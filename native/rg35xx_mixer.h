@@ -2,6 +2,7 @@
 #define RG35XX_MIXER_H
 
 #include "rg35xx_media_cache.h"
+#include "rg35xx_media_events.h"
 #include <stdint.h>
 #include <stddef.h>
 
@@ -9,9 +10,7 @@
 #define RG35XX_MIXER_RATE 44100
 #define RG35XX_MIXER_CHANNELS 2
 
-typedef void (*rg35xx_media_end_cb)(uint32_t player_id);
-
-void rg35xx_mixer_init(rg35xx_media_end_cb end_cb);
+void rg35xx_mixer_init(rg35xx_media_event_cb event_cb);
 void rg35xx_mixer_reset(void);
 int rg35xx_mixer_play(uint32_t player_id);
 int rg35xx_mixer_pause(uint32_t player_id);
