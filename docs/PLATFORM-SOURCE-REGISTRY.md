@@ -25,7 +25,7 @@ Package `org.recompile.mobile`:
 | RG35XXFrameScheduler | dirty-frame generation/wakeup | KEEP / PRESENT |
 | RG35XXImageCache | immutable decoded-image LRU/cache | KEEP / PRESENT |
 | RG35XXInputEngine | deterministic key press/release/repeat | KEEP / PRESENT |
-| RG35XXWavDecoder | target WAV decode/normalization helper | MISSING — RESTORE REQUIRED |
+| RG35XXWavDecoder | target WAV decode/normalization helper | KEEP / PRESENT — RC1 RESTORED |
 | RG35XXMediaProfile | truthful target MMAPI capability policy | KEEP / PRESENT |
 | RG35XXMediaRegistry | Java semantic player registry | KEEP / PRESENT |
 | RG35XXAudioProtocol | Java/native framed audio protocol | KEEP / PRESENT |
