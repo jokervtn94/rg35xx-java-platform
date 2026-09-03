@@ -26,7 +26,7 @@ Package `org.recompile.mobile`:
 | RG35XXImageCache | immutable decoded-image LRU/cache | KEEP / PRESENT |
 | RG35XXInputEngine | deterministic key press/release/repeat | KEEP / PRESENT |
 | RG35XXWavDecoder | target WAV decode/normalization helper | KEEP / PRESENT — RC1 RESTORED |
-| RG35XXMediaProfile | truthful target MMAPI capability policy | KEEP / PRESENT — MIDI/WAV + TONE AFTER 010M; AMR/MPEG FALSE |
+| RG35XXMediaProfile | truthful target MMAPI capability policy | KEEP / PRESENT — MIDI/WAV/TONE ONLY AFTER 010N; VENDOR CONTAINERS NOT PROMOTED |
 | RG35XXMediaRegistry | Java semantic player registry + bounded native-event queue | KEEP / PRESENT — LOOPED RETAINS STARTED; 010L CORRECTED |
 | RG35XXAudioProtocol | Java/native framed audio protocol | KEEP / PRESENT |
 | RG35XXAudioTransport | dedicated Java→native audio writer | KEEP / PRESENT |
@@ -54,7 +54,7 @@ These remain upstream-owned facades/implementations. RG35XX behavior must be hoo
 - `org.recompile.mobile.PlatformPlayer`
 - upstream Font/PlatformFont implementation
 
-Vendor compatibility facades (Nokia/Siemens/KDDI/DoJa/JBlend and other upstream compatibility packages) are preserved unless a specific compatibility audit records a replacement/removal.
+Vendor compatibility facades and upstream container decoders (Nokia/Siemens/KDDI/DoJa/JBlend, SMAF/MMF, MLD/MFi, EMS melody) are preserved. `RGJ-RC1-010N` proves that the current SMAFDecoder, MLDDecoder and EMSMelodyDecoder still rely on `javax.sound.midi` object construction and/or `MidiSystem.write`; therefore those container types are not advertised on RG35XX until an explicit JavaSound-free conversion task replaces only the backend conversion responsibility.
 
 ## Authoritative native modules
 
@@ -77,11 +77,13 @@ Vendor compatibility facades (Nokia/Siemens/KDDI/DoJa/JBlend and other upstream 
 
 Dependency policy for the TML/TSF worker is locked in `docs/RC1-TML-TSF-DEPENDENCY-GATE.md`. The replacement worker source, explicit SoundFont byte-source contract, and native media runtime lifecycle coordinator now exist, but this does not claim that TinyMidiLoader/TinySoundFont vendored headers, an authoritative SoundFont asset/provider, consolidated core call-sites, native link, or device behavior is complete. The source holder owns no filesystem path, performs no I/O/allocation, and cannot substitute an arbitrary SoundFont for the still-unresolved authoritative asset/provider. Runtime ordering is source_set -> worker_init on startup and worker_shutdown -> source_clear on final shutdown; mixer/audio-pipe ownership remains outside this coordinator.
 
-`RGJ-RC1-010K` closes the media **process-boundary architecture** at STATIC-AUDIT-PASS: mixer callbacks enqueue typed LOOPED/END events into the bounded native queue; only the existing libretro control-writer context serializes case-14 packets; Java case 14 queues and case 15 drains through `RG35XXMediaRegistry`; final Linux shutdown uses control-pipe EOF to give `RG35XXLifecycle.platformShutdown()` an RMS/media barrier opportunity before the existing hard-kill fallback. This does not promote the full media facade or build status.
+`RGJ-RC1-010K` closes the media process-boundary architecture at STATIC-AUDIT-PASS: mixer callbacks enqueue typed LOOPED/END events into the bounded native queue; only the existing libretro control-writer context serializes case-14 packets; Java case 14 queues and case 15 drains through `RG35XXMediaRegistry`; final Linux shutdown uses control-pipe EOF to give `RG35XXLifecycle.platformShutdown()` an RMS/media barrier opportunity before the existing hard-kill fallback.
 
-`RGJ-RC1-010L` closes the **direct MIDI/WAV Java facade architecture** at STATIC-AUDIT-PASS: an explicit RG35XX JVM property selects target behavior, desktop Manager/PlatformPlayer remains unchanged when false, JavaxPlatformPlayer remains the javax facade, and direct MIDI/WAV branch before desktop JavaSound/JLayer backend construction. Audit: `docs/RC1-DIRECT-MEDIA-FACADE-AUDIT.md`.
+`RGJ-RC1-010L` closes direct MIDI/WAV Java facade architecture at STATIC-AUDIT-PASS: an explicit RG35XX JVM property selects target behavior, desktop Manager/PlatformPlayer remains unchanged when false, JavaxPlatformPlayer remains the javax facade, and direct MIDI/WAV branch before desktop JavaSound/JLayer backend construction. Audit: `docs/RC1-DIRECT-MEDIA-FACADE-AUDIT.md`.
 
-`RGJ-RC1-010M` closes the **ToneControl/Manager.playTone architecture** at STATIC-AUDIT-PASS: `RG35XXToneSequenceEncoder` implements the MIDP ToneControl grammar without JavaSound and produces SMF for the existing native MIDI backend; `audio/x-tone-seq` is now truthfully promoted. `device://midi` live-message control remains explicitly unclaimed. Audit: `docs/RC1-TONECONTROL-AUDIT.md`.
+`RGJ-RC1-010M` closes ToneControl/Manager.playTone architecture at STATIC-AUDIT-PASS: `RG35XXToneSequenceEncoder` implements MIDP ToneControl grammar without JavaSound and produces SMF for the existing native MIDI backend; `audio/x-tone-seq` is truthfully promoted. `device://midi` live-message control remains explicitly unclaimed. Audit: `docs/RC1-TONECONTROL-AUDIT.md`.
+
+`RGJ-RC1-010N` closes the vendor/container capability boundary at STATIC-AUDIT-PASS. Upstream SMAF/MMF, MLD/MFi and EMS iMelody/eMelody decoders are preserved but not promoted because their current conversion path constructs JavaSound MIDI objects and/or calls `MidiSystem.write`. Mixed sequence+PCM timing is part of any future replacement contract. Audit: `docs/RC1-VENDOR-MEDIA-CONTAINER-AUDIT.md`.
 
 ## Authoritative integration patches
 
@@ -103,13 +105,7 @@ Dependency policy for the TML/TSF worker is locked in `docs/RC1-TML-TSF-DEPENDEN
 - 0018 Manager/PlatformPlayer direct RG35XX MIDI/WAV facade routing + target selector contract
 - 0019 JavaSound-free PlatformPlayer ToneControl + Manager.playTone integration
 
-Patch 0015 is based on the inspected upstream devel `src/libretro/freej2me_libretro.c` blob `534b26cc97129c4fe7b04ea9a6b07fb8945d33b0`. It remains an integration contract until applied to the assembled RG35XX core; it must not be treated as a second core implementation.
-
-Patch 0016 keeps `rg35xx_audio_pipe` as the sole dedicated Java→native audio transport owner and narrows the exact Linux process boundary: create before fork, inherit only the child write descriptor across exec, place `-Dfreej2me.rg35xx.audio.fd=<fd>` before `-jar`, close the opposite endpoints after fork, close both endpoints on fork failure/deinit, and never repurpose fd 0/1/2. It supersedes only ambiguous argv wording in patch 0004; it does not add another pipe implementation. BUILD validation of the assembled command line remains pending.
-
-Patch 0017 completes the process-boundary contract without creating another reverse pipe or shutdown opcode. Its static-audit record is `docs/RC1-MEDIA-PROCESS-BOUNDARY-AUDIT.md` and immutable supplemental task `tasklog/RC1-010K-MEDIA-PROCESS-BOUNDARY.md`.
-
-Patches 0018/0019 keep upstream Manager/PlatformPlayer/JavaxPlatformPlayer ownership intact. They are target-gated integration contracts until applied to the exact assembled Java sources; neither is a replacement javax implementation.
+Patches 0015-0019 are integration contracts until applied to the exact assembled source tree; none is a second upstream facade/core implementation.
 
 A patch may be superseded by consolidated source, but its behavior must be accounted for before removal.
 
