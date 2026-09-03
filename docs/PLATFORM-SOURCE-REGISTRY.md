@@ -62,7 +62,7 @@ Vendor compatibility facades (Nokia/Siemens/KDDI/DoJa/JBlend and other upstream 
 | `rg35xx_audio_protocol.h` | KEEP / PRESENT |
 | `rg35xx_media_cache.h/.c` | KEEP / PRESENT |
 | `rg35xx_audio_dispatch.c` | KEEP / PRESENT |
-| `rg35xx_audio_dispatch.h` | MISSING — OWNERSHIP/NEED MUST BE RESOLVED |
+| `rg35xx_audio_dispatch.h` | KEEP / PRESENT — RC1 DECLARATION OWNERSHIP RESOLVED |
 | `rg35xx_audio_pipe.h/.c` | KEEP / PRESENT |
 | `rg35xx_mixer.h/.c` | KEEP / PRESENT |
 | `rg35xx_midi_backend.h/.c` | KEEP / PRESENT |
