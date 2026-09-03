@@ -1,0 +1,104 @@
+# RGJ-RC1-010I — exact freej2me_libretro.c native-media runtime integration
+#
+# Source basis
+# ------------
+# Exact upstream owner inspected: TASEmulators/freej2me-plus devel
+# src/libretro/freej2me_libretro.c, blob 534b26cc97129c4fe7b04ea9a6b07fb8945d33b0.
+# This is an integration specification/patch contract, not a parallel core.
+#
+# Required includes in the existing core owner
+# --------------------------------------------
+#   #include "rg35xx_media_runtime.h"
+#   #include "rg35xx_mixer.h"
+#   #include "rg35xx_audio_pipe.h"
+#   #include "rg35xx_media_cache.h"
+#
+# Authoritative SoundFont provider boundary
+# -----------------------------------------
+# The core must obtain validated SF2 bytes from an explicit configured/resource
+# owner. Do NOT infer a BIOS path, do NOT silently use TinySoundFont's example
+# SoundFont, and do NOT make the media runtime open files.
+#
+# Once authoritative bytes exist:
+#   if (!rg35xx_media_runtime_init(sf2_data, sf2_size)) {
+#       // MIDI backend remains unavailable/fail-safe; PCM may still operate.
+#   }
+#
+# The SF2 byte buffer must remain alive until rg35xx_media_runtime_shutdown().
+#
+# Exact upstream lifecycle findings
+# ---------------------------------
+# 1. retro_init() currently checks variables/system directory and then calls
+#    javaOpen(). There is no RG35XX media initialization in upstream.
+# 2. javaOpen() owns creation/fork/inheritance of the existing Java stdin/stdout
+#    pipes. Dedicated RG35XX audio-pipe creation must be integrated into this
+#    same process setup before fork, not bolted onto retro_run().
+# 3. retro_load_game() writes save path, ROM path, options, then opcode 13.
+#    Native media runtime is process/platform lifetime and must NOT be recreated
+#    for every JAR load.
+# 4. retro_unload_game() is currently empty upstream.
+# 5. retro_deinit() currently SIGKILLs/waits for Java on Linux. RC1 lifecycle
+#    requires Java shutdown/RMS barrier where protocol permits before hard kill;
+#    native media teardown must occur after Java can no longer enqueue media.
+# 6. retro_reset() calls retro_deinit(), retro_init(), retro_load_game(); therefore
+#    final media teardown/init must be idempotent across this restart path.
+#
+# Required process-lifetime ordering
+# ----------------------------------
+# Startup, before Java can register native media:
+#   a. initialize media cache
+#   b. initialize mixer with the typed RG35XX media-event callback
+#   c. obtain authoritative SF2 bytes and call rg35xx_media_runtime_init()
+#      (MIDI fail-safe unavailable if SF2 is absent; never fabricate an asset)
+#   d. create dedicated audio pipe before fork
+#   e. fork/exec JamVM with -Dfreej2me.rg35xx.audio.fd=<child-write-fd>
+#   f. parent drains audio pipe independently of retro_run()
+#
+# Game reset/unload command ordering:
+#   rg35xx_mixer_reset();
+#   rg35xx_media_cache_reset();
+# The process-lifetime SF2/TSF runtime stays initialized across ordinary game
+# switch. Java RG35XXLifecycle owns the corresponding RESET command boundary.
+#
+# Final retro_deinit ordering:
+#   a. request/observe Java shutdown where the current protocol permits so RMS
+#      force-flush and Java media reset can complete
+#   b. prevent further Java audio writes / stop audio-pipe worker ownership
+#   c. close dedicated audio pipe endpoints
+#   d. rg35xx_mixer_reset()
+#   e. reset/free media cache according to its existing owner API
+#   f. rg35xx_media_runtime_shutdown()
+#      -> worker_shutdown -> soundfont_source_clear
+#   g. only then release the authoritative SF2 byte buffer
+#
+# Native -> Java event return
+# ---------------------------
+# The typed mixer callback emits RG35XX_MEDIA_EVENT_END_OF_MEDIA (1) and
+# RG35XX_MEDIA_EVENT_LOOPED (2), with player id + media time. The consolidated
+# core must encode these as the 13-byte opcode-14 payload already specified by
+# patches/0014-libretro-native-media-events.patch and write them on the existing
+# core->Java stdin/control direction. stdout remains Java->core video IPC only.
+#
+# Non-negotiable invariants
+# -------------------------
+# - no SoundFont filesystem guessing
+# - no second libretro entrypoint/core source
+# - no audio over Java stdout
+# - no media runtime init/shutdown from retro_run()
+# - no malloc/free in mixer/TSF render hot paths
+# - ordinary game switch resets players/cache but does not destroy the shared SF2
+# - final shutdown destroys TSF before releasing SF2 bytes
+#
+# Remaining exact-source blockers before this patch can become BUILD-PASS
+# -----------------------------------------------------------------------
+# - authoritative SF2 asset/provider is still unresolved
+# - pinned tml.h/tsf.h are not yet vendored byte-identically
+# - dedicated audio-pipe/process argument edits must be applied to the assembled
+#   RG35XX core source, including the exact javaOpen() argv/FD inheritance path
+# - opcode-14 event writer must be applied to the assembled core
+# - media cache init/free API names must be checked against the exact native files
+# - Linux Java graceful-shutdown handshake must be reconciled before replacing
+#   upstream's current SIGKILL-only deinit behavior
+#
+# Status: IMPLEMENTED integration contract only. Not STATIC-AUDIT-PASS for the
+# whole media facade, not BUILD-PASS, and not DEVICE-TEST-PASS.
