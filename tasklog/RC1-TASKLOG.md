@@ -191,3 +191,16 @@ No class/package/native module may be added merely from memory or an older overl
 - PlatformPlayer contract: existing `notifyListeners()` remains the sole fan-out to MIDP, Siemens, Nokia, KDDI, DoJa and JBlend. Do not implement parallel vendor callbacks in RG35XX helpers.
 - Remaining blocker: current native MIDI backend exposes final finished callback only and does not yet prove an intermediate loop callback. The new protocol reserves EVENT_LOOPED, but exact native loop-event production must be reconciled before RC1-010 can become STATIC-AUDIT-PASS.
 - BUILD-PASS and DEVICE-TEST-PASS are not claimed.
+
+## RGJ-RC1-010F — Replace missing historical TML/TSF worker source
+- Action: REPLACE / RESTORE-BY-REIMPLEMENTATION
+- Status: PLANNED
+- Old responsibility: historical RG35XX native TML/TSF worker proven by device logs (`worker START`, `SoundFont loaded`, `PRIMED`, `native END`) but absent from the current repository and not recovered from conversation/library source search or Git history.
+- Current integration owner: `native/rg35xx_midi_backend.c` remains the bounded two-context adapter and declares the existing `rg35xx_tsf_*` hook contract. It must not be replaced by a second MIDI backend.
+- Replacement scope: implement the missing worker behind the existing hooks (`open_memory`, `start`, `pause`, `stop`, `seek`, `close`, `mix_slot`, `slot_finished`, `slot_time_us`) and add an explicit loop-boundary primitive/event only where needed by RC1-010E.
+- Source basis: official TinyMidiLoader/TinySoundFont APIs plus historical RG35XX runtime evidence. TML provides in-memory MIDI parsing/timestamps; TSF provides in-memory SoundFont loading/copy and sample rendering. No recovered historical source will be claimed.
+- Ownership rule: one SoundFont foundation, bounded independent playback contexts, no JavaSound/ALSA sequencer, no second synth implementation, no stdout audio, and no heap allocation in the render callback/hot path after load/start setup.
+- Loop rule: exactly one native layer owns loop count. The adapter must not double-loop a worker that already owns looping; LOOPED is emitted at each actual restart and END_OF_MEDIA exactly once after the final iteration.
+- Compatibility target: preserve the behavior evidenced by v9.9 logs (14700-Hz synth basis feeding 44100-Hz platform output, bounded voices/worker-ring behavior) unless consolidated source constraints require a separately recorded replacement.
+- Rollback: if authoritative historical worker source is later recovered before BUILD-PASS, compare it against this replacement and record an explicit REVERT/REPLACE decision rather than silently swapping implementations.
+- BUILD-PASS / DEVICE-TEST-PASS are not claimed.
