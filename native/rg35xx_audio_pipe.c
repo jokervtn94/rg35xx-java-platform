@@ -1,4 +1,4 @@
-#include "rg35xx_audio_protocol.h"
+#include "rg35xx_audio_pipe.h"
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
@@ -11,16 +11,6 @@ int rg35xx_audio_dispatch(const struct rg35xx_audio_header *h,
                           const uint8_t *payload);
 
 /* Tasklog: RGJ-B3-004. Parent owns read end; JamVM child inherits write end. */
-struct rg35xx_audio_pipe {
-    int read_fd;
-    int write_fd;
-    uint8_t header[RG35XX_AUDIO_HEADER_SIZE];
-    size_t header_used;
-    struct rg35xx_audio_header parsed;
-    uint8_t *payload;
-    size_t payload_used;
-};
-
 void rg35xx_audio_pipe_init(struct rg35xx_audio_pipe *p)
 {
     if(!p) return;
@@ -37,11 +27,9 @@ int rg35xx_audio_pipe_create(struct rg35xx_audio_pipe *p)
     p->read_fd = fds[0];
     p->write_fd = fds[1];
 
-    /* Parent drain must never block retro/audio worker shutdown. */
     flags = fcntl(p->read_fd, F_GETFL, 0);
     if(flags >= 0) fcntl(p->read_fd, F_SETFL, flags | O_NONBLOCK);
-
-    /* Do not set CLOEXEC on write_fd: JamVM child must inherit it. */
+    /* write_fd deliberately has no CLOEXEC: JamVM child inherits it. */
     return 1;
 }
 
@@ -82,10 +70,6 @@ void rg35xx_audio_pipe_close(struct rg35xx_audio_pipe *p)
     rg35xx_audio_pipe_reset_message(p);
 }
 
-/*
- * Drain complete protocol messages. Partial header/payload state is retained
- * across calls, so the caller can invoke this from the existing audio worker.
- */
 int rg35xx_audio_pipe_drain(struct rg35xx_audio_pipe *p)
 {
     ssize_t n;
