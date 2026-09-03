@@ -1,0 +1,64 @@
+# RC1 exact-source integration patch/spec: PlatformImage + RG35XXImageCache
+# Upstream owner remains org.recompile.mobile.PlatformImage.
+# Do NOT create a replacement PlatformImage or a second image cache.
+# Task: RGJ-RC1-006
+
+Target: src/org/recompile/mobile/PlatformImage.java (TASEmulators/freej2me-plus devel)
+Helper: src/org/recompile/mobile/RG35XXImageCache.java
+
+## Byte-array constructor integration
+
+In PlatformImage(byte[] imageData, int imageOffset, int imageLength, boolean mutable):
+
+1. Only immutable images (`mutable == false`) are cache eligible.
+2. Compute key with RG35XXImageCache.keyForBytes(imageData, imageOffset, imageLength).
+3. On cache hit, construct a fresh TYPE_INT_ARGB BufferedImage, obtain its DataBufferInt array,
+   and copy cached ARGB pixels into that fresh backing array. Never expose/share the cached array.
+4. On cache miss, preserve the existing ImageIO decode and type-normalization path exactly.
+5. After decode/normalization and after any RG35XX PNG/tRNS compatibility repair in the consolidated
+   PlatformImage path, put the final ARGB pixels into RG35XXImageCache only when immutable.
+6. Preserve `isMutable = mutable` exactly.
+
+Pseudo-diff (adapt to exact consolidated source; do not apply blindly):
+
+@@ PlatformImage(byte[] imageData, int imageOffset, int imageLength, boolean mutable)
++ String rgCacheKey = null;
++ if(!mutable) {
++     rgCacheKey = RG35XXImageCache.keyForBytes(imageData, imageOffset, imageLength);
++     int[] rgCached = RG35XXImageCache.get(rgCacheKey);
++     if(rgCached != null) {
++         // Width/height must be part of cached metadata before this fast return can be used.
++         // Current RG35XXImageCache stores pixels only, therefore DO NOT implement an unsafe
++         // cache-hit return yet. See RC1 audit decision below.
++     }
++ }
+  // existing ImageIO decode/type normalization remains authoritative
+  ...
++ if(!mutable && rgCacheKey != null) RG35XXImageCache.put(rgCacheKey, dataBuffer);
+  isMutable = mutable;
+
+## RC1 audit decision: cache metadata gap
+
+The current RG35XXImageCache stores only int[] pixels, not decoded width/height. Therefore an exact
+PlatformImage cache-hit reconstruction cannot be implemented safely without either:
+(a) extending the existing RG35XXImageCache Entry/API to retain dimensions, or
+(b) decoding image headers again, which defeats the intended decode-cache fast path.
+
+RC1 chooses (a), but that modification must be made as a MODIFY of the existing registered class,
+not by adding a new cache class/package. Until the dimension-aware API is committed and audited,
+this patch is an integration specification and MUST NOT be marked BUILD-PASS.
+
+## Mutable/immutable invariants
+
+- PlatformImage(int Width, int Height) and color-backed blank images remain mutable and are never cached.
+- PlatformImage(Image source) remains a deep copy via System.arraycopy; no cache sharing.
+- PlatformImage(com.nttdocomo.ui.Image source) remains a deep copy; DoJa mutability semantics are preserved.
+- DoJa byte-array constructor calls with mutable=true bypass cache completely.
+- getMIDPGraphics()/getDoJaGraphics() immutable checks remain unchanged.
+- Resource-name/InputStream constructors remain uncached in RC1 unless a later task defines a stable identity key.
+- PNG indexed transparency/tRNS repair, when present in the RG35XX consolidated source, must execute before cache insertion.
+
+## Duplicate-prevention result
+
+No new RG35XX Java class/package is required for this gate. Existing owner pair is authoritative:
+PlatformImage (upstream facade/decoder) + RG35XXImageCache (target immutable cache).
