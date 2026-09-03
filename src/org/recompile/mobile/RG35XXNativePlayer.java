@@ -12,9 +12,9 @@ import java.io.InputStream;
  * deliberately a small backend so upstream PlatformPlayer keeps listener and
  * vendor compatibility responsibilities while RG35XX owns target transport.
  *
- * Tasklog: RGJ-B3-003 / RGJ-B3-004 / RGJ-B3-006
+ * Tasklog: RGJ-B3-003 / RGJ-B3-004 / RGJ-B3-006 / RGJ-RC1-010E
  */
-public final class RG35XXNativePlayer
+public final class RG35XXNativePlayer implements RG35XXMediaRegistry.EventListener
 {
     public static final int UNREALIZED = 100;
     public static final int REALIZED = 200;
@@ -27,10 +27,12 @@ public final class RG35XXNativePlayer
     private int sampleRate;
     private int channels;
     private int state = UNREALIZED;
+    private RG35XXMediaRegistry.EventListener externalEventListener;
 
     public RG35XXNativePlayer(InputStream stream, String contentType) throws IOException
     {
         entry = RG35XXMediaRegistry.create(contentType);
+        entry.setEventListener(this);
         media = readAll(stream);
     }
 
@@ -38,10 +40,17 @@ public final class RG35XXNativePlayer
     public int getState() { return state; }
     public String getContentType() { return entry.contentType; }
 
+    public synchronized void setEventListener(RG35XXMediaRegistry.EventListener listener)
+    {
+        externalEventListener = listener;
+    }
+
     /** WAV must already be normalized by RG35XXWavDecoder before this call. */
     public synchronized void setPcm16(byte[] pcm, int rate, int channelCount)
     {
         if(state == CLOSED) throw new IllegalStateException("player closed");
+        if(pcm == null || rate <= 0 || channelCount < 1 || channelCount > 2)
+            throw new IllegalArgumentException("invalid PCM16 media");
         media = pcm;
         sampleRate = rate;
         channels = channelCount;
@@ -142,9 +151,27 @@ public final class RG35XXNativePlayer
         return entry.volume;
     }
 
+    public void onNativeMediaEvent(int playerId, int eventType, long mediaTimeUs)
+    {
+        RG35XXMediaRegistry.EventListener listener;
+        synchronized(this)
+        {
+            if(state == CLOSED || playerId != entry.playerId) return;
+            state = PREFETCHED;
+            entry.setState(state);
+            entry.markStarted(false);
+            entry.setMediaTimeUs(mediaTimeUs);
+            listener = externalEventListener;
+        }
+        if(listener != null)
+            listener.onNativeMediaEvent(playerId, eventType, mediaTimeUs);
+    }
+
     public synchronized void close()
     {
         if(state == CLOSED) return;
+        externalEventListener = null;
+        entry.setEventListener(null);
         if(entry.registeredNative) RG35XXAudioTransport.release(entry.playerId);
         RG35XXMediaRegistry.release(entry.playerId);
         media = null;
