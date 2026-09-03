@@ -210,48 +210,61 @@ Statuses: `PLANNED`, `IMPLEMENTED`, `STATIC-AUDIT-PASS`, `BUILD-PASS`, `DEVICE-T
 - Status: STATIC-AUDIT-PASS
 - Finding: upstream Manager advertises MIDI, WAV, MLD, AMR, MPEG, tone, MMF, iMelody and audio/basic unconditionally.
 - Finding: upstream PlatformPlayer contains desktop JavaSound/MIDI/MP3 and multiple decoder paths not equivalent to the proven RG35XX native backend.
-- Reason: advertised capabilities must not cause a game to select an unsupported codec on RG35XX.
 
 ### RGJ-B3-002 — Truthful RG35XX MMAPI capability reporting
 - Action: MODIFY
-- Status: PLANNED
-- Target source: javax.microedition.media.Manager.getSupportedContentTypes/getSupportedProtocols.
-- Source of truth: RG35XXMediaProfile.
-- Initial target truth: MIDI, WAV/PCM/IMA/A-law/mu-law and tone; AMR/MPEG remain unadvertised until a target decoder is proven.
+- Status: IMPLEMENTED
+- Source: RG35XXMediaProfile + patches/0003-manager-rg35xx-media-profile.patch.
+- Initial truth: MIDI, WAV/PCM/IMA/A-law/mu-law and tone; AMR/MPEG remain unadvertised.
 - Regression focus: Zombie Infection format negotiation.
 
-### RGJ-B3-003 — RG35XXMediaRegistry
+### RGJ-B3-003 — RG35XXMediaRegistry / native Player lifecycle adapter
 - Action: ADD
-- Status: PLANNED
-- Responsibility: stable player IDs, type, lifecycle, loop count, volume, media time and native registration state.
-- Rule: Player semantics stay in Java; decode/mix timing truth for native-backed formats stays native.
+- Status: IMPLEMENTED
+- Sources: RG35XXMediaRegistry.java, RG35XXNativePlayer.java, docs/MMAPI-LIFECYCLE.md.
+- Responsibility: stable player IDs, lifecycle, loop count, volume, media time and native registration state.
+- Rule: PlatformPlayer remains public/vendor compatibility facade.
 
 ### RGJ-B3-004 — Dedicated Java-to-native audio transport
 - Action: REPLACE
-- Status: PLANNED
+- Status: IMPLEMENTED
+- Sources: RG35XXAudioProtocol.java, RG35XXAudioTransport.java, RG35XXAudioBootstrap.java, native/rg35xx_audio_pipe.*.
 - Before: media blobs/commands staged through files under /mnt/mmc/BIOS.
-- After target: separate audio command/blob channel that cannot corrupt stdout video IPC.
-- Constraint: do not multiplex large audio payloads into binary video stdout.
-- Rollback: preserve current SD bridge until the new channel passes static/protocol audit.
+- New path: separate inherited FD pipe; stdout remains video IPC only.
+- Rollback: legacy SD bridge is retained until consolidated audit/build/device validation.
 
 ### RGJ-B3-005 — Native media blob cache
 - Action: ADD
-- Status: PLANNED
-- Purpose: register immutable MIDI/PCM media once by player ID and reuse it for PLAY/STOP/SEEK/VOLUME commands.
-- Benefit: eliminate repeated SD reads/staging during gameplay.
+- Status: IMPLEMENTED
+- Sources: native/rg35xx_media_cache.* and native/rg35xx_audio_dispatch.c.
+- Purpose: immutable MIDI/PCM registration once by player ID; later commands reuse RAM media.
 
 ### RGJ-B3-006 — CPU-bounded native mixer/player model
 - Action: ADD
-- Status: PLANNED
-- Target: one BGM MIDI context plus bounded SFX MIDI/PCM voices appropriate for ARM926-class target cost.
-- Preserve: asynchronous libretro audio callback/ring architecture and native END_OF_MEDIA truth.
+- Status: IMPLEMENTED
+- Sources: native/rg35xx_mixer.*, native/rg35xx_midi_backend.*.
+- Bound: 8 PCM voices, 2 MIDI contexts; slot 0 retained as primary/BGM, slot 1 deterministic SFX replacement.
+- Preserve: asynchronous libretro audio callback/ring and native END_OF_MEDIA truth.
+
+### RGJ-B3-STAB-001 — Remove allocation from audio render hot path
+- Action: MODIFY
+- Status: STATIC-AUDIT-PASS
+- Before: rg35xx_mixer_render used calloc/free on every render call.
+- After: static 1024-frame stereo int32 accumulator reused in bounded chunks.
+- Reason: avoid allocator churn/latency on ARM926 and reduce frame/audio instability risk.
+- Rollback: none recommended; allocation-free render is behavior-equivalent.
 
 ### RGJ-B3-007 — Media Engine real-JAR regression audit
 - Action: AUDIT
 - Status: PLANNED
 - Diamond Rush: PCM WAV + MMAPI.
 - Asphalt 4: MIDI + PCM + IMA ADPCM + VolumeControl.
-- Zombie Infection: capability negotiation with multiple advertised media variants.
+- Zombie Infection: truthful capability negotiation.
 - Prince of Persia: packed MIDI/PCM and Player lifecycle.
 - God of War: multi-MIDI behavior.
 - Vua Cướp Biển: no invented audio for a binary without actual audio implementation/assets.
+
+### RGJ-B3-008 — Consolidated source/protocol gate
+- Action: AUDIT
+- Status: PLANNED
+- Required before Beta 3 lock: Java 6 compatibility, C compile/link contract, pipe lifecycle, protocol parity, mixer reset/release ordering, END_OF_MEDIA exactly once, no stdout contamination, no audio hot-path SD I/O.
