@@ -285,3 +285,52 @@ Statuses: `PLANNED`, `IMPLEMENTED`, `STATIC-AUDIT-PASS`, `BUILD-PASS`, `DEVICE-T
 - Decision: Media Engine 2.0 architecture is frozen for Platform 1.0 unless a later audit/build/device test creates an explicit REVERT/REPLACE task.
 - Preserved rollback: legacy SD bridge remains present but non-preferred until consolidated build/device validation proves the dedicated transport end-to-end.
 - Next subsystem: Beta 4 Graphics Engine optimization and compatibility audit.
+
+## Platform 1.0 Beta 4 — Graphics Engine
+
+### RGJ-B4-001 — Upstream PlatformGraphics hot-path audit
+- Action: AUDIT
+- Status: STATIC-AUDIT-PASS
+- Finding: drawRegion TRANS_NONE already reaches direct drawRGB; transformed sprites use a separate transformed-image path.
+- Finding: drawRGB is direct framebuffer work, so optimization must preserve MIDP alpha, scanlength, translation and clip semantics rather than replace the renderer.
+
+### RGJ-B4-002 — drawRGB clipped fast path
+- Action: MODIFY
+- Status: IMPLEMENTED
+- Source: patches/0007-platformgraphics-rg35xx-fast-drawrgb.patch.
+- Design: resolve destination clip once before the inner loop; processAlpha=false forces opaque alpha; processAlpha=true skips alpha 0, directly copies alpha 255 and blends only partial alpha.
+- Constraint: no allocation or Graphics2D fallback in the pixel loop.
+
+### RGJ-B4-003 — Preserve PNG transparency/image cache pipeline
+- Action: KEEP
+- Status: STATIC-AUDIT-PASS
+- Reason: graphics optimization consumes already-decoded ARGB and must not bypass indexed PNG tRNS repair or immutable RG35XXImageCache semantics.
+
+### RGJ-B4-004 — Bounded Sprite transform geometry cache
+- Action: ADD
+- Status: IMPLEMENTED
+- Sources: src/org/recompile/mobile/RG35XXTransformCache.java and patches/0008-platformgraphics-transform-cache.patch.
+- Design: cache destination-to-source index maps for the eight MIDP Sprite transforms, keyed by source width/height/transform.
+- Bound: 24 maps with deterministic LRU replacement.
+- Rule: cache geometry only; never cache mutable image pixels.
+
+### RGJ-B4-005 — Transform-cache lifecycle
+- Action: MODIFY
+- Status: IMPLEMENTED
+- Requirement: reset RG35XXTransformCache between games together with RG35XXImageCache during consolidated Libretro integration.
+- Reason: bounded memory and deterministic per-game state.
+
+### RGJ-B4-006 — Graphics compatibility gate
+- Action: AUDIT
+- Status: STATIC-AUDIT-PASS
+- Diamond Rush / Asphalt 4 / God of War: drawRGB path benefits directly while retaining alpha semantics.
+- Prince of Persia: TiledLayer/Sprite transformed regions retain all eight MIDP transform geometries.
+- Zombie Infection: packed decoded image data remains behind the same ARGB/tRNS pipeline.
+- Limitation: exact integration against the consolidated modified PlatformGraphics source remains an RC assembly gate; BUILD-PASS is intentionally not claimed.
+
+### RGJ-B4-007 — Beta 4 lock
+- Action: AUDIT
+- Status: STATIC-AUDIT-PASS
+- Decision: Graphics Engine optimization architecture is frozen unless consolidated-source audit reveals a semantic mismatch.
+- No Java/native video protocol change; fixed 640x480 RGB565 frontend, dirty-frame scheduler and receiver thread remain unchanged.
+- Next subsystem: Beta 5 RMS/storage engine and lifecycle audit.
