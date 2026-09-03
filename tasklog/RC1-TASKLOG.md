@@ -73,12 +73,21 @@ No class/package/native module may be added merely from memory or an older overl
 - Result: future consolidation work is source-registry-driven rather than memory-driven.
 
 ## RGJ-RC1-006 — PlatformImage + immutable image-cache exact-source gate
-- Action: AUDIT
-- Status: IMPLEMENTED
+- Action: MODIFY
+- Status: STATIC-AUDIT-PASS
 - Sources checked: upstream `org.recompile.mobile.PlatformImage` on FreeJ2ME-Plus devel; registered `RG35XXImageCache`.
 - Integration spec: `patches/0011-platformimage-rg35xx-cache.patch`.
-- Duplicate result: no new class/package is permitted or required; upstream PlatformImage remains decoder/facade owner and existing RG35XXImageCache remains the only RG35XX decoded-image cache.
-- Preserved semantics: mutable blank images, `Image`/DoJa deep-copy constructors, mutable DoJa byte-array images, immutable Graphics access checks, and upstream type normalization.
-- Finding: current RG35XXImageCache Entry stores pixels but not decoded width/height. A safe cache-hit PlatformImage reconstruction therefore cannot yet be implemented without extending the existing cache API.
-- Decision: MODIFY the existing registered RG35XXImageCache to carry dimensions; do not add a second cache class. Cache insertion occurs only after final PNG/tRNS compatibility repair and only for immutable byte-array images.
-- Gate: not STATIC-AUDIT-PASS yet; dimension-aware cache API + exact PlatformImage call-site must be committed/audited first.
+- Duplicate result: no new class/package; upstream PlatformImage remains decoder/facade owner and RG35XXImageCache remains the only RG35XX decoded-image cache.
+- Cache API modified in-place: entries now retain width + height + defensive ARGB pixel copy; `put` validates dimensions and bounded byte cost; byte-slice key validation is overflow-safe.
+- Exact cache-hit contract: immutable byte-array images reconstruct a fresh TYPE_INT_ARGB BufferedImage and copy cached pixels; mutable DoJa images bypass cache.
+- Preserved semantics: mutable blank images, MIDP Image/DoJa deep-copy constructors, immutable Graphics access checks, and upstream type normalization.
+- PNG/tRNS invariant: final compatibility repair occurs before insertion; cache never stores a pre-repair decode.
+- Resource-name/InputStream constructors remain uncached until a stable identity contract is separately audited.
+- Gate result: source/API design is STATIC-AUDIT-PASS. BUILD-PASS is not claimed until the consolidated upstream PlatformImage call-site is applied and compiled.
+
+## RGJ-RC1-007 — PlatformGraphics exact-source gate
+- Action: AUDIT
+- Status: PLANNED
+- Required reload: tasklogs + source registry before mutation.
+- Scope: reconcile upstream PlatformGraphics with patches 0007/0008, RG35XXTransformCache, alpha/clipping semantics, drawRegion transform behavior and no-allocation hot-path rules.
+- Rule: do not create a parallel graphics class; upstream PlatformGraphics remains owner.
