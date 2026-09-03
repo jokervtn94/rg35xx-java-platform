@@ -1,0 +1,179 @@
+# RGJ-RC1-010K — media process-boundary completion contract
+#
+# Scope
+# -----
+# Completes the RC1 process boundary as one stage: native media callback handoff,
+# case-14 delivery, Java-side bounded dispatch, and graceful platform shutdown.
+# This patch applies to the existing upstream/core owners only; it does not add a
+# second libretro core, a second reverse pipe, or a Java media timer.
+#
+# Exact source basis
+# ------------------
+# Native core owner: TASEmulators/freej2me-plus devel
+#   src/libretro/freej2me_libretro.c
+#   blob 534b26cc97129c4fe7b04ea9a6b07fb8945d33b0
+# Java control owner: upstream org.recompile.freej2me.Libretro
+# Existing RG35XX owners:
+#   native/rg35xx_mixer.h + rg35xx_media_events.h
+#   native/rg35xx_media_event_queue.h/.c
+#   src/org/recompile/mobile/RG35XXMediaRegistry.java
+#   src/org/recompile/mobile/RG35XXLifecycle.java
+#
+# PART A — native mixer callback -> bounded handoff queue
+# -----------------------------------------------------
+# The mixer callback is invoked only for typed LOOPED/END events. It must not
+# write directly to pWrite[1], because pWrite[1] is also used by the existing
+# libretro control writer and direct multi-threaded writes could interleave with
+# variable-length commands.
+#
+# Existing core owns one callback:
+#
+#   static void rg35xx_core_media_event(uint8_t event_type,
+#                                       uint32_t player_id,
+#                                       uint64_t media_time_us)
+#   {
+#       if(event_type != RG35XX_MEDIA_EVENT_END_OF_MEDIA &&
+#          event_type != RG35XX_MEDIA_EVENT_LOOPED) return;
+#       rg35xx_media_event_queue_push(event_type, player_id, media_time_us);
+#   }
+#
+# Startup:
+#   rg35xx_media_event_queue_reset();
+#   rg35xx_mixer_init(rg35xx_core_media_event);
+#
+# Game RESET/unload and final deinit also call
+#   rg35xx_media_event_queue_reset();
+# after mixer reset so stale events cannot cross into the next JAR.
+#
+# Queue policy:
+# - fixed 32 records, no heap allocation
+# - pthread mutex only when a media event is pushed/popped; no per-frame lock
+# - overflow drops oldest stale event and keeps newest completion state
+# - no ARMv5 lock-free/atomic memory-ordering assumptions
+#
+# PART B — native queue -> Java opcode 14
+# --------------------------------------
+# Only the existing libretro control-writer context drains the native queue.
+# Do this once at a bounded point in retro_run(), before issuing the next normal
+# frame/input control sequence. Do not drain from the audio callback/thread.
+#
+# For each event build ONE 18-byte control packet on the stack and pass it to the
+# existing write_to_pipe(pWrite[1], packet, 18) in one call. Do not compare the
+# return value: the inspected project history includes variants where this helper
+# returns void.
+#
+# Packet:
+#   byte 0      = 14
+#   bytes 1..4  = big-endian payload length = 13
+#   byte 5      = event type
+#   bytes 6..9  = big-endian player id
+#   bytes 10..17= big-endian media time us
+#
+# Encoding helper contract (no allocation):
+#
+#   static void rg35xx_send_media_event(const struct rg35xx_media_event_record *e)
+#   {
+#       unsigned char p[18];
+#       uint64_t t = e->media_time_us;
+#       p[0] = 14; p[1] = 0; p[2] = 0; p[3] = 0; p[4] = 13;
+#       p[5] = e->event_type;
+#       p[6] = (e->player_id >> 24) & 0xFF;
+#       p[7] = (e->player_id >> 16) & 0xFF;
+#       p[8] = (e->player_id >> 8) & 0xFF;
+#       p[9] = e->player_id & 0xFF;
+#       p[10] = (t >> 56) & 0xFF; p[11] = (t >> 48) & 0xFF;
+#       p[12] = (t >> 40) & 0xFF; p[13] = (t >> 32) & 0xFF;
+#       p[14] = (t >> 24) & 0xFF; p[15] = (t >> 16) & 0xFF;
+#       p[16] = (t >> 8) & 0xFF;  p[17] = t & 0xFF;
+#       write_to_pipe(pWrite[1], p, sizeof(p));
+#   }
+#
+#   static void rg35xx_drain_media_events_to_java(void)
+#   {
+#       struct rg35xx_media_event_record e;
+#       while(rg35xx_media_event_queue_pop(&e)) rg35xx_send_media_event(&e);
+#   }
+#
+# Invariant: pWrite[1] remains the already-existing core->Java stdin/control
+# direction. Java stdout remains binary video IPC only.
+#
+# PART C — Libretro.java case 14 exact read/decode
+# ------------------------------------------------
+# Import RG35XXMediaRegistry and RG35XXLifecycle into the existing Libretro.java.
+# Do not create a replacement parser.
+#
+# Add one reusable 13-byte event buffer to LibretroIO, or allocate it once before
+# the parser loop. Do not allocate a new event object per callback.
+#
+# Case 14:
+#   - require code == 13
+#   - read exactly 13 bytes in a loop; EOF aborts parser cleanly
+#   - validate event type is END_OF_MEDIA(1) or LOOPED(2)
+#   - decode player id and unsigned media-time bytes
+#   - call RG35XXMediaRegistry.enqueueNativeEvent(...)
+#   - do not call PlayerListener/vendor listeners in the parser thread
+#
+# Because Java long is signed, reconstruct the 64-bit bit pattern using shifts
+# and OR on (long)(byte & 0xFF). Media times produced by this platform are far
+# below Long.MAX_VALUE; negative decoded values are rejected defensively.
+#
+# Case 15:
+#   after existing frame/update/input-repeat work:
+#       RG35XXMediaRegistry.drainNativeEvents();
+# This remains the sole Java callback-dispatch cadence; no Timer/executor/thread.
+#
+# PART D — graceful final shutdown without inventing a new opcode
+# --------------------------------------------------------------
+# Upstream Linux retro_deinit() currently SIGKILLs JamVM. RC1 must first give
+# RG35XXLifecycle.platformShutdown() a chance to run so RMS forceFlush and native
+# media RESET happen before process destruction.
+#
+# Do NOT allocate another shutdown opcode. The existing parent->Java control pipe
+# already has a standard terminal condition: EOF.
+#
+# Java LibretroIO parser:
+# - wrap the parser lifetime so System.in EOF reaches a finally block
+# - in finally call RG35XXLifecycle.platformShutdown()
+# - log failure to stderr/Mobile logger only; never stdout
+# - then System.exit(0) after the barrier attempt so the core can reap JamVM
+#
+# Core retro_deinit() Linux ordering:
+#   1. if Java is running, close parent pWrite[1] once to deliver EOF
+#   2. wait for the child to exit for a bounded shutdown-only grace interval
+#      (recommended 2000 ms; this is not a runtime watchdog)
+#   3. if still alive, preserve upstream hard-kill fallback and reap the child
+#   4. stop dedicated audio worker ownership and close rg35xx audio pipe
+#   5. rg35xx_mixer_reset()
+#   6. rg35xx_media_event_queue_reset()
+#   7. rg35xx_media_cache_reset()
+#   8. rg35xx_media_runtime_shutdown()
+#   9. release authoritative SF2 bytes last
+#
+# IMPORTANT: close only pWrite[1] for the graceful EOF request. Do not close the
+# Java->core video read pipe before the Java lifecycle has had its chance to run.
+# The child may emit final diagnostics only on stderr; stdout remains protocol.
+#
+# PART E — restart/game-switch distinctions
+# ------------------------------------------
+# Ordinary game switch:
+#   Java RG35XXLifecycle.unloadGame()
+#   -> RMS forceFlush -> native RESET -> registry reset -> per-game cache/input reset
+#   Native process-lifetime SF2/TSF runtime stays alive.
+#
+# Full retro_reset():
+#   upstream calls retro_deinit -> retro_init -> retro_load_game.
+#   Therefore EOF shutdown + native teardown must be idempotent. A new process gets
+#   a new dedicated audio fd and a freshly initialized media runtime.
+#
+# PART F — completion criteria for this stage
+# -------------------------------------------
+# STATIC-AUDIT-PASS for the process boundary requires all of the following:
+# - typed native callback has one owner and only enqueues
+# - queue is bounded/allocation-free and cannot leak events across game reset
+# - core serializes opcode-14 writes through its normal control-writer context
+# - Java case 14 exact-read + case 15 drain retain existing parser ownership
+# - final shutdown uses EOF -> platformShutdown -> exit before hard-kill fallback
+# - no new stdout use, reverse pipe, timer, synth, worker ring, or runtime watchdog
+#
+# BUILD-PASS remains blocked on applying patches 0014-0017 to the assembled exact
+# source tree and compiling/linking. DEVICE-TEST-PASS remains later.
