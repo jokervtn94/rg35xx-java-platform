@@ -1,0 +1,29 @@
+# RG35XX Java Platform 1.0 Beta 4
+# PlatformGraphics Sprite transform-cache integration
+#
+# Scope: transformed drawRegion / drawTransformedImage hot path only.
+# TRANS_NONE must retain the existing direct drawRGB path.
+#
+# Integration model:
+#   RG35XXTransformCache.Map map = RG35XXTransformCache.get(width, height, transform);
+#   int[] sourceMap = map.sourceIndex;
+#
+# The transformed destination loop then indexes the source subregion through
+# sourceMap rather than recomputing switch/rotation/mirror arithmetic per pixel.
+# Source origin must still be added by the caller:
+#   int local = sourceMap[dy * map.width + dx];
+#   int sx = local % width;
+#   int sy = local / width;
+#   int pixel = source[(srcY + sy) * sourceStride + srcX + sx];
+#
+# Correctness requirements:
+# - keep all 8 javax.microedition.lcdui.game.Sprite transform constants exact
+# - preserve drawRegion source bounds validation
+# - preserve anchor handling and current translation/clip behavior
+# - preserve source alpha and PNG tRNS repair results
+# - never cache mutable image pixels, only geometry maps
+# - reset cache between games together with RG35XXImageCache
+#
+# Cache is intentionally small (24 maps) because typical J2ME sprite sheets
+# repeatedly use a handful of dimensions.  It trades a bounded amount of RAM
+# for reduced integer arithmetic in animation-heavy titles.
