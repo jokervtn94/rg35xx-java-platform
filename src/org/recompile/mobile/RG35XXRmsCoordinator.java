@@ -5,7 +5,7 @@ import java.util.Vector;
 /**
  * Single low-priority coalescing writer for RG35XX RecordStore persistence.
  * RecordStore owns serialization/semantics; this class only schedules flushes.
- * Java 6 compatible. Tasklog: RGJ-B5-002 / RGJ-B5-004 / RGJ-B6-009.
+ * Java 6 compatible. Tasklog: RGJ-B5-002 / RGJ-B5-004 / RGJ-B6-009 / RGJ-RC1-011C.
  */
 public final class RG35XXRmsCoordinator implements Runnable
 {
@@ -103,10 +103,17 @@ public final class RG35XXRmsCoordinator implements Runnable
     /**
      * Force all queued stores to stable storage before returning.
      * A store that failed in the background gets exactly one barrier retry.
-     * If that retry also fails, the exception is surfaced instead of spinning.
+     * If the coordinator has never been activated (the RC1 pinned synchronous
+     * RecordStore baseline), this is deliberately a no-op and does not create
+     * an otherwise useless Java thread.
      */
     public void forceFlush() throws Exception
     {
+        synchronized(lock)
+        {
+            if(!running && dirty.isEmpty() && failed.isEmpty() && !flushing) return;
+        }
+
         start();
         synchronized(lock)
         {
