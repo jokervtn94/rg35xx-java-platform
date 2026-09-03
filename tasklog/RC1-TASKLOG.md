@@ -71,3 +71,14 @@ No class/package/native module may be added merely from memory or an older overl
 - ADD gate: prove the responsibility is not already owned by a current class/module.
 - REMOVE/REPLACE gate: record old path/symbol and replacement/rollback before deletion; never silently resurrect superseded code from an older ZIP/patch.
 - Result: future consolidation work is source-registry-driven rather than memory-driven.
+
+## RGJ-RC1-006 — PlatformImage + immutable image-cache exact-source gate
+- Action: AUDIT
+- Status: IMPLEMENTED
+- Sources checked: upstream `org.recompile.mobile.PlatformImage` on FreeJ2ME-Plus devel; registered `RG35XXImageCache`.
+- Integration spec: `patches/0011-platformimage-rg35xx-cache.patch`.
+- Duplicate result: no new class/package is permitted or required; upstream PlatformImage remains decoder/facade owner and existing RG35XXImageCache remains the only RG35XX decoded-image cache.
+- Preserved semantics: mutable blank images, `Image`/DoJa deep-copy constructors, mutable DoJa byte-array images, immutable Graphics access checks, and upstream type normalization.
+- Finding: current RG35XXImageCache Entry stores pixels but not decoded width/height. A safe cache-hit PlatformImage reconstruction therefore cannot yet be implemented without extending the existing cache API.
+- Decision: MODIFY the existing registered RG35XXImageCache to carry dimensions; do not add a second cache class. Cache insertion occurs only after final PNG/tRNS compatibility repair and only for immutable byte-array images.
+- Gate: not STATIC-AUDIT-PASS yet; dimension-aware cache API + exact PlatformImage call-site must be committed/audited first.
