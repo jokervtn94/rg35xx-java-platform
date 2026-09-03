@@ -9,7 +9,7 @@ Before every future ADD/REMOVE/REPLACE/MODIFY of RG35XX platform code, reload:
 3. `docs/PLATFORM-SOURCE-REGISTRY.md`
 4. current repository tree/target files
 
-No class/package/native module may be added merely from memory or an older overlay. ADD requires a non-overlap check; REMOVE/REPLACE requires an immutable task entry identifying the old symbol and replacement/rollback.
+No class/package/native module may be added merely from memory or an older overlay. ADD requires a non-overlap check; REMOVE/REPLACE requires an immutable task entry identifying the old symbol and replacement/rollback. KEEP also requires current-tree presence verification; a registry entry alone is not proof that its source exists.
 
 ## RGJ-B6-009 — RMS failure-path hardening
 - Action: MODIFY
@@ -122,5 +122,21 @@ No class/package/native module may be added merely from memory or an older overl
 ## RGJ-RC1-010 — Manager + PlatformPlayer media facade gate
 - Action: AUDIT
 - Status: PLANNED
-- Required reload: tasklogs + source registry before mutation.
-- Scope: reconcile upstream `javax.microedition.media.Manager` and `org.recompile.mobile.PlatformPlayer` with registered RG35XXMediaProfile/Registry/NativePlayer; preserve vendor/MMAPI API compatibility and avoid advertising unsupported codecs.
+- Reload performed before audit start: TASKLOG + RC1-TASKLOG + PLATFORM-SOURCE-REGISTRY.
+- Sources inspected so far: upstream `javax.microedition.media.Manager`, upstream `org.recompile.mobile.PlatformPlayer`, `RG35XXMediaProfile`, `RG35XXMediaRegistry`, `RG35XXNativePlayer`, patches 0003/0006.
+- Exact-source finding: upstream Manager still advertises AMR/MPEG/MMF/MLD/iMelody broadly and directly depends on desktop `javax.sound.midi`; upstream PlatformPlayer also imports JavaSound, ScheduledExecutorService and desktop MPEG playback. These cannot become mandatory RG35XX runtime dependencies.
+- Integration requirement retained: Manager capability reporting must route through `RG35XXMediaProfile`; PlatformPlayer remains the public/vendor-compatible facade and delegates supported RG35XX media to `RG35XXNativePlayer` rather than replacing the facade.
+- Tone caveat: `RG35XXMediaRegistry.TYPE_TONE` is not directly registerable by current RG35XXNativePlayer prefetch; tone must be converted to MIDI first and registered as MIDI, as the earlier integration spec states.
+- Gate blocker discovered by source reconciliation: registered `RG35XXWavDecoder.java` is missing from the current repository. Because native PCM registration requires normalized PCM16/rate/channels, this gate must not be locked until that responsibility is restored or explicitly REPLACED.
+- BUILD-PASS and STATIC-AUDIT-PASS for RC1-010 are not claimed yet.
+
+## RGJ-RC1-010A — Current-tree source reconciliation
+- Action: AUDIT
+- Status: STATIC-AUDIT-PASS
+- Document: `docs/RC1-SOURCE-RECONCILIATION.md`.
+- Purpose: verify that registry KEEP entries actually exist before dependent gates proceed.
+- Confirmed missing Java sources: `RG35XXWavDecoder.java`, `RG35XXFontEngine.java`.
+- Confirmed native registry mismatch: `native/rg35xx_audio_dispatch.h` is absent while `rg35xx_audio_dispatch.c` exists; need/ownership must be resolved rather than assuming the header exists.
+- Prior-source search: Library/conversation search did not locate authoritative copies of the two missing Java classes; a prior combined patch did not contain their exact class names.
+- Registry correction: missing entries are now explicitly marked `MISSING — RESTORE REQUIRED`; future KEEP checks require current-tree presence verification.
+- Rule: do not reconstruct missing classes from memory and do not silently substitute unrelated upstream code without a REPLACE task.
