@@ -44,6 +44,8 @@ Vendor container decoders remain preserved but are not advertised on RG35XX whil
 
 `rg35xx_audio_protocol.h`, `rg35xx_media_cache.[hc]`, `rg35xx_media_events.h`, `rg35xx_media_event_queue.[hc]`, `rg35xx_audio_dispatch.[hc]`, `rg35xx_audio_pipe.[hc]`, `rg35xx_mixer.[hc]`, `rg35xx_midi_backend.[hc]`, `rg35xx_tsf_worker.[hc]`, `rg35xx_tsf_impl.c`, `rg35xx_soundfont_source.[hc]`, `rg35xx_media_runtime.[hc]` are KEEP/PRESENT. `rg35xx_tsf_impl.c` is the sole TML/TSF implementation translation unit. Existing `freej2me_libretro.c` is the only core entrypoint.
 
+011I locks the exact project native translation-unit set and link/lifecycle ownership in `docs/RC1-NATIVE-BUILD-MANIFEST.md`. Each registered project `.c` is linked exactly once; headers are declarations only; no second libretro entrypoint or TML/TSF implementation owner is permitted. Previous integration failure classes (`pWrite`, `write_to_pipe`, `check_fast_forwarding`, media callback type/order) are explicit first-build gates.
+
 ## Authoritative external build inputs
 
 - FreeJ2ME-Plus: `TASEmulators/freej2me-plus@13ec186903087156c145268f8706eecfaf9f1e50`.
@@ -54,7 +56,7 @@ Vendor container decoders remain preserved but are not advertised on RG35XX whil
 
 ## Closed static gates
 
-010K media process boundary; 010L direct MIDI/WAV facade; 010M ToneControl; 010N vendor-container capability boundary; 010O native media consolidation; 011B graphics/input/lifecycle; 011C pinned RMS baseline; 011D headless font ownership; 011E TML/TSF provenance; 011F consolidated prebuild gate; 011G external runtime/SoundFont provenance; 011H font-resource provider/provenance.
+010K media process boundary; 010L direct MIDI/WAV facade; 010M ToneControl; 010N vendor-container capability boundary; 010O native media consolidation; 011B graphics/input/lifecycle; 011C pinned RMS baseline; 011D headless font ownership; 011E TML/TSF provenance; 011F consolidated prebuild gate; 011G external runtime/SoundFont provenance; 011H font-resource provider/provenance; 011I native build manifest/core-link ownership.
 
 ## Authoritative integration patches
 
@@ -68,4 +70,4 @@ Reload `tasklog/TASKLOG.md`, `tasklog/RC1-TASKLOG.md`, this registry and current
 
 ## RC1 missing/duplicate gate
 
-Consolidation requires every KEEP source exactly once, no superseded RG35XXFontEngine resurrection, exact TML/TSF headers, pinned SoundFont bytes, pinned/materialized DejaVu font with recorded SHA-256, GNU Classpath headless peer assembly, consolidated native call-sites and one native link manifest before BUILD-PASS.
+Consolidation requires every KEEP source exactly once, no superseded RG35XXFontEngine resurrection, exact TML/TSF headers, pinned SoundFont bytes, pinned/materialized DejaVu font with recorded SHA-256, GNU Classpath headless peer assembly, consolidated native call-sites and the single native link manifest before BUILD-PASS.
