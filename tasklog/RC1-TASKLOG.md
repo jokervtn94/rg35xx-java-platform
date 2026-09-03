@@ -204,3 +204,13 @@ No class/package/native module may be added merely from memory or an older overl
 - Compatibility target: preserve the behavior evidenced by v9.9 logs (14700-Hz synth basis feeding 44100-Hz platform output, bounded voices/worker-ring behavior) unless consolidated source constraints require a separately recorded replacement.
 - Rollback: if authoritative historical worker source is later recovered before BUILD-PASS, compare it against this replacement and record an explicit REVERT/REPLACE decision rather than silently swapping implementations.
 - BUILD-PASS / DEVICE-TEST-PASS are not claimed.
+
+## RGJ-RC1-010G — Native audio dispatch declaration ownership
+- Action: ADD / MODIFY / AUDIT
+- Status: STATIC-AUDIT-PASS
+- Files: `native/rg35xx_audio_dispatch.h`, `native/rg35xx_audio_dispatch.c`, `native/rg35xx_audio_pipe.c`.
+- Pre-change reload: TASKLOG + RC1-TASKLOG + PLATFORM-SOURCE-REGISTRY completed; native directory and both call-site files inspected.
+- Ownership finding: `rg35xx_audio_dispatch.c` already owned the implementation while `rg35xx_audio_pipe.c` carried a local forward declaration; no existing header owned the declaration, so adding one header does not duplicate implementation responsibility.
+- Correction: `rg35xx_audio_dispatch.h` is now the single declaration owner; dispatcher and pipe include it, and the pipe-local prototype is removed.
+- Preserved: protocol parsing, nonblocking pipe ownership, payload allocation policy, dispatch opcode behavior, and stdout/video separation are unchanged.
+- Gate result: declaration ownership mismatch is STATIC-AUDIT-PASS. No C compilation or ARMv5TE link was run, so BUILD-PASS is not claimed.
