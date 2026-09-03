@@ -256,15 +256,32 @@ Statuses: `PLANNED`, `IMPLEMENTED`, `STATIC-AUDIT-PASS`, `BUILD-PASS`, `DEVICE-T
 
 ### RGJ-B3-007 — Media Engine real-JAR regression audit
 - Action: AUDIT
-- Status: PLANNED
-- Diamond Rush: PCM WAV + MMAPI.
-- Asphalt 4: MIDI + PCM + IMA ADPCM + VolumeControl.
-- Zombie Infection: truthful capability negotiation.
-- Prince of Persia: packed MIDI/PCM and Player lifecycle.
-- God of War: multi-MIDI behavior.
-- Vua Cướp Biển: no invented audio for a binary without actual audio implementation/assets.
+- Status: STATIC-AUDIT-PASS
+- Evidence corpus: Diamond Rush, Asphalt 4, Zombie Infection, Prince of Persia Two Thrones, God of War Betrayal, Vua Cướp Biển.
+- Diamond Rush: PCM WAV/MMAPI path maps to WAV decoder -> PCM16 registration -> bounded PCM mixer; RMS remains a later storage subsystem task.
+- Asphalt 4: MIDI + PCM + Microsoft IMA ADPCM + VolumeControl are represented by truthful capability/decode/mixer paths.
+- Zombie Infection: AMR/MMF/MPEG are intentionally not advertised by RG35XXMediaProfile; MIDI/WAV remain selectable supported paths.
+- Prince of Persia: packed MIDI/PCM resources are registered from memory; Player lifecycle is delegated through RG35XXNativePlayer.
+- God of War: multiple MIDI Players map to bounded 2-context MIDI policy; deterministic SFX replacement prevents unbounded synth growth.
+- Vua Cướp Biển: no media backend is invented for a JAR with no actual audio implementation/assets.
+- Limitation: static audit proves architecture/API coverage, not device timing or game-specific runtime correctness.
 
 ### RGJ-B3-008 — Consolidated source/protocol gate
 - Action: AUDIT
-- Status: PLANNED
-- Required before Beta 3 lock: Java 6 compatibility, C compile/link contract, pipe lifecycle, protocol parity, mixer reset/release ordering, END_OF_MEDIA exactly once, no stdout contamination, no audio hot-path SD I/O.
+- Status: STATIC-AUDIT-PASS
+- Java language gate: target additions use Java-6-compatible syntax; upstream build.xml compiles source/target 1.6.
+- Protocol parity: Java/native magic 0x41354A52, version 1, 14-byte header, 4 MiB payload cap and opcodes 1..10 match exactly.
+- stdout isolation: dedicated inherited audio FD remains separate from binary video stdout IPC.
+- Pipe lifecycle: create before fork; parent owns nonblocking read end; JamVM child inherits write end; partial header/payload state retained across reads.
+- Reset/release: mixer voice/context release precedes media blob free; RESET clears mixer before media cache.
+- Hot path: mixer render uses preallocated bounded accumulator; no per-render heap allocation and no SD media staging in new transport path.
+- END_OF_MEDIA: native playback remains authoritative; Java timer synthesis is prohibited. Existing proven native completion path remains compatibility anchor until event-channel replacement.
+- C-link caveat: TML/TSF hook functions are an explicit integration contract with the existing core worker and must be resolved when the consolidated source tree is assembled; therefore BUILD-PASS is intentionally not claimed here.
+- Result: Beta 3 source/protocol architecture is statically lockable; build/device gates remain deferred to consolidated RC as planned.
+
+### RGJ-B3-009 — Beta 3 lock
+- Action: AUDIT
+- Status: STATIC-AUDIT-PASS
+- Decision: Media Engine 2.0 architecture is frozen for Platform 1.0 unless a later audit/build/device test creates an explicit REVERT/REPLACE task.
+- Preserved rollback: legacy SD bridge remains present but non-preferred until consolidated build/device validation proves the dedicated transport end-to-end.
+- Next subsystem: Beta 4 Graphics Engine optimization and compatibility audit.
