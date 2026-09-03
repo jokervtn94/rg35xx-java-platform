@@ -56,6 +56,22 @@ public final class RG35XXNativePlayer implements RG35XXMediaRegistry.EventListen
         channels = channelCount;
     }
 
+    /**
+     * ToneControl and Java-side vendor decoders may produce a standard MIDI file
+     * before prefetch. TYPE_TONE keeps its public semantic type but registers
+     * the converted bytes through the native MIDI transport.
+     */
+    public synchronized void setMidi(byte[] midi)
+    {
+        if(state == CLOSED) throw new IllegalStateException("player closed");
+        if(midi == null || midi.length < 4 ||
+           midi[0] != 'M' || midi[1] != 'T' || midi[2] != 'h' || midi[3] != 'd')
+            throw new IllegalArgumentException("invalid MIDI media");
+        if(state >= PREFETCHED)
+            throw new IllegalStateException("cannot replace MIDI after prefetch");
+        media = midi;
+    }
+
     public synchronized void realize()
     {
         ensureOpen();
@@ -72,8 +88,10 @@ public final class RG35XXNativePlayer implements RG35XXMediaRegistry.EventListen
         if(!RG35XXAudioTransport.isAvailable()) return false;
 
         boolean ok;
-        if(entry.mediaType == RG35XXMediaRegistry.TYPE_MIDI)
-            ok = RG35XXAudioTransport.registerMidi(entry.playerId, media);
+        if(entry.mediaType == RG35XXMediaRegistry.TYPE_MIDI ||
+           entry.mediaType == RG35XXMediaRegistry.TYPE_TONE)
+            ok = media != null && media.length >= 4 &&
+                 RG35XXAudioTransport.registerMidi(entry.playerId, media);
         else if(entry.mediaType == RG35XXMediaRegistry.TYPE_PCM16)
             ok = RG35XXAudioTransport.registerPcm16(entry.playerId, sampleRate, channels, media);
         else
@@ -157,9 +175,21 @@ public final class RG35XXNativePlayer implements RG35XXMediaRegistry.EventListen
         synchronized(this)
         {
             if(state == CLOSED || playerId != entry.playerId) return;
-            state = PREFETCHED;
-            entry.setState(state);
-            entry.markStarted(false);
+
+            if(eventType == RG35XXMediaRegistry.EVENT_LOOPED)
+            {
+                state = STARTED;
+                entry.setState(state);
+                entry.markStarted(true);
+            }
+            else if(eventType == RG35XXMediaRegistry.EVENT_END_OF_MEDIA)
+            {
+                state = PREFETCHED;
+                entry.setState(state);
+                entry.markStarted(false);
+            }
+            else return;
+
             entry.setMediaTimeUs(mediaTimeUs);
             listener = externalEventListener;
         }
