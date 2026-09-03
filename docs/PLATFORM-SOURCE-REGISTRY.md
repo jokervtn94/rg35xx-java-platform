@@ -68,9 +68,11 @@ Vendor compatibility facades (Nokia/Siemens/KDDI/DoJa/JBlend and other upstream 
 | `rg35xx_mixer.h/.c` | KEEP / PRESENT |
 | `rg35xx_midi_backend.h/.c` | KEEP / PRESENT |
 | `rg35xx_tsf_worker.h/.c` | KEEP / PRESENT — RC1 REPLACEMENT IMPLEMENTATION; DEPENDENCY/BUILD AUDIT PENDING 010F |
+| `rg35xx_tsf_impl.c` | KEEP / PRESENT — SINGLE TML/TSF IMPLEMENTATION TRANSLATION UNIT; VENDOR HEADERS PENDING |
+| `rg35xx_soundfont_source.h/.c` | KEEP / PRESENT — EXPLICIT ALLOCATION-FREE SF2 BYTE SOURCE CONTRACT; CORE PROVIDER PENDING |
 | existing `freej2me_libretro.c` | integration owner; do not create a parallel core entrypoint |
 
-Dependency policy for the TML/TSF worker is locked in `docs/RC1-TML-TSF-DEPENDENCY-GATE.md`. The replacement worker source now exists, but this does not claim that TinyMidiLoader/TinySoundFont vendored headers, SoundFont asset/ownership, consolidated core initialization, native link, or device behavior is complete.
+Dependency policy for the TML/TSF worker is locked in `docs/RC1-TML-TSF-DEPENDENCY-GATE.md`. The replacement worker source and explicit SoundFont byte-source contract now exist, but this does not claim that TinyMidiLoader/TinySoundFont vendored headers, an authoritative SoundFont asset/provider, consolidated core initialization, native link, or device behavior is complete. The source holder owns no filesystem path, performs no I/O/allocation, and cannot substitute an arbitrary SoundFont for the still-unresolved authoritative asset/provider.
 
 ## Authoritative integration patches
 
