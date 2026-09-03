@@ -64,7 +64,7 @@ grep -q 'TML_IMPLEMENTATION' "$ROOT/native/rg35xx_tsf_impl.c" || fail "TML owner
 # Current pin-era consolidation contracts must not disappear during assembly.
 for p in \
   0020-pinned-graphics-input-lifecycle-consolidation.patch \
-  0021-pinned-recordstore-safe-baseline.patch \
+  0021-pinned-rms-safe-baseline.patch \
   0022-pinned-headless-font-peer-consolidation.patch
 do
   require_file "patches/$p"
