@@ -106,6 +106,21 @@ No class/package/native module may be added merely from memory or an older overl
 
 ## RGJ-RC1-009 — Libretro input adapter exact-source gate
 - Action: AUDIT
+- Status: STATIC-AUDIT-PASS
+- Reload performed: TASKLOG + RC1-TASKLOG + PLATFORM-SOURCE-REGISTRY before inspection/mutation.
+- Sources checked: upstream FreeJ2ME-Plus devel `org.recompile.freej2me.Libretro`, upstream `MobilePlatform`, registered `RG35XXInputEngine`.
+- Integration spec: `patches/0013-libretro-rg35xx-input-engine.patch`.
+- Ownership: Libretro remains stdin protocol/parser owner; MobilePlatform remains MIDP/vendor dispatch owner; Mobile.getMobileKey remains frontend-slot -> J2ME mapping owner; RG35XXInputEngine is the sole RG35XX held/repeat state machine.
+- Exact-source finding: upstream Libretro directly mutates `MobilePlatform.pressedKeys[code]` and immediately calls MobilePlatform keyPressed/keyReleased. RC integration must replace that transition dispatch, not run RG35XXInputEngine beside it, otherwise duplicate MIDP transitions occur.
+- Repeat policy: no Timer/repeat thread/executor. `RG35XXInputEngine.update()` must be driven by an existing bounded libretro/core update cadence; the engine itself prevents catch-up repeat storms after stalls.
+- Numeric keypad policy: do not remap in RG35XXInputEngine. Preserve the already-working mapping by converting through `Mobile.getMobileKey(slot)` exactly once at the reusable sink boundary.
+- Safety correction: validate frontend slot before indexing `pressedKeys`/input state so malformed protocol input cannot kill the Libretro IO thread with ArrayIndexOutOfBoundsException.
+- Compatibility mirror: `MobilePlatform.pressedKeys` may remain synchronized for upstream behavior, but cannot own a second repeat generator.
+- Lifecycle: `RG35XXLifecycle` resets RG35XXInputEngine between games so no held key leaks into the next JAR.
+- Gate result: STATIC-AUDIT-PASS for exact-source ownership/integration contract. BUILD-PASS remains blocked on applying the consolidated call site and verifying the actual update/tick hook.
+
+## RGJ-RC1-010 — Manager + PlatformPlayer media facade gate
+- Action: AUDIT
 - Status: PLANNED
 - Required reload: tasklogs + source registry before mutation.
-- Scope: reconcile `org.recompile.freej2me.Libretro`, upstream MobilePlatform key dispatch and registered `RG35XXInputEngine`; preserve the already-stable RG35XX key mapping and numeric keypad behavior without creating a second input owner.
+- Scope: reconcile upstream `javax.microedition.media.Manager` and `org.recompile.mobile.PlatformPlayer` with registered RG35XXMediaProfile/Registry/NativePlayer; preserve vendor/MMAPI API compatibility and avoid advertising unsupported codecs.
