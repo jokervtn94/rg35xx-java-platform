@@ -1,13 +1,13 @@
 package org.recompile.mobile;
 
 import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.zip.CRC32;
 
 /**
  * Bounded immutable decoded ARGB cache for RG35XX.
  * Introduced in Beta 1; restored into the consolidated project tree in Beta 6.
- * Returned pixel arrays are copies so MIDlets cannot mutate cached content.
+ * RC1 entries carry dimensions so PlatformImage can reconstruct a fresh image
+ * without decoding the source again. Returned pixel arrays are always copies.
  */
 public final class RG35XXImageCache
 {
@@ -19,28 +19,34 @@ public final class RG35XXImageCache
 
     private RG35XXImageCache() { }
 
-    public static synchronized int[] get(String key)
+    public static synchronized CachedImage get(String key)
     {
         Entry e = (Entry)cache.get(key);
-        return e == null ? null : copy(e.pixels);
+        if(e == null) return null;
+        return new CachedImage(e.width, e.height, copy(e.pixels));
     }
 
-    public static synchronized void put(String key, int[] pixels)
+    public static synchronized void put(String key, int width, int height, int[] pixels)
     {
         if(key == null || pixels == null) return;
-        int cost = pixels.length * 4;
-        if(cost <= 0 || cost > MAX_BYTES) return;
+        if(width <= 0 || height <= 0) return;
+        long expected = (long)width * (long)height;
+        if(expected != pixels.length) return;
+
+        long costLong = expected * 4L;
+        if(costLong <= 0L || costLong > MAX_BYTES) return;
+        int cost = (int)costLong;
 
         Entry old = (Entry)cache.remove(key);
         if(old != null) bytes -= old.bytes;
-        cache.put(key, new Entry(copy(pixels), cost));
+        cache.put(key, new Entry(width, height, copy(pixels), cost));
         bytes += cost;
         trim();
     }
 
     public static String keyForBytes(byte[] data, int offset, int length)
     {
-        if(data == null || offset < 0 || length < 0 || offset + length > data.length)
+        if(data == null || offset < 0 || length < 0 || offset > data.length - length)
             throw new IllegalArgumentException("invalid image byte slice");
         CRC32 crc = new CRC32();
         crc.update(data, offset, length);
@@ -73,10 +79,34 @@ public final class RG35XXImageCache
         return out;
     }
 
+    /** Immutable metadata object. pixels is already a defensive copy. */
+    public static final class CachedImage
+    {
+        public final int width;
+        public final int height;
+        public final int[] pixels;
+
+        private CachedImage(int width, int height, int[] pixels)
+        {
+            this.width = width;
+            this.height = height;
+            this.pixels = pixels;
+        }
+    }
+
     private static final class Entry
     {
+        final int width;
+        final int height;
         final int[] pixels;
         final int bytes;
-        Entry(int[] pixels, int bytes) { this.pixels = pixels; this.bytes = bytes; }
+
+        Entry(int width, int height, int[] pixels, int bytes)
+        {
+            this.width = width;
+            this.height = height;
+            this.pixels = pixels;
+            this.bytes = bytes;
+        }
     }
 }
