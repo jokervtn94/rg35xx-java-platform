@@ -1,10 +1,10 @@
-#include "rg35xx_audio_protocol.h"
+#include "rg35xx_audio_dispatch.h"
 #include "rg35xx_media_cache.h"
 #include "rg35xx_mixer.h"
 #include <stdint.h>
 #include <stddef.h>
 
-/* Tasklog: RGJ-B3-004 / RGJ-B3-005 / RGJ-B3-006 */
+/* Tasklog: RGJ-B3-004 / RGJ-B3-005 / RGJ-B3-006 / RGJ-RC1-010G */
 static uint64_t rg35xx_audio_u64le(const uint8_t *p)
 {
     uint64_t v = 0;
