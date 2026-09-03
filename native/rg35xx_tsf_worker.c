@@ -19,7 +19,8 @@ struct rg35xx_tsf_slot {
     tml_message *first;
     tml_message *next;
     tsf *synth;
-    uint64_t time_us;
+    uint64_t frame_pos;
+    uint64_t duration_frames;
     uint64_t duration_us;
     int opened;
     int playing;
@@ -38,6 +39,27 @@ static short render_pcm[RG35XX_TSF_RENDER_FRAMES * 2u];
 static int valid_slot(int slot)
 {
     return slot >= 0 && slot < RG35XX_TSF_SLOTS;
+}
+
+static uint64_t us_to_frame_ceil(uint64_t us)
+{
+    uint64_t whole = us / UINT64_C(1000000);
+    uint64_t rem = us % UINT64_C(1000000);
+    return whole * RG35XX_TSF_RATE +
+        (rem * RG35XX_TSF_RATE + UINT64_C(999999)) / UINT64_C(1000000);
+}
+
+static uint64_t frame_to_us(uint64_t frame)
+{
+    uint64_t whole = frame / RG35XX_TSF_RATE;
+    uint64_t rem = frame % RG35XX_TSF_RATE;
+    return whole * UINT64_C(1000000) +
+        (rem * UINT64_C(1000000)) / RG35XX_TSF_RATE;
+}
+
+static uint64_t message_frame(const tml_message *m)
+{
+    return m ? us_to_frame_ceil((uint64_t)m->time * UINT64_C(1000)) : 0;
 }
 
 static int prepare_channels(tsf *synth)
@@ -94,15 +116,18 @@ static void apply_message(tsf *synth, const tml_message *m)
 static void replay_to(struct rg35xx_tsf_slot *s, uint64_t target_us)
 {
     tml_message *m;
+    uint64_t target_frame;
     if(!s || !s->synth) return;
     reset_synth(s);
+    target_frame = us_to_frame_ceil(target_us);
+    if(target_frame > s->duration_frames) target_frame = s->duration_frames;
     m = s->first;
-    while(m && ((uint64_t)m->time * UINT64_C(1000)) <= target_us) {
+    while(m && message_frame(m) <= target_frame) {
         apply_message(s->synth, m);
         m = m->next;
     }
     s->next = m;
-    s->time_us = target_us > s->duration_us ? s->duration_us : target_us;
+    s->frame_pos = target_frame;
 }
 
 static int restart_loop(struct rg35xx_tsf_slot *s)
@@ -112,7 +137,7 @@ static int restart_loop(struct rg35xx_tsf_slot *s)
         if(s->loops_left > 1) --s->loops_left;
         reset_synth(s);
         s->next = s->first;
-        s->time_us = 0;
+        s->frame_pos = 0;
         s->finished = 0;
         s->looped_pending = 1;
         return 1;
@@ -120,19 +145,8 @@ static int restart_loop(struct rg35xx_tsf_slot *s)
     s->playing = 0;
     s->paused = 0;
     s->finished = 1;
-    s->time_us = s->duration_us;
+    s->frame_pos = s->duration_frames;
     return 0;
-}
-
-static size_t frames_until_us(uint64_t now_us, uint64_t target_us)
-{
-    uint64_t delta;
-    uint64_t frames;
-    if(target_us <= now_us) return 0;
-    delta = target_us - now_us;
-    frames = (delta * RG35XX_TSF_RATE + UINT64_C(999999)) / UINT64_C(1000000);
-    if(frames > (uint64_t)RG35XX_TSF_RENDER_FRAMES) frames = RG35XX_TSF_RENDER_FRAMES;
-    return (size_t)frames;
 }
 
 static void render_frames(struct rg35xx_tsf_slot *s, int32_t *accum, size_t offset, size_t frames)
@@ -141,7 +155,7 @@ static void render_frames(struct rg35xx_tsf_slot *s, int32_t *accum, size_t offs
     if(!frames) return;
     tsf_render_short(s->synth, render_pcm, (int)frames, 0);
     for(i = 0; i < frames * 2u; ++i) accum[(offset * 2u) + i] += (int32_t)render_pcm[i];
-    s->time_us += ((uint64_t)frames * UINT64_C(1000000)) / RG35XX_TSF_RATE;
+    s->frame_pos += frames;
 }
 
 int rg35xx_tsf_worker_init(const uint8_t *soundfont, size_t size)
@@ -199,6 +213,7 @@ int rg35xx_tsf_open_memory(int slot, const uint8_t *midi, size_t size)
     }
     tml_get_info(s->first, NULL, NULL, NULL, NULL, &length_ms);
     s->duration_us = (uint64_t)length_ms * UINT64_C(1000);
+    s->duration_frames = us_to_frame_ceil(s->duration_us);
     s->next = s->first;
     s->volume = 100;
     s->opened = 1;
@@ -208,6 +223,7 @@ int rg35xx_tsf_open_memory(int slot, const uint8_t *midi, size_t size)
 int rg35xx_tsf_start(int slot, int volume, int loop_count, uint64_t media_time_us)
 {
     struct rg35xx_tsf_slot *s;
+    uint64_t requested_frame;
     if(!valid_slot(slot) || loop_count == 0) return 0;
     s = &slots[slot];
     if(!s->opened || !s->synth) return 0;
@@ -219,7 +235,16 @@ int rg35xx_tsf_start(int slot, int volume, int loop_count, uint64_t media_time_u
     s->looped_pending = 0;
     s->finished = 0;
     tsf_set_volume(s->synth, (float)volume / 100.0f);
-    if(media_time_us != s->time_us) replay_to(s, media_time_us);
+    requested_frame = us_to_frame_ceil(media_time_us);
+    if(requested_frame > s->duration_frames) requested_frame = s->duration_frames;
+    if(requested_frame != s->frame_pos) replay_to(s, media_time_us);
+    if(s->duration_frames == 0 || s->frame_pos >= s->duration_frames) {
+        s->playing = 0;
+        s->paused = 0;
+        s->finished = 1;
+        s->frame_pos = s->duration_frames;
+        return 1;
+    }
     s->playing = 1;
     s->paused = 0;
     return 1;
@@ -244,7 +269,7 @@ int rg35xx_tsf_stop(int slot)
     if(!s->opened) return 0;
     reset_synth(s);
     s->next = s->first;
-    s->time_us = 0;
+    s->frame_pos = 0;
     s->playing = 0;
     s->paused = 0;
     s->finished = 0;
@@ -259,8 +284,12 @@ int rg35xx_tsf_seek(int slot, uint64_t media_time_us)
     s = &slots[slot];
     if(!s->opened || !s->synth) return 0;
     replay_to(s, media_time_us);
-    s->finished = 0;
+    s->finished = (s->duration_frames == 0 || s->frame_pos >= s->duration_frames);
     s->looped_pending = 0;
+    if(s->finished) {
+        s->playing = 0;
+        s->paused = 0;
+    }
     return 1;
 }
 
@@ -285,22 +314,22 @@ size_t rg35xx_tsf_mix_slot(int slot, int32_t *accum, size_t frames)
     while(done < frames && s->playing) {
         size_t remaining = frames - done;
         size_t segment;
-        uint64_t next_event_us = s->next ? (uint64_t)s->next->time * UINT64_C(1000) : s->duration_us;
+        uint64_t boundary_frame = s->next ? message_frame(s->next) : s->duration_frames;
 
-        while(s->next && next_event_us <= s->time_us) {
+        while(s->next && boundary_frame <= s->frame_pos) {
             apply_message(s->synth, s->next);
             s->next = s->next->next;
-            next_event_us = s->next ? (uint64_t)s->next->time * UINT64_C(1000) : s->duration_us;
+            boundary_frame = s->next ? message_frame(s->next) : s->duration_frames;
         }
 
-        if(!s->next && s->time_us >= s->duration_us) {
+        if(!s->next && s->frame_pos >= s->duration_frames) {
             if(!restart_loop(s)) break;
             continue;
         }
 
-        segment = frames_until_us(s->time_us, next_event_us);
-        if(!segment) segment = 1;
+        segment = boundary_frame > s->frame_pos ? (size_t)(boundary_frame - s->frame_pos) : 1u;
         if(segment > remaining) segment = remaining;
+        if(segment > RG35XX_TSF_RENDER_FRAMES) segment = RG35XX_TSF_RENDER_FRAMES;
         render_frames(s, accum, done, segment);
         done += segment;
     }
@@ -314,7 +343,9 @@ int rg35xx_tsf_slot_finished(int slot)
 
 uint64_t rg35xx_tsf_slot_time_us(int slot)
 {
-    return valid_slot(slot) ? slots[slot].time_us : 0;
+    if(!valid_slot(slot)) return 0;
+    if(slots[slot].finished) return slots[slot].duration_us;
+    return frame_to_us(slots[slot].frame_pos);
 }
 
 int rg35xx_tsf_take_looped(int slot)
