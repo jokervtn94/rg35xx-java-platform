@@ -90,8 +90,11 @@ Dependency policy for the TML/TSF worker is locked in `docs/RC1-TML-TSF-DEPENDEN
 - 0013 Libretro RG35XX input engine
 - 0014 Libretro native-media event return channel
 - 0015 exact upstream `freej2me_libretro.c` native-media runtime/process-lifecycle integration
+- 0016 exact upstream `javaOpen()` dedicated-audio FD/argv inheritance contract
 
 Patch 0015 is based on the inspected upstream devel `src/libretro/freej2me_libretro.c` blob `534b26cc97129c4fe7b04ea9a6b07fb8945d33b0`. It remains an integration contract until applied to the assembled RG35XX core; it must not be treated as a second core implementation.
+
+Patch 0016 keeps `rg35xx_audio_pipe` as the sole dedicated Java→native audio transport owner and narrows the exact Linux process boundary: create before fork, inherit only the child write descriptor across exec, place `-Dfreej2me.rg35xx.audio.fd=<fd>` before `-jar`, close the opposite endpoints after fork, close both endpoints on fork failure/deinit, and never repurpose fd 0/1/2. It supersedes only ambiguous argv wording in patch 0004; it does not add another pipe implementation. BUILD validation of the assembled command line remains pending.
 
 A patch may be superseded by consolidated source, but its behavior must be accounted for before removal.
 
