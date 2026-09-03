@@ -80,17 +80,19 @@
 # ---------------------------
 # At the top of existing Manager.playTone(note,duration,volume):
 # - preserve argument validation (note 0..127, duration >0, volume clamp 0..100)
+# - preserve upstream compatibility policy that durations below 50 ms use an
+#   effective duration of 50 ms (several games rely on very short audible cues)
 # - if RG35XXPlatformProfile.isActive(), bypass toneChannel/toneThread entirely
-# - generate exact-duration SMF with
-#     RG35XXToneSequenceEncoder.encodeSingleTone(note,duration,volume)
+# - generate SMF from that same effective duration with
+#     RG35XXToneSequenceEncoder.encodeSingleTone(note,effectiveDuration,volume)
 # - keep one Manager-owned transient RG35XXNativePlayer for playTone; close the
 #   previous transient before replacing it so repeated calls do not leak players
 # - bind one reusable event listener; on native END_OF_MEDIA close/release the
 #   transient player if its id is still the active one
 # - realize/prefetch/start and return immediately (non-blocking)
 #
-# This preserves the single-current-tone behavior of upstream's interrupted
-# toneThread without creating a Java sleep thread on RG35XX.
+# This preserves the single-current-tone behavior and duration compatibility of
+# upstream's interrupted toneThread without creating a Java sleep thread on RG35XX.
 #
 # PART E — capability promotion
 # -----------------------------
