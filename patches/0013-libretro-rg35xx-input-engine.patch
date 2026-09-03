@@ -1,0 +1,44 @@
+# RG35XX RC1 integration specification — Libretro input adapter
+# Task: RGJ-RC1-009
+# This is an exact-source integration contract, not a BUILD-PASS claim.
+
+OWNER
+- org.recompile.freej2me.Libretro remains the binary stdin protocol/parser owner.
+- org.recompile.mobile.MobilePlatform remains the MIDP/vendor key dispatch owner.
+- org.recompile.mobile.RG35XXInputEngine is the only RG35XX held/repeat state machine.
+- Mobile.getMobileKey(code) remains the authoritative frontend-slot -> J2ME key mapping.
+
+REQUIRED LIBRETRO INTEGRATION
+1. Import RG35XXInputEngine. Do not create another input class, Timer or repeat thread.
+2. Keep the existing 5-byte libretro input protocol and mouse handling unchanged.
+3. Validate joypad slot before indexing MobilePlatform.pressedKeys or RG35XXInputEngine state. Invalid slots are ignored, never allowed to throw ArrayIndexOutOfBoundsException in the IO thread.
+4. For a valid joypad DOWN event, feed the physical/logical frontend slot to RG35XXInputEngine.press(slot, nowMs, sink). The sink converts exactly once with Mobile.getMobileKey(slot) and calls MobilePlatform.keyPressed().
+5. For a valid joypad UP event, feed the same slot to RG35XXInputEngine.release(slot, sink); sink converts exactly once and calls MobilePlatform.keyReleased().
+6. Do not independently dispatch MobilePlatform.keyPressed/keyReleased beside RG35XXInputEngine, otherwise one physical transition becomes two MIDP transitions.
+7. Drive RG35XXInputEngine.update(nowMs, sink) from an already-existing bounded libretro/core update cadence. Do not create a Java repeat worker. Repeat dispatch calls MobilePlatform.keyRepeated(Mobile.getMobileKey(slot)).
+8. Keep MobilePlatform.pressedKeys synchronized for upstream compatibility, but it is a compatibility mirror only; it must not become a second repeat generator.
+9. Numeric keypad mappings remain owned by Mobile.getMobileKey(). RG35XXInputEngine must not remap numeric keys or phone profiles.
+10. Game unload/reset calls RG35XXInputEngine.reset() through RG35XXLifecycle. No held key may leak into the next JAR.
+
+SINK CONTRACT
+A single reusable sink instance should be owned by Libretro (not allocated per event):
+- keyPressed(slot)  -> MobilePlatform.keyPressed(Mobile.getMobileKey(slot))
+- keyReleased(slot) -> MobilePlatform.keyReleased(Mobile.getMobileKey(slot))
+- keyRepeated(slot) -> MobilePlatform.keyRepeated(Mobile.getMobileKey(slot))
+
+TIMING
+- RG35XXInputEngine owns repeat delay/interval.
+- Libretro supplies monotonic-enough milliseconds from an existing clock/update path.
+- A delayed update produces at most one repeat for that update; the engine advances nextRepeat to now + interval when behind, preventing repeat storms after stalls.
+
+PRESERVE
+- Existing frontend key slot numbering and Mobile.getMobileKey() mapping.
+- Existing MobilePlatform MIDP, Vodafone and DoJa state updates.
+- Existing Canvas command handling and areKeysSuppressed behavior.
+- Mouse rotation/pointer dispatch.
+- stdout video IPC and dedicated audio transport are unrelated and unchanged.
+
+BUILD GATE
+- Confirm actual libretro update/tick call site for RG35XXInputEngine.update().
+- Confirm valid frontend slot range against pressedKeys length and native protocol.
+- Compile the consolidated source before marking BUILD-PASS.
