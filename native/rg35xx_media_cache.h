@@ -41,4 +41,11 @@ struct rg35xx_media_entry {
     int channels;
 };
 
+void rg35xx_media_cache_reset(void);
+struct rg35xx_media_entry *rg35xx_media_cache_find(uint32_t player_id);
+int rg35xx_media_cache_register(uint32_t player_id, uint8_t type,
+                                const uint8_t *blob, size_t blob_size,
+                                int sample_rate, int channels);
+int rg35xx_media_cache_release(uint32_t player_id);
+
 #endif
