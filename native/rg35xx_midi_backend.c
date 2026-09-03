@@ -1,9 +1,10 @@
 #include "rg35xx_midi_backend.h"
+#include "rg35xx_tsf_worker.h"
 #include <string.h>
 
 /*
  * Media Engine adapter state. Actual TML/TSF object construction/rendering is
- * supplied by the proven core audio worker through the hook functions below.
+ * supplied by the replacement worker declared in rg35xx_tsf_worker.h.
  * This keeps Platform 1.0 from embedding a second synthesizer implementation.
  */
 struct rg35xx_midi_ctx {
@@ -15,17 +16,6 @@ struct rg35xx_midi_ctx {
 
 static struct rg35xx_midi_ctx ctx[RG35XX_MEDIA_MAX_MIDI_CTX];
 static rg35xx_midi_end_cb end_callback;
-
-/* Existing core integration hooks. Return nonzero on success. */
-int rg35xx_tsf_open_memory(int slot, const uint8_t *midi, size_t size);
-int rg35xx_tsf_start(int slot, int volume, int loop_count, uint64_t media_time_us);
-int rg35xx_tsf_pause(int slot);
-int rg35xx_tsf_stop(int slot);
-int rg35xx_tsf_seek(int slot, uint64_t media_time_us);
-void rg35xx_tsf_close(int slot);
-size_t rg35xx_tsf_mix_slot(int slot, int32_t *accum, size_t frames);
-int rg35xx_tsf_slot_finished(int slot);
-uint64_t rg35xx_tsf_slot_time_us(int slot);
 
 static int find_slot(uint32_t id)
 {
