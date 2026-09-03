@@ -2,7 +2,7 @@
 #include "rg35xx_midi_backend.h"
 #include <string.h>
 
-/* Tasklog: RGJ-B3-006 / RGJ-B3-STAB-001 / RGJ-RC1-010D */
+/* Tasklog: RGJ-B3-006 / RGJ-B3-STAB-001 / RGJ-RC1-010D / RGJ-RC1-010H */
 #define RG35XX_MIXER_CHUNK_FRAMES 1024u
 #define RG35XX_PCM_PHASE_BITS 15u
 #define RG35XX_PCM_PHASE_ONE  (1u << RG35XX_PCM_PHASE_BITS)
@@ -17,7 +17,7 @@ struct pcm_voice {
 };
 
 static struct pcm_voice pcm_voices[RG35XX_MEDIA_MAX_PCM_VOICES];
-static rg35xx_media_end_cb media_end_callback;
+static rg35xx_media_event_cb media_event_callback;
 /* Static reusable accumulator: no malloc/calloc/free in audio render hot path. */
 static int32_t mix_accum[RG35XX_MIXER_CHUNK_FRAMES * 2u];
 
@@ -69,12 +69,12 @@ static struct pcm_voice *alloc_voice(uint32_t id)
     return &pcm_voices[0];
 }
 
-void rg35xx_mixer_init(rg35xx_media_end_cb end_cb)
+void rg35xx_mixer_init(rg35xx_media_event_cb event_cb)
 {
     memset(pcm_voices, 0, sizeof(pcm_voices));
     memset(mix_accum, 0, sizeof(mix_accum));
-    media_end_callback = end_cb;
-    rg35xx_midi_backend_init(end_cb);
+    media_event_callback = event_cb;
+    rg35xx_midi_backend_init(event_cb);
 }
 
 void rg35xx_mixer_reset(void)
@@ -165,10 +165,16 @@ static void pcm_finish_or_loop(struct rg35xx_media_entry *e, struct pcm_voice *v
 {
     if(e->loop_count == -1 || e->loop_count > 1) {
         if(e->loop_count > 1) e->loop_count--;
-        v->source_pos_q15 = 0; return;
+        v->source_pos_q15 = 0;
+        e->media_time_us = 0;
+        if(media_event_callback)
+            media_event_callback(RG35XX_MEDIA_EVENT_LOOPED, e->player_id, 0);
+        return;
     }
-    v->active = 0; e->state = RG35XX_MEDIA_STOPPED; e->media_time_us = 0;
-    if(media_end_callback) media_end_callback(e->player_id);
+    v->active = 0;
+    e->state = RG35XX_MEDIA_STOPPED;
+    if(media_event_callback)
+        media_event_callback(RG35XX_MEDIA_EVENT_END_OF_MEDIA, e->player_id, e->media_time_us);
 }
 
 static void render_chunk(int16_t *out, size_t frames)
