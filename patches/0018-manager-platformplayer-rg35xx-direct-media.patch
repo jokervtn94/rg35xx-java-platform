@@ -1,0 +1,196 @@
+# RGJ-RC1-010L — direct MIDI/WAV Manager + PlatformPlayer facade integration
+#
+# Scope
+# -----
+# Completes the Java direct-media facade stage for the formats with a proven
+# RG35XX backend: MIDI and WAV. Desktop/AWT behavior remains upstream-owned.
+# ToneControl/vendor container conversion is intentionally a separate next stage
+# and is not advertised by RG35XXMediaProfile until its JavaSound-free conversion
+# path is source-audited.
+#
+# Exact upstream source basis
+# ---------------------------
+# - javax.microedition.media.Manager (TASEmulators/freej2me-plus devel)
+# - org.recompile.mobile.PlatformPlayer (same devel tree)
+# - org.recompile.mobile.JavaxPlatformPlayer extends PlatformPlayer and remains
+#   the javax facade returned by Manager.
+#
+# Current upstream findings
+# -------------------------
+# Manager imports/owns desktop javax.sound.midi objects and createPlayer() returns
+# JavaxPlatformPlayer. getSupportedContentTypes() advertises MIDI/WAV plus AMR,
+# MPEG, MLD, MMF, iMelody and tone. playTone() directly uses JavaSound channels.
+#
+# PlatformPlayer imports JavaSound/sample/MPEG and its constructor immediately
+# constructs midiPlayer/wavPlayer/MP3Player or sniff/decode variants. Therefore
+# an RG35XX branch MUST happen before desktop backend construction for target
+# direct formats.
+#
+# PART A — explicit target selector
+# ---------------------------------
+# `RG35XXPlatformProfile.isActive()` is the sole Java selector. It reads:
+#   -Dfreej2me.rg35xx=true
+# supplied by the RG35XX libretro process argv before `-jar`.
+#
+# The selector is independent from `freej2me.rg35xx.audio.fd`, because audio-FD
+# creation may fail while the platform must still retain RG35XX-safe capability
+# reporting/fail-safe behavior.
+#
+# Desktop/AWT launches without this property and remain on existing upstream
+# JavaSound/MPEG paths.
+#
+# PART B — Manager capability gate
+# --------------------------------
+# In Manager.getSupportedContentTypes(protocol):
+#
+#   if(RG35XXPlatformProfile.isActive())
+#       return RG35XXMediaProfile.getSupportedTypes(protocol);
+#   else
+#       return the existing upstream desktop list unchanged;
+#
+# RG35XX direct advertised types at this stage:
+#   audio/midi
+#   audio/x-midi
+#   audio/wav
+#   audio/x-wav
+#
+# Do NOT advertise audio/amr, audio/mpeg, audio/x-tone-seq, audio/mmf,
+# audio/x-mld or audio/x-imy in this stage. Their direct target path is not yet
+# fully proven.
+#
+# Manager.getSupportedProtocols(contentType) may preserve upstream behavior for
+# desktop. On RG35XX it must not claim network/capture protocols; resource/input
+# stream creation remains the primary path. Dedicated device locators are not
+# evidence that audio/x-tone-seq conversion is complete.
+#
+# PART C — PlatformPlayer ownership
+# ---------------------------------
+# PlatformPlayer remains the public Player implementation and sole owner of:
+# - javax.microedition.media.Player state surface
+# - Control objects exposed to MIDP/vendor wrappers
+# - PlayerListener + Siemens/KDDI/Nokia/DoJa/JBlend fan-out
+# - public contentType semantics
+#
+# RG35XXNativePlayer remains a private backend/delegate. Do not make Manager
+# return RG35XXNativePlayer directly and do not duplicate vendor callbacks.
+#
+# Add one optional field to PlatformPlayer:
+#   private RG35XXNativePlayer rg35xxPlayer;
+#
+# Constructor ordering for InputStream/type:
+#   1. initialize existing listener/control facade fields
+#   2. if RG35XXPlatformProfile.isActive(), run the RG35XX direct-media path
+#      BEFORE constructing midiPlayer/wavPlayer/MP3Player
+#   3. otherwise execute existing upstream constructor unchanged
+#
+# PART D — RG35XX direct MIDI path
+# --------------------------------
+# If canonical type is MIDI:
+#   rg35xxPlayer = new RG35XXNativePlayer(stream, canonicalType);
+#   bind one reusable RG35XXMediaRegistry.EventListener that calls the existing
+#   PlatformPlayer.notifyListeners() only after native registry drain
+#   return from constructor without creating desktop midiPlayer/Sequencer/Synth
+#
+# If type is empty/unknown, bounded format sniffing may identify an MThd stream
+# and route it here. Sniffing must read the stream exactly once into a byte array
+# and recreate the backend from ByteArrayInputStream; do not rely on available()
+# as complete stream length for arbitrary InputStream implementations.
+#
+# PART E — RG35XX WAV path
+# ------------------------
+# If canonical type is WAV, or bounded sniffing finds RIFF/WAVE:
+#   1. decode via RG35XXWavDecoder.decode(...)
+#   2. create RG35XXNativePlayer with WAV public content type
+#   3. call setPcm16(decoded.pcm16, decoded.sampleRate, decoded.channels)
+#   4. bind the same reusable native event listener
+#   5. return before desktop AudioSystem/Clip construction
+#
+# WAV decoder/load allocations occur at realize/prefetch/setup time, not in the
+# native render hot path.
+#
+# PART F — Player lifecycle delegation
+# ------------------------------------
+# Existing PlatformPlayer public methods keep their signatures and notification
+# ownership. When rg35xxPlayer != null:
+#
+# realize():
+#   rg35xxPlayer.realize(); facade state = REALIZED
+#
+# prefetch():
+#   call rg35xxPlayer.prefetch(); on success facade state = PREFETCHED;
+#   on failure remain REALIZED or throw MediaException according to the exact
+#   upstream method signature/exception contract; never fall through and create
+#   a desktop backend.
+#
+# start():
+#   if rg35xxPlayer.start() succeeds, facade state = STARTED and call existing
+#   notifyListeners(PlayerListener.STARTED, getMediaTime()) once.
+#
+# stop():
+#   delegate STOP; facade state = PREFETCHED; preserve target STOP semantics
+#   (media time resets to zero in native backend) and call STOPPED once.
+#
+# deallocate():
+#   must not spawn the upstream JavaSound close threads for rg35xxPlayer.
+#   Preserve semantic resource ownership without releasing the Player facade.
+#
+# close():
+#   rg35xxPlayer.close(); facade state = CLOSED; existing CLOSED notification
+#   behavior remains PlatformPlayer-owned.
+#
+# setMediaTime()/getMediaTime():
+#   native media time is authoritative. PlatformPlayer forwards without Java
+#   wall-clock timers.
+#
+# setLoopCount():
+#   validate upstream MMAPI semantics then delegate exactly once. Native worker/
+#   mixer owns actual loop decrement/restart.
+#
+# volumeControl:
+#   preserve the existing facade Control object but delegate level changes to
+#   RG35XXNativePlayer.setVolume().
+#
+# PART G — native event semantics correction
+# ------------------------------------------
+# `RG35XXMediaRegistry` and `RG35XXNativePlayer` were corrected in this stage:
+# - EVENT_LOOPED is an intermediate restart and keeps started/STARTED state
+# - EVENT_END_OF_MEDIA alone transitions to PREFETCHED/started=false
+# - facade listener binding then calls existing notifyListeners(LOOPED/END,...)
+#
+# This prevents an intermediate LOOPED event from making PlatformPlayer appear
+# stopped while native playback has already restarted.
+#
+# PART H — target unsupported direct types
+# ----------------------------------------
+# On RG35XX, unsupported direct AMR/MPEG/QCP/etc. must NOT fall through to
+# desktop JavaSound/JLayer construction. Use the existing facade's unsupported/
+# stub policy or throw MediaException where the exact upstream API expects it.
+# Capability reporting must remain false.
+#
+# Java-side vendor decoders that can produce MIDI/WAV (MLD/MMF/iMelody/etc.) are
+# deferred to the next conversion stage. They are not removed from desktop.
+#
+# PART I — target JVM property injection
+# --------------------------------------
+# The RG35XX libretro argv contract must include BOTH properties before -jar:
+#   -Dfreej2me.rg35xx=true
+#   -Dfreej2me.rg35xx.audio.fd=<fd>   (only when the dedicated pipe exists)
+#
+# The target selector property is always present for RG35XX even if the audio FD
+# could not be created. This makes target safety/capability gating independent of
+# transport availability.
+#
+# PART J — stage acceptance
+# -------------------------
+# STATIC-AUDIT-PASS for this direct-media facade stage requires:
+# - explicit target selector; desktop remains unchanged
+# - Manager advertised direct types exactly match proven backend types
+# - PlatformPlayer branches before desktop MIDI/WAV backend creation
+# - JavaxPlatformPlayer remains the javax facade
+# - MIDI and WAV delegate to RG35XXNativePlayer/RG35XXWavDecoder
+# - LOOPED keeps STARTED; END moves PREFETCHED
+# - unsupported target types never instantiate desktop audio backends
+# - no new Timer/executor/JavaSound requirement on RG35XX direct path
+#
+# BUILD-PASS remains blocked until this contract is applied to the assembled
+# upstream Java sources and `rm -rf build && ant` succeeds.
