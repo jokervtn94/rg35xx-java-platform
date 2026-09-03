@@ -13,18 +13,20 @@ esac
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 PIN_FREEJ2ME="13ec186903087156c145268f8706eecfaf9f1e50"
+PIN_SOUNDFONT_COMMIT="684543d5e5efaef08d02be50dcda8d552478fa60"
+PIN_SOUNDFONT_BLOB="298b552d2e9d1307e03e5c5c99d2c046aaed9ec3"
+PIN_SOUNDFONT_SIZE="32319396"
 
 fail() { echo "RC1 PREBUILD GATE: FAIL: $*" >&2; exit 1; }
 note() { echo "RC1 PREBUILD GATE: $*"; }
 require_file() { [ -f "$ROOT/$1" ] || fail "missing project source: $1"; }
 
-# Control documents must exist before any source assembly/build.
 require_file tasklog/TASKLOG.md
 require_file tasklog/RC1-TASKLOG.md
 require_file docs/PLATFORM-SOURCE-REGISTRY.md
 require_file docs/RC1-INTEGRATION-MANIFEST.md
+require_file docs/RC1-EXTERNAL-RUNTIME-ASSEMBLY.md
 
-# Current project-owned Java set. RG35XXFontEngine is intentionally absent/superseded.
 for f in \
   RG35XXPlatformProfile RG35XXFrameScheduler RG35XXImageCache RG35XXInputEngine \
   RG35XXWavDecoder RG35XXMediaProfile RG35XXMediaRegistry RG35XXAudioProtocol \
@@ -37,7 +39,6 @@ done
 [ ! -e "$ROOT/src/org/recompile/mobile/RG35XXFontEngine.java" ] || \
   fail "superseded RG35XXFontEngine.java was reintroduced without a REVERT/REPLACE task"
 
-# Native modules required exactly once in the project overlay.
 for f in \
   rg35xx_audio_protocol.h \
   rg35xx_media_cache.h rg35xx_media_cache.c \
@@ -61,7 +62,6 @@ TML_OWNER_COUNT=$(grep -l '^[[:space:]]*#define[[:space:]][[:space:]]*TML_IMPLEM
 grep -q 'TSF_IMPLEMENTATION' "$ROOT/native/rg35xx_tsf_impl.c" || fail "TSF owner is not rg35xx_tsf_impl.c"
 grep -q 'TML_IMPLEMENTATION' "$ROOT/native/rg35xx_tsf_impl.c" || fail "TML owner is not rg35xx_tsf_impl.c"
 
-# Current pin-era consolidation contracts must not disappear during assembly.
 for p in \
   0020-pinned-graphics-input-lifecycle-consolidation.patch \
   0021-pinned-rms-safe-baseline.patch \
@@ -70,7 +70,6 @@ do
   require_file "patches/$p"
 done
 
-# Correct dependency verifier/acquisition controls are mandatory.
 require_file native/verify_tinysoundfont_vendor.sh
 require_file native/vendor_tinysoundfont.sh
 
@@ -84,7 +83,8 @@ fi
 if [ "$MODE" = "--build-ready" ]; then
   : "${RG35XX_FREEJ2ME_ROOT:?set RG35XX_FREEJ2ME_ROOT to the exact pinned FreeJ2ME checkout}"
   : "${RG35XX_CLASSPATH_ROOT:?set RG35XX_CLASSPATH_ROOT to the GNU Classpath 0.99 source tree}"
-  : "${RG35XX_SOUNDFONT_FILE:?set RG35XX_SOUNDFONT_FILE to the authoritative platform SoundFont}"
+  : "${RG35XX_FONT_FILE:?set RG35XX_FONT_FILE to the authoritative target TTF/OTF resource}"
+  : "${RG35XX_SOUNDFONT_FILE:?set RG35XX_SOUNDFONT_FILE to GeneralUser-GS.sf2 from pinned commit $PIN_SOUNDFONT_COMMIT}"
 
   [ -d "$RG35XX_FREEJ2ME_ROOT/.git" ] || fail "RG35XX_FREEJ2ME_ROOT is not a Git checkout"
   FREEJ2ME_HEAD=$(git -C "$RG35XX_FREEJ2ME_ROOT" rev-parse HEAD)
@@ -98,7 +98,13 @@ if [ "$MODE" = "--build-ready" ]; then
   [ -f "$RG35XX_FREEJ2ME_ROOT/src/libretro/freej2me_libretro.c" ] || fail "pinned freej2me_libretro.c missing"
 
   [ -f "$RG35XX_CLASSPATH_ROOT/gnu/java/awt/peer/headless/HeadlessToolkit.java" ] || fail "GNU Classpath HeadlessToolkit.java missing"
+  [ -s "$RG35XX_FONT_FILE" ] || fail "authoritative target font resource is missing/empty"
   [ -s "$RG35XX_SOUNDFONT_FILE" ] || fail "authoritative SoundFont file is missing/empty"
+
+  SOUNDFONT_SIZE=$(wc -c < "$RG35XX_SOUNDFONT_FILE" | tr -d ' ')
+  [ "$SOUNDFONT_SIZE" = "$PIN_SOUNDFONT_SIZE" ] || fail "SoundFont size $SOUNDFONT_SIZE != pinned $PIN_SOUNDFONT_SIZE"
+  SOUNDFONT_BLOB=$(git hash-object "$RG35XX_SOUNDFONT_FILE")
+  [ "$SOUNDFONT_BLOB" = "$PIN_SOUNDFONT_BLOB" ] || fail "SoundFont blob $SOUNDFONT_BLOB != pinned $PIN_SOUNDFONT_BLOB"
 
   note "BUILD-INPUT PRECHECK PASS — this authorizes source assembly/build attempts, not BUILD-PASS"
 else
