@@ -1,0 +1,58 @@
+# RG35XX Java Platform 1.0 Beta 4
+# PlatformGraphics.drawRGB fast-path integration patch
+#
+# Apply this change to the existing PlatformGraphics.drawRGB implementation.
+# It deliberately keeps MIDP drawRGB semantics while removing avoidable work
+# from the ARM926 hot path.
+#
+# Invariants:
+# - translation and clip are resolved before the inner pixel loop
+# - processAlpha=false forces source alpha to 0xFF
+# - processAlpha=true: alpha 0 skips, alpha 255 copies, 1..254 blends
+# - no Graphics2D fallback
+# - no allocation in the inner loop
+# - source scanlength semantics are preserved
+#
+# Reference implementation for the clipped inner body:
+#
+# final int clipLeft = Math.max(x + translateX, clipX);
+# final int clipTop = Math.max(y + translateY, clipY);
+# final int clipRight = Math.min(x + translateX + width, clipX + clipWidth);
+# final int clipBottom = Math.min(y + translateY + height, clipY + clipHeight);
+#
+# if (clipLeft >= clipRight || clipTop >= clipBottom) { return; }
+#
+# final int srcX0 = clipLeft - (x + translateX);
+# final int srcY0 = clipTop - (y + translateY);
+# final int copyWidth = clipRight - clipLeft;
+#
+# for (int dy = clipTop, sy = srcY0; dy < clipBottom; dy++, sy++) {
+#     int src = offset + sy * scanlength + srcX0;
+#     int dst = dy * canvasWidth + clipLeft;
+#     final int end = dst + copyWidth;
+#
+#     if (!processAlpha) {
+#         while (dst < end) {
+#             canvasData[dst++] = rgbData[src++] | 0xFF000000;
+#         }
+#     } else {
+#         while (dst < end) {
+#             final int pixel = rgbData[src++];
+#             final int alpha = pixel >>> 24;
+#             if (alpha == 0) {
+#                 dst++;
+#             } else if (alpha == 255) {
+#                 canvasData[dst++] = pixel;
+#             } else {
+#                 canvasData[dst] = blendPixels(pixel, canvasData[dst]);
+#                 dst++;
+#             }
+#         }
+#     }
+# }
+#
+# Integration note:
+# The actual upstream method may use accessor names for translation/clip rather
+# than fields. During consolidated-tree assembly, bind these expressions to the
+# exact local variables already established by that method; do not duplicate
+# translation or alter exception/bounds behavior outside the pixel loop.
