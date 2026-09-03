@@ -1,0 +1,41 @@
+# RGJ-RC1-011C — pinned RMS safe baseline
+# Source pin: TASEmulators/freej2me-plus@13ec186903087156c145268f8706eecfaf9f1e50
+#
+# This contract SUPERSEDES the application of patches/0009-recordstore-rg35xx-storage-policy.patch
+# for the RC1 pinned source. It does not delete 0009; historical Beta 5 intent remains recorded.
+#
+# Exact pinned RecordStore persistence model
+# ------------------------------------------
+# - <basename>.rms stores JSON metadata, IDs and tags.
+# - <basename>.<recordId> stores each record payload separately.
+# - saveRecordStore() rewrites metadata and all current record payload files.
+# - addRecord/deleteRecord/setRecord currently call saveRecordStore() synchronously.
+#
+# RC1 decision
+# ------------
+# 1. KEEP the pinned upstream synchronous mutation->saveRecordStore() path for RC1.
+# 2. DO NOT apply the Beta-5 single-target snapshot/atomic-replacement design to this
+#    multi-file persistence format. A single-file temp/backup helper cannot make the
+#    metadata + N payload files one atomic transaction.
+# 3. KEEP RG35XXRmsCoordinator and RG35XXRmsAtomicFile source-controlled for rollback/
+#    future work, but do not connect pinned RecordStore to markDirty()/flushRG35XX().
+# 4. RG35XXRmsCoordinator.forceFlush() must remain a zero-cost/no-thread no-op when no
+#    store has activated the coordinator. This lets lifecycle barriers remain harmless.
+# 5. KEEP upstream RecordStore IDs, tags, versions, authentication, suite/vendor naming,
+#    legacy migration and on-disk format unchanged.
+# 6. Do not change the pinned RecordStore format merely to regain asynchronous writes.
+# 7. Performance optimization of multi-file RMS is deferred until a generation/commit
+#    protocol is explicitly designed, recovery-audited and device-tested.
+#
+# Why this is safer
+# -----------------
+# Applying the old single-file atomic helper to only <basename>.rms would allow metadata
+# to commit independently of record payload files. Applying it separately to every file
+# still would not create an all-or-nothing transaction across the set. Power loss or
+# process termination between replacements could expose mixed generations.
+#
+# BUILD/DEVICE status
+# -------------------
+# STATIC-AUDIT-PASS is permitted for this policy once exact pinned call sites and helper
+# behavior are audited. BUILD-PASS requires the consolidated pinned source to compile.
+# DEVICE-TEST-PASS requires real RG35XX save/reopen/game-switch validation.
