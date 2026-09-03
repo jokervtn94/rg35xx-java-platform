@@ -178,3 +178,16 @@ No class/package/native module may be added merely from memory or an older overl
 - Sanity rates documented: one second at 8k/11.025k/14.7k/22.05k/32k/44.1k/48k maps to approximately one second of 44.1 kHz output, with only bounded Q15 rounding.
 - Preserved: mono duplicates to stereo, volume/loop/media-time semantics, native END_OF_MEDIA callback, fixed `RG35XX_MIXER_RATE=44100`.
 - BUILD-PASS and device audio-quality validation remain pending.
+
+## RGJ-RC1-010E — Native media event return channel
+- Action: MODIFY / ADD INTEGRATION PATCH
+- Status: IMPLEMENTED
+- Files: `src/org/recompile/mobile/RG35XXMediaRegistry.java`, `src/org/recompile/mobile/RG35XXNativePlayer.java`, `patches/0014-libretro-native-media-events.patch`.
+- Pre-change reload: TASKLOG + RC1-TASKLOG + PLATFORM-SOURCE-REGISTRY completed; patch directory inspected and no existing patch owned native-media completion return events.
+- Exact-source finding: upstream Libretro stdin protocol uses a 5-byte header and already occupies case 13 for run-jar and case 15 for frame/update tick; case 14 is unused in the inspected devel source and is reserved for RG35XX media-event packets.
+- Direction rule: Java->native audio remains on the dedicated audio FD; Java stdout remains video IPC only. Native->Java media events reuse the existing core->Java stdin control channel rather than adding another reverse pipe/thread.
+- Java event policy: RG35XXMediaRegistry now owns a fixed 32-entry primitive ring. Libretro case 14 only validates/queues; existing case 15 drains events so MIDlet/vendor listener callbacks do not execute inside the blocking stdin parse path.
+- Backend policy: RG35XXNativePlayer binds itself to the registry event sink, updates native-backed state to PREFETCHED on completion/loop notification, then forwards to one facade listener supplied by PlatformPlayer.
+- PlatformPlayer contract: existing `notifyListeners()` remains the sole fan-out to MIDP, Siemens, Nokia, KDDI, DoJa and JBlend. Do not implement parallel vendor callbacks in RG35XX helpers.
+- Remaining blocker: current native MIDI backend exposes final finished callback only and does not yet prove an intermediate loop callback. The new protocol reserves EVENT_LOOPED, but exact native loop-event production must be reconciled before RC1-010 can become STATIC-AUDIT-PASS.
+- BUILD-PASS and DEVICE-TEST-PASS are not claimed.
