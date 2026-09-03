@@ -15,7 +15,7 @@ struct rg35xx_midi_ctx {
 };
 
 static struct rg35xx_midi_ctx ctx[RG35XX_MEDIA_MAX_MIDI_CTX];
-static rg35xx_midi_end_cb end_callback;
+static rg35xx_media_event_cb event_callback;
 
 static int find_slot(uint32_t id)
 {
@@ -39,10 +39,10 @@ static int alloc_slot(uint32_t id)
     return i;
 }
 
-void rg35xx_midi_backend_init(rg35xx_midi_end_cb cb)
+void rg35xx_midi_backend_init(rg35xx_media_event_cb cb)
 {
     memset(ctx, 0, sizeof(ctx));
-    end_callback = cb;
+    event_callback = cb;
 }
 
 void rg35xx_midi_backend_reset(void)
@@ -121,15 +121,21 @@ size_t rg35xx_midi_backend_mix(int32_t *accum, size_t frames)
     for(i = 0; i < RG35XX_MEDIA_MAX_MIDI_CTX; ++i) {
         struct rg35xx_media_entry *e;
         uint32_t id;
+        uint64_t time_us;
         if(!ctx[i].player_id || !ctx[i].active || ctx[i].paused) continue;
         id = ctx[i].player_id;
         rg35xx_tsf_mix_slot(i, accum, frames);
+        time_us = rg35xx_tsf_slot_time_us(i);
+        ctx[i].media_time_us = time_us;
         e = rg35xx_media_cache_find(id);
-        if(e) e->media_time_us = rg35xx_tsf_slot_time_us(i);
+        if(e) e->media_time_us = time_us;
+        if(rg35xx_tsf_take_looped(i) && event_callback)
+            event_callback(RG35XX_MEDIA_EVENT_LOOPED, id, time_us);
         if(rg35xx_tsf_slot_finished(i)) {
             ctx[i].active = 0;
-            if(e) { e->state = RG35XX_MEDIA_STOPPED; e->media_time_us = 0; }
-            if(end_callback) end_callback(id);
+            if(e) { e->state = RG35XX_MEDIA_STOPPED; e->media_time_us = time_us; }
+            if(event_callback)
+                event_callback(RG35XX_MEDIA_EVENT_END_OF_MEDIA, id, time_us);
         }
     }
     return frames;
