@@ -22,9 +22,9 @@ Package `org.recompile.mobile`:
 | Class | Responsibility | State |
 |---|---|---|
 | RG35XXPlatformProfile | target/profile feature policy | KEEP / PRESENT — EXPLICIT `freej2me.rg35xx` TARGET SELECTOR; 010L STATIC-AUDIT-PASS |
-| RG35XXFrameScheduler | dirty-frame generation/wakeup | KEEP / PRESENT |
-| RG35XXImageCache | immutable decoded-image LRU/cache | KEEP / PRESENT |
-| RG35XXInputEngine | deterministic key press/release/repeat | KEEP / PRESENT |
+| RG35XXFrameScheduler | dirty-frame generation/wakeup | KEEP / PRESENT — PRODUCER/LIFECYCLE ONLY UNDER 011B; NO BLOCKING CASE-15 CONSUMER |
+| RG35XXImageCache | immutable decoded-image LRU/cache | KEEP / PRESENT — 011B PINNED CALL-SITE CONTRACT |
+| RG35XXInputEngine | deterministic key press/release/repeat | KEEP / PRESENT — 011B PINNED CALL-SITE CONTRACT |
 | RG35XXWavDecoder | target WAV decode/normalization helper | KEEP / PRESENT — RC1 RESTORED |
 | RG35XXMediaProfile | truthful target MMAPI capability policy | KEEP / PRESENT — MIDI/WAV/TONE ONLY AFTER 010N; VENDOR CONTAINERS NOT PROMOTED |
 | RG35XXMediaRegistry | Java semantic player registry + bounded native-event queue | KEEP / PRESENT — LOOPED RETAINS STARTED; 010L CORRECTED |
@@ -33,13 +33,13 @@ Package `org.recompile.mobile`:
 | RG35XXAudioBootstrap | inherited audio-FD bootstrap/ownership | KEEP / PRESENT |
 | RG35XXNativePlayer | native-backed MMAPI adapter + event binding | KEEP / PRESENT — MIDI/WAV/TONE-CONVERTED BACKEND; LOOPED/END SEMANTICS CORRECTED |
 | RG35XXToneSequenceEncoder | JavaSound-free MIDP ToneControl A-BNF -> SMF format 0 | KEEP / PRESENT — 010M STATIC-AUDIT-PASS |
-| RG35XXFontEngine | unified font metrics/raster policy | MISSING — RESTORE REQUIRED |
-| RG35XXTransformCache | bounded MIDP Sprite transform maps | KEEP / PRESENT |
-| RG35XXRmsCoordinator | coalesced low-priority RMS persistence | KEEP / PRESENT |
-| RG35XXRmsAtomicFile | Java-6-compatible atomic replacement helper | KEEP / PRESENT |
-| RG35XXLifecycle | central subsystem lifecycle ordering | KEEP / PRESENT |
+| RG35XXFontEngine | historical bitmap metrics/raster responsibility | SUPERSEDED / DO NOT RESTORE FROM MEMORY — 011D replaces ownership with GNU Classpath headless FontPeer + existing PlatformFont/PlatformGraphics |
+| RG35XXTransformCache | bounded MIDP Sprite transform maps | KEEP / PRESENT — 011B PINNED CALL-SITE CONTRACT |
+| RG35XXRmsCoordinator | coalesced low-priority RMS persistence | KEEP / PRESENT BUT DORMANT ON PINNED RC1 SYNC BASELINE — 011C |
+| RG35XXRmsAtomicFile | Java-6-compatible atomic replacement helper | KEEP / PRESENT BUT UNHOOKED FROM PINNED MULTI-FILE RMS — 011C |
+| RG35XXLifecycle | central subsystem lifecycle ordering | KEEP / PRESENT — 011B LOAD COMMIT SEMANTICS; 011C SYNC RMS BARRIERS SAFE |
 
-No additional `RG35XX*` Java class should be introduced until this table is checked and the new responsibility is proven non-overlapping. A MISSING entry must be restored from authoritative source or handled by an explicit REPLACE task; do not silently invent a substitute.
+No additional `RG35XX*` Java class should be introduced until this table is checked and the new responsibility is proven non-overlapping. A missing/superseded entry must be restored from authoritative source or handled by an explicit REPLACE task; do not silently invent a substitute.
 
 ## Existing upstream classes to integrate, not duplicate
 
@@ -52,7 +52,8 @@ These remain upstream-owned facades/implementations. RG35XX behavior must be hoo
 - `org.recompile.mobile.PlatformGraphics`
 - `org.recompile.mobile.PlatformImage`
 - `org.recompile.mobile.PlatformPlayer`
-- upstream Font/PlatformFont implementation
+- upstream `org.recompile.mobile.PlatformFont`
+- target GNU Classpath `gnu.java.awt.peer.headless.HeadlessToolkit` / one real `ClasspathFontPeer` backend for headless AWT fonts (011D replacement owner)
 
 Vendor compatibility facades and upstream container decoders (Nokia/Siemens/KDDI/DoJa/JBlend, SMAF/MMF, MLD/MFi, EMS melody) are preserved. `RGJ-RC1-010N` proves that the current SMAFDecoder, MLDDecoder and EMSMelodyDecoder still rely on `javax.sound.midi` object construction and/or `MidiSystem.write`; therefore those container types are not advertised on RG35XX until an explicit JavaSound-free conversion task replaces only the backend conversion responsibility.
 
@@ -85,6 +86,12 @@ Dependency policy for the TML/TSF worker is locked in `docs/RC1-TML-TSF-DEPENDEN
 
 `RGJ-RC1-010N` closes the vendor/container capability boundary at STATIC-AUDIT-PASS. Upstream SMAF/MMF, MLD/MFi and EMS iMelody/eMelody decoders are preserved but not promoted because their current conversion path constructs JavaSound MIDI objects and/or calls `MidiSystem.write`. Mixed sequence+PCM timing is part of any future replacement contract. Audit: `docs/RC1-VENDOR-MEDIA-CONTAINER-AUDIT.md`.
 
+`RGJ-RC1-011B` closes pinned graphics/input/lifecycle call-site ownership at STATIC-AUDIT-PASS. It supersedes blocking dirty-frame consumption inside the single LibretroIO parser, routes key transition/repeat ownership through the existing RG35XXInputEngine, and splits game load prepare/success/failure lifecycle semantics. Audit: `docs/RC1-GRAPHICS-INPUT-LIFECYCLE-AUDIT.md`.
+
+`RGJ-RC1-011C` closes the pinned RMS safe baseline at STATIC-AUDIT-PASS. Historical single-target async/atomic integration is superseded for the pinned multi-file RecordStore; upstream synchronous persistence remains the RC1 baseline while RG35XXRmsCoordinator/RG35XXRmsAtomicFile stay present but dormant/unhooked. Audit: `docs/RC1-RMS-PINNED-BASELINE-AUDIT.md`.
+
+`RGJ-RC1-011D` closes font ownership/root-cause reconciliation at STATIC-AUDIT-PASS. The missing historical `RG35XXFontEngine` class is explicitly superseded rather than reconstructed. Existing FreeJ2ME PlatformFont/PlatformGraphics remain facade/consumer owners and the target GNU Classpath headless Toolkit/FontPeer path becomes the replacement backend owner. Audit: `docs/RC1-FONT-HEADLESS-PEER-AUDIT.md`.
+
 ## Authoritative integration patches
 
 - 0003 Manager media profile
@@ -93,10 +100,10 @@ Dependency policy for the TML/TSF worker is locked in `docs/RC1-TML-TSF-DEPENDEN
 - 0006 PlatformPlayer native backend
 - 0007 PlatformGraphics drawRGB fast path
 - 0008 PlatformGraphics transform cache
-- 0009 RecordStore RG35XX storage policy
+- 0009 RecordStore RG35XX storage policy — historical; superseded for pinned RC1 by 0021
 - 0010 Libretro/platform lifecycle
 - 0011 PlatformImage RG35XX cache
-- 0012 MobilePlatform dirty-frame integration
+- 0012 MobilePlatform dirty-frame integration — blocking consumer portion superseded by 0020
 - 0013 Libretro RG35XX input engine
 - 0014 Libretro native-media event return channel
 - 0015 exact upstream `freej2me_libretro.c` native-media runtime/process-lifecycle integration
@@ -104,8 +111,11 @@ Dependency policy for the TML/TSF worker is locked in `docs/RC1-TML-TSF-DEPENDEN
 - 0017 consolidated media process-boundary completion: native event handoff + case 14/15 + EOF graceful shutdown
 - 0018 Manager/PlatformPlayer direct RG35XX MIDI/WAV facade routing + target selector contract
 - 0019 JavaSound-free PlatformPlayer ToneControl + Manager.playTone integration
+- 0020 pinned graphics/input/lifecycle consolidation contract
+- 0021 pinned multi-file RMS safe synchronous baseline
+- 0022 GNU Classpath 0.99 headless FontPeer consolidation contract
 
-Patches 0015-0019 are integration contracts until applied to the exact assembled source tree; none is a second upstream facade/core implementation.
+Patches 0015-0022 are integration contracts until applied to the exact assembled source tree; none is a second upstream facade/core implementation. Superseded historical patches remain engineering evidence and must not be silently re-applied.
 
 A patch may be superseded by consolidated source, but its behavior must be accounted for before removal.
 
@@ -127,11 +137,13 @@ For every subsequent implementation turn:
 
 The source tree is not considered consolidated until:
 
-- every KEEP Java class exists exactly once and every MISSING entry is resolved explicitly;
+- every KEEP Java class exists exactly once and every missing/superseded responsibility is resolved explicitly;
 - every required native module exists exactly once or is explicitly documented as intentionally headerless/internal;
 - no deleted/superseded RG35XX class is reintroduced by old overlays;
 - integration targets reference current method names (`reset()`, `resetNative()`, etc.);
 - every project class referenced by lifecycle/patches exists;
-- no project class exists without a documented responsibility or integration path.
+- no project class exists without a documented responsibility or integration path;
+- the GNU Classpath headless FontPeer/resource gate is present in the reproducible assembled source;
+- pinned TML/TSF headers, authoritative SoundFont provider and consolidated native call-sites are present before native BUILD-PASS.
 
 Current reconciliation evidence: `docs/RC1-SOURCE-RECONCILIATION.md`.
