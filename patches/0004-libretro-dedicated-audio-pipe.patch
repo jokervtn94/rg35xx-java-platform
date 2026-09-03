@@ -1,0 +1,53 @@
+# RGJ-B3-004 — integration patch specification
+#
+# Apply to the Platform 1.0 freej2me_libretro.c overlay, not blindly to a
+# different upstream revision. The exact surrounding line numbers depend on
+# the v9.9/v10 platform overlay already carrying receiver/audio worker changes.
+#
+# 1. Include:
+#    #include "rg35xx_audio_pipe.h"
+#
+# 2. Add one process-lifetime object:
+#    static struct rg35xx_audio_pipe rg35xx_java_audio_pipe;
+#
+# 3. Before fork() of JamVM:
+#    rg35xx_audio_pipe_init(&rg35xx_java_audio_pipe);
+#    if(!rg35xx_audio_pipe_create(&rg35xx_java_audio_pipe)) {
+#        /* keep legacy bridge available; do not abort game startup */
+#    }
+#
+# 4. In the child immediately after fork(), before execvp():
+#    rg35xx_audio_pipe_child_after_fork(&rg35xx_java_audio_pipe);
+#    if(rg35xx_audio_pipe_child_fd(&rg35xx_java_audio_pipe) >= 3) {
+#        char audio_fd_property[64];
+#        snprintf(audio_fd_property, sizeof(audio_fd_property),
+#                 "-Dfreej2me.rg35xx.audio.fd=%d",
+#                 rg35xx_audio_pipe_child_fd(&rg35xx_java_audio_pipe));
+#        /* insert this JVM property BEFORE -jar in params[] */
+#    }
+#
+# 5. In the parent immediately after successful fork():
+#    rg35xx_audio_pipe_parent_after_fork(&rg35xx_java_audio_pipe);
+#
+# 6. Existing native audio worker loop, before synth/mix work:
+#    rg35xx_audio_pipe_drain(&rg35xx_java_audio_pipe);
+#
+# 7. Core/game deinit after Java child is stopped:
+#    rg35xx_media_cache_reset();
+#    rg35xx_audio_pipe_close(&rg35xx_java_audio_pipe);
+#
+# 8. Compile/link these Platform 1.0 native units into the libretro core:
+#    rg35xx_audio_pipe.c
+#    rg35xx_audio_dispatch.c
+#    rg35xx_media_cache.c
+#
+# IMPORTANT INVARIANTS
+# - Do not dup the audio pipe onto fd 1: stdout remains binary video IPC.
+# - Do not use fd 2: stderr remains diagnostics.
+# - Do not set FD_CLOEXEC on the child write descriptor.
+# - Parent closes its write end; child closes its read end.
+# - Failure to create/open the new transport must not prevent Java startup
+#   while the legacy bridge is retained as rollback.
+# - Increase NUM_ARGUMENTS and shift existing params exactly once when the
+#   property is inserted. Preserve the already-correct JamVM order:
+#     jamvm [JVM properties] encoding -jar freej2me-lr.jar [game args]
