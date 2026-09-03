@@ -1,9 +1,10 @@
 #include "rg35xx_audio_protocol.h"
 #include "rg35xx_media_cache.h"
+#include "rg35xx_mixer.h"
 #include <stdint.h>
 #include <stddef.h>
 
-/* Tasklog: RGJ-B3-004 / RGJ-B3-005 */
+/* Tasklog: RGJ-B3-004 / RGJ-B3-005 / RGJ-B3-006 */
 static uint64_t rg35xx_audio_u64le(const uint8_t *p)
 {
     uint64_t v = 0;
@@ -15,7 +16,6 @@ static uint64_t rg35xx_audio_u64le(const uint8_t *p)
 int rg35xx_audio_dispatch(const struct rg35xx_audio_header *h,
                           const uint8_t *payload)
 {
-    struct rg35xx_media_entry *e;
     if(!h) return 0;
     if(h->payload_size && !payload) return 0;
 
@@ -24,57 +24,33 @@ int rg35xx_audio_dispatch(const struct rg35xx_audio_header *h,
         case RG35XX_AUDIO_REGISTER_MIDI:
             return rg35xx_media_cache_register(h->player_id, RG35XX_MEDIA_MIDI,
                                                payload, h->payload_size, 0, 0);
-
         case RG35XX_AUDIO_REGISTER_PCM16:
             if(h->payload_size < 8) return 0;
             return rg35xx_media_cache_register(h->player_id, RG35XX_MEDIA_PCM16,
                                                payload + 8, h->payload_size - 8,
                                                (int)rg35xx_audio_u32le(payload),
                                                (int)rg35xx_audio_u32le(payload + 4));
-
+        case RG35XX_AUDIO_PLAY:
+            return h->payload_size == 0 && rg35xx_mixer_play(h->player_id);
+        case RG35XX_AUDIO_PAUSE:
+            return h->payload_size == 0 && rg35xx_mixer_pause(h->player_id);
+        case RG35XX_AUDIO_STOP:
+            return h->payload_size == 0 && rg35xx_mixer_stop(h->player_id);
+        case RG35XX_AUDIO_SEEK_US:
+            return h->payload_size == 8 && rg35xx_mixer_seek(h->player_id, rg35xx_audio_u64le(payload));
+        case RG35XX_AUDIO_SET_VOLUME:
+            return h->payload_size == 4 && rg35xx_mixer_set_volume(h->player_id, (int)rg35xx_audio_u32le(payload));
+        case RG35XX_AUDIO_SET_LOOP_COUNT:
+            return h->payload_size == 4 && rg35xx_mixer_set_loop_count(h->player_id, (int32_t)rg35xx_audio_u32le(payload));
         case RG35XX_AUDIO_RELEASE:
+            if(h->payload_size != 0) return 0;
+            rg35xx_mixer_release(h->player_id);
             return rg35xx_media_cache_release(h->player_id);
-
         case RG35XX_AUDIO_RESET:
+            if(h->payload_size != 0) return 0;
+            rg35xx_mixer_reset();
             rg35xx_media_cache_reset();
             return 1;
-
-        default:
-            break;
-    }
-
-    e = rg35xx_media_cache_find(h->player_id);
-    if(!e) return 0;
-
-    switch(h->opcode)
-    {
-        case RG35XX_AUDIO_PLAY:
-            if(h->payload_size != 0) return 0;
-            e->state = RG35XX_MEDIA_PLAYING;
-            return 1;
-        case RG35XX_AUDIO_PAUSE:
-            if(h->payload_size != 0) return 0;
-            e->state = RG35XX_MEDIA_PAUSED;
-            return 1;
-        case RG35XX_AUDIO_STOP:
-            if(h->payload_size != 0) return 0;
-            e->state = RG35XX_MEDIA_STOPPED;
-            e->media_time_us = 0;
-            return 1;
-        case RG35XX_AUDIO_SEEK_US:
-            if(h->payload_size != 8) return 0;
-            e->media_time_us = rg35xx_audio_u64le(payload);
-            return 1;
-        case RG35XX_AUDIO_SET_VOLUME:
-            if(h->payload_size != 4) return 0;
-            e->volume = (int)rg35xx_audio_u32le(payload);
-            if(e->volume < 0) e->volume = 0;
-            if(e->volume > 100) e->volume = 100;
-            return 1;
-        case RG35XX_AUDIO_SET_LOOP_COUNT:
-            if(h->payload_size != 4) return 0;
-            e->loop_count = (int32_t)rg35xx_audio_u32le(payload);
-            return e->loop_count != 0;
         default:
             return 0;
     }
