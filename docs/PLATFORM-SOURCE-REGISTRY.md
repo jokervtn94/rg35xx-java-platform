@@ -13,6 +13,7 @@ This registry is the mandatory duplicate/missing-source gate for all future plat
 5. Do not create parallel RG35XX implementations inside `javax.microedition.*`; modify/adapt the existing upstream facade instead.
 6. stdout is reserved for binary video IPC. Audio uses the dedicated RG35XX audio transport.
 7. BUILD-PASS and DEVICE-TEST-PASS may only be recorded after the corresponding real validation.
+8. Registry intent is not proof of file presence: every turn must also verify the current source tree for touched responsibilities.
 
 ## Authoritative RG35XX Java classes
 
@@ -20,24 +21,24 @@ Package `org.recompile.mobile`:
 
 | Class | Responsibility | State |
 |---|---|---|
-| RG35XXPlatformProfile | target/profile feature policy | KEEP |
-| RG35XXFrameScheduler | dirty-frame generation/wakeup | KEEP |
-| RG35XXImageCache | immutable decoded-image LRU/cache | KEEP |
-| RG35XXInputEngine | deterministic key press/release/repeat | KEEP |
-| RG35XXWavDecoder | target WAV decode/normalization helper | KEEP |
-| RG35XXMediaProfile | truthful target MMAPI capability policy | KEEP |
-| RG35XXMediaRegistry | Java semantic player registry | KEEP |
-| RG35XXAudioProtocol | Java/native framed audio protocol | KEEP |
-| RG35XXAudioTransport | dedicated Java→native audio writer | KEEP |
-| RG35XXAudioBootstrap | inherited audio-FD bootstrap/ownership | KEEP |
-| RG35XXNativePlayer | native-backed MMAPI adapter | KEEP |
-| RG35XXFontEngine | unified font metrics/raster policy | KEEP |
-| RG35XXTransformCache | bounded MIDP Sprite transform maps | KEEP |
-| RG35XXRmsCoordinator | coalesced low-priority RMS persistence | KEEP |
-| RG35XXRmsAtomicFile | Java-6-compatible atomic replacement helper | KEEP |
-| RG35XXLifecycle | central subsystem lifecycle ordering | KEEP |
+| RG35XXPlatformProfile | target/profile feature policy | KEEP / PRESENT |
+| RG35XXFrameScheduler | dirty-frame generation/wakeup | KEEP / PRESENT |
+| RG35XXImageCache | immutable decoded-image LRU/cache | KEEP / PRESENT |
+| RG35XXInputEngine | deterministic key press/release/repeat | KEEP / PRESENT |
+| RG35XXWavDecoder | target WAV decode/normalization helper | MISSING — RESTORE REQUIRED |
+| RG35XXMediaProfile | truthful target MMAPI capability policy | KEEP / PRESENT |
+| RG35XXMediaRegistry | Java semantic player registry | KEEP / PRESENT |
+| RG35XXAudioProtocol | Java/native framed audio protocol | KEEP / PRESENT |
+| RG35XXAudioTransport | dedicated Java→native audio writer | KEEP / PRESENT |
+| RG35XXAudioBootstrap | inherited audio-FD bootstrap/ownership | KEEP / PRESENT |
+| RG35XXNativePlayer | native-backed MMAPI adapter | KEEP / PRESENT |
+| RG35XXFontEngine | unified font metrics/raster policy | MISSING — RESTORE REQUIRED |
+| RG35XXTransformCache | bounded MIDP Sprite transform maps | KEEP / PRESENT |
+| RG35XXRmsCoordinator | coalesced low-priority RMS persistence | KEEP / PRESENT |
+| RG35XXRmsAtomicFile | Java-6-compatible atomic replacement helper | KEEP / PRESENT |
+| RG35XXLifecycle | central subsystem lifecycle ordering | KEEP / PRESENT |
 
-No additional `RG35XX*` Java class should be introduced until this table is checked and the new responsibility is proven non-overlapping.
+No additional `RG35XX*` Java class should be introduced until this table is checked and the new responsibility is proven non-overlapping. A MISSING entry must be restored from authoritative source or handled by an explicit REPLACE task; do not silently invent a substitute.
 
 ## Existing upstream classes to integrate, not duplicate
 
@@ -56,13 +57,16 @@ Vendor compatibility facades (Nokia/Siemens/KDDI/DoJa/JBlend and other upstream 
 
 ## Authoritative native modules
 
-- `rg35xx_audio_protocol.h`
-- `rg35xx_media_cache.h/.c`
-- `rg35xx_audio_dispatch.h/.c`
-- `rg35xx_audio_pipe.h/.c`
-- `rg35xx_mixer.h/.c`
-- `rg35xx_midi_backend.h/.c`
-- existing `freej2me_libretro.c` remains the libretro integration owner; do not create a parallel core entrypoint.
+| Module | State |
+|---|---|
+| `rg35xx_audio_protocol.h` | KEEP / PRESENT |
+| `rg35xx_media_cache.h/.c` | KEEP / PRESENT |
+| `rg35xx_audio_dispatch.c` | KEEP / PRESENT |
+| `rg35xx_audio_dispatch.h` | MISSING — OWNERSHIP/NEED MUST BE RESOLVED |
+| `rg35xx_audio_pipe.h/.c` | KEEP / PRESENT |
+| `rg35xx_mixer.h/.c` | KEEP / PRESENT |
+| `rg35xx_midi_backend.h/.c` | KEEP / PRESENT |
+| existing `freej2me_libretro.c` | integration owner; do not create a parallel core entrypoint |
 
 ## Authoritative integration patches
 
@@ -74,6 +78,9 @@ Vendor compatibility facades (Nokia/Siemens/KDDI/DoJa/JBlend and other upstream 
 - 0008 PlatformGraphics transform cache
 - 0009 RecordStore RG35XX storage policy
 - 0010 Libretro/platform lifecycle
+- 0011 PlatformImage RG35XX cache
+- 0012 MobilePlatform dirty-frame integration
+- 0013 Libretro RG35XX input engine
 
 A patch may be superseded by consolidated source, but its behavior must be accounted for before removal.
 
@@ -88,15 +95,18 @@ For every subsequent implementation turn:
 5. Classify intended change as KEEP/MODIFY/ADD/REPLACE/REMOVE.
 6. For ADD, prove no current class/module already owns the responsibility.
 7. For REMOVE/REPLACE, record the old symbol/path and replacement/rollback in Tasklog before deletion.
-8. After modification, audit imports/package names/call sites against the registry.
+8. For KEEP, verify the file/module is actually PRESENT; if missing, stop dependent gates and record a reconciliation task.
+9. After modification, audit imports/package names/call sites against the registry.
 
 ## RC1 missing/duplicate gate
 
 The source tree is not considered consolidated until:
 
-- every KEEP Java class above exists exactly once;
-- every native module above exists exactly once;
+- every KEEP Java class exists exactly once and every MISSING entry is resolved explicitly;
+- every required native module exists exactly once or is explicitly documented as intentionally headerless/internal;
 - no deleted/superseded RG35XX class is reintroduced by old overlays;
 - integration targets reference current method names (`reset()`, `resetNative()`, etc.);
 - every project class referenced by lifecycle/patches exists;
 - no project class exists without a documented responsibility or integration path.
+
+Current reconciliation evidence: `docs/RC1-SOURCE-RECONCILIATION.md`.
