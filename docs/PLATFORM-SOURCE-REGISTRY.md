@@ -66,7 +66,10 @@ Vendor compatibility facades (Nokia/Siemens/KDDI/DoJa/JBlend and other upstream 
 | `rg35xx_audio_pipe.h/.c` | KEEP / PRESENT |
 | `rg35xx_mixer.h/.c` | KEEP / PRESENT |
 | `rg35xx_midi_backend.h/.c` | KEEP / PRESENT |
+| `rg35xx_tsf_worker.h` | KEEP / PRESENT — RC1 DECLARATION CONTRACT; IMPLEMENTATION PENDING 010F |
 | existing `freej2me_libretro.c` | integration owner; do not create a parallel core entrypoint |
+
+Dependency policy for the pending TML/TSF worker is locked in `docs/RC1-TML-TSF-DEPENDENCY-GATE.md`. The declaration header does not claim that the worker implementation, TinyMidiLoader/TinySoundFont vendored sources, SoundFont asset/ownership, or native link is complete.
 
 ## Authoritative integration patches
 
