@@ -1,0 +1,84 @@
+# RGJ-RC1-011B — pinned graphics/input/lifecycle consolidation contract
+# Upstream pin: TASEmulators/freej2me-plus@13ec186903087156c145268f8706eecfaf9f1e50
+# This supersedes only unsafe/inexact portions of patches 0010/0012/0013.
+# It is not BUILD-PASS.
+
+OWNERSHIP
+- PlatformImage remains image decode/facade owner; RG35XXImageCache remains the only RG35XX immutable decode cache.
+- PlatformGraphics remains all MIDP/DoJa drawing owner; RG35XXTransformCache remains geometry-only transform cache.
+- MobilePlatform remains front/backbuffer, flush, resize and FPS-limit owner.
+- Libretro remains the 5-byte stdin protocol and stdout video serializer owner.
+- RG35XXInputEngine remains the only RG35XX held/repeat state machine.
+- RG35XXLifecycle remains the only RG35XX subsystem-order coordinator.
+- No second renderer, frame thread, protocol reader, key mapper, or lifecycle owner is added.
+
+A. PLATFORMIMAGE / PLATFORMGRAPHICS
+Apply existing 0011 cache integration and 0007/0008 graphics contracts against the pinned blobs. Do not replace the classes. Immutable byte-array image cache hits reconstruct a fresh TYPE_INT_ARGB image. Mutable DoJa byte-array images bypass cache. processAlpha=false still forces opaque pixels; it is not a raw alpha-preserving arraycopy.
+
+B. MOBILEPLATFORM EXACT DIRTY PRODUCER POINTS
+Pinned `MobilePlatform.flushGraphics()` performs:
+  synchronized(lcdFrontbuffer) { gcFrontbuffer.flushGraphics(...); }
+  if(postDraw != null) { postDraw.run(); postDraw = null; }
+  painter.run();
+  ...
+  limitFps();
+
+If dirty generation is maintained, call `RG35XXFrameScheduler.markDirty()` only after `postDraw` has completed and before `painter.run()`. This represents the final visible frontbuffer state for that flush. Do not mark per primitive.
+
+Pinned `resizeLCD()` replaces lcdFrontbuffer/lcd and graphics/display references. Mark dirty only after all replacement references are installed.
+
+IMPORTANT RC1 REPLACEMENT OF PATCH 0012 CONSUMER RULE:
+Do NOT call `RG35XXFrameScheduler.waitForChange()` from Libretro case 15 or anywhere in the single `LibretroIO` protocol-reader thread. That thread blocks in `System.in.read()` and owns all control parsing; a dirty wait there can prevent future core packets from being consumed. The current case-15 protocol also expects a frame response when requested and has no explicit no-change packet. Therefore RC1 retains the existing frame request/response transport. Dirty generation remains producer/lifecycle state until a non-blocking no-change protocol or independently proven presentation worker exists. Do not add a second Java frame thread solely to consume the scheduler.
+
+C. LIBRETRO INPUT EXACT CALL SITES
+Create one reusable static/final `RG35XXInputEngine.Sink` in Libretro:
+  keyPressed(slot)  -> MobilePlatform.keyPressed(Mobile.getMobileKey(slot))
+  keyReleased(slot) -> MobilePlatform.keyReleased(Mobile.getMobileKey(slot))
+  keyRepeated(slot) -> MobilePlatform.keyRepeated(Mobile.getMobileKey(slot))
+
+Valid RG35XX joypad slots are 0..19. `MobilePlatform.pressedKeys` is length 23 in the pin; index 20 is upstream fast-forward state and must not be passed to RG35XXInputEngine. Preserve indexes 20+ for their existing non-key semantics.
+
+case 3 DOWN:
+- if code outside 0..19, ignore as a joypad transition;
+- set pressedKeys[code]=true;
+- call RG35XXInputEngine.press(code, System.currentTimeMillis(), sink);
+- do not call MobilePlatform.keyPressed separately.
+
+case 2 UP:
+- same slot validation;
+- set pressedKeys[code]=false;
+- call RG35XXInputEngine.release(code, sink);
+- do not call MobilePlatform.keyReleased separately.
+
+case 15:
+- replace the pinned loop that directly calls keyRepeated for every pressedKeys entry with exactly one `RG35XXInputEngine.update(System.currentTimeMillis(), sink)`.
+- preserve fast-forward index 20 handling and all pause/frame serialization behavior.
+- if native media event drain from 0017 is present, drain it in the same bounded tick without introducing another thread.
+
+D. LIFECYCLE LOAD TRANSACTION
+Before `MobilePlatform.load(...)` in case 10:
+  RG35XXLifecycle.beforeGameLoad();
+This is mandatory before loader/suite context can be replaced.
+
+If load succeeds:
+  RG35XXLifecycle.afterGameLoad();
+Then continue current restart/config/run flow.
+
+If load fails or throws before success commit:
+  RG35XXLifecycle.gameLoadFailed();
+Do not fabricate gameActive=true.
+
+The updated project `RG35XXLifecycle.beforeGameLoad()` now prepares/reset state but keeps gameActive=false; `afterGameLoad()` is the explicit success commit point.
+
+E. PAUSE / SHUTDOWN
+When the libretro facade initiates a MIDlet pause, execute the RMS pause barrier before volatile application state is considered safely paused. Final control-pipe EOF/shutdown behavior remains governed by 0017: call RG35XXLifecycle.platformShutdown() before Java exits where possible, with native hard-kill only as fallback after bounded shutdown ownership.
+
+F. PRESERVE
+- stdout remains video only.
+- synchronized frontbuffer copy/serialization remains intact.
+- Mobile.getMobileKey remains the single profile/numeric mapping owner.
+- DoJa/Vodafone key-state behavior stays in MobilePlatform.
+- existing `LockSupport` FPS limiter remains upstream-owned and is a build compatibility gate, not replaced here.
+
+STATUS
+STATIC-AUDIT-PASS is recorded only after the companion 011B audit checks this contract against the pinned source. BUILD-PASS and DEVICE-TEST-PASS remain separate.
