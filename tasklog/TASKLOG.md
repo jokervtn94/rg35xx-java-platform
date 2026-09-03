@@ -6,7 +6,7 @@ Actions: `ADD`, `MODIFY`, `REMOVE`, `DISABLE`, `REPLACE`, `KEEP`, `REVERT`, `AUD
 
 Statuses: `PLANNED`, `IMPLEMENTED`, `STATIC-AUDIT-PASS`, `BUILD-PASS`, `DEVICE-TEST-PASS`, `DEVICE-TEST-FAIL`, `ROLLED-BACK`, `SUPERSEDED`.
 
-> Historical Alpha 1 / Beta 1 / Beta 2 / Beta 3 / Beta 4 entries remain authoritative in git history. This file continues the immutable engineering log; prior entries are not semantically revoked by the Beta 5 additions below.
+> Historical Alpha 1 / Beta 1 / Beta 2 / Beta 3 / Beta 4 entries remain authoritative in git history. Beta 5 and Beta 6 entries below continue the same immutable engineering record.
 
 ## Platform 1.0 Beta 5 — RMS / Storage Engine
 
@@ -73,3 +73,60 @@ Statuses: `PLANNED`, `IMPLEMENTED`, `STATIC-AUDIT-PASS`, `BUILD-PASS`, `DEVICE-T
 - Architecture/source policy is lockable: RAM semantic state + coalesced low-priority persistence + atomic replacement + lifecycle barriers.
 - BUILD-PASS is intentionally not claimed until the consolidated FreeJ2ME source tree applies patch 0009 and Java-6/JamVM compilation is performed.
 - Legacy synchronous save path remains the rollback option if device validation exposes lifecycle/persistence defects.
+
+## Platform 1.0 Beta 6 — Integration & Lifecycle
+
+### RGJ-B6-001 — Central RG35XX lifecycle coordinator
+- Action: ADD
+- Status: IMPLEMENTED
+- Source: src/org/recompile/mobile/RG35XXLifecycle.java.
+- Responsibility: deterministic ordering across platform start, game load/unload, pause/destroy barriers and final shutdown.
+- Rule: coordinator owns ordering, not subsystem implementation.
+
+### RGJ-B6-002 — Restore Alpha/Beta helper sources into repository
+- Action: ADD
+- Status: IMPLEMENTED
+- Sources: RG35XXFrameScheduler.java, RG35XXInputEngine.java, RG35XXImageCache.java.
+- Reason: these helpers were documented/used in earlier overlay stages but absent from the source-controlled project tree.
+- Benefit: consolidated RC no longer depends on ZIP-only undocumented classes.
+
+### RGJ-B6-003 — Fix transform cache lifecycle API mismatch
+- Action: MODIFY
+- Status: STATIC-AUDIT-PASS
+- Before: lifecycle called RG35XXTransformCache.clear(), which does not exist.
+- After: lifecycle calls RG35XXTransformCache.reset().
+- Evidence: source audit of RG35XXTransformCache.
+
+### RGJ-B6-004 — Fix audio reset lifecycle API mismatch
+- Action: MODIFY
+- Status: STATIC-AUDIT-PASS
+- Before: lifecycle called RG35XXAudioTransport.reset(), which does not exist.
+- After: lifecycle calls RG35XXAudioTransport.resetNative().
+- Evidence: source audit of RG35XXAudioTransport.
+
+### RGJ-B6-005 — Game-unload state ordering
+- Action: MODIFY
+- Status: STATIC-AUDIT-PASS
+- Order: RMS forceFlush -> native media RESET -> Java media registry reset -> input/cache/frame reset.
+- Reason: preserve player-ID/native media ownership until native cleanup command is issued; never discard persistence before flush.
+
+### RGJ-B6-006 — Consolidated Libretro lifecycle specification
+- Action: MODIFY
+- Status: IMPLEMENTED
+- Source: patches/0010-libretro-platform-lifecycle.patch.
+- Java hooks: platformStart, beforeGameLoad, pauseBarrier, destroyBarrier, unloadGame, platformShutdown.
+- Native hooks: audio pipe before fork, worker ownership, RESET ordering, unload/deinit teardown.
+- Preserved: stdout video IPC, async audio, receiver pthread, fixed 640x480 RGB565, native END_OF_MEDIA, no aggressive watchdog.
+
+### RGJ-B6-007 — Helper API integration audit
+- Action: AUDIT
+- Status: STATIC-AUDIT-PASS
+- Source: docs/BETA6-INTEGRATION-AUDIT.md.
+- Result: known lifecycle method-name mismatches corrected; missing project helper sources restored.
+- Remaining exact-source gates: PlatformImage cache hook, Libretro input adapter, MobilePlatform dirty hooks, PlatformGraphics transform hook, RecordStore application, TML/TSF link symbols, audio-pipe integration and lifecycle call sites.
+
+### RGJ-B6-008 — Beta 6 gate
+- Action: AUDIT
+- Status: IMPLEMENTED
+- Decision: do not declare Beta 6 lock or BUILD-PASS until the exact upstream FreeJ2ME source tree is assembled with all RG35XX patches and the remaining call-site/symbol checks are completed.
+- Next step: construct Platform 1.0 Consolidated RC source manifest and integration checklist, then resolve each remaining source gate before the first build.
