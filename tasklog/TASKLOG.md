@@ -143,23 +143,115 @@ Statuses: `PLANNED`, `IMPLEMENTED`, `STATIC-AUDIT-PASS`, `BUILD-PASS`, `DEVICE-T
 - Status: STATIC-AUDIT-PASS
 - Reason: aggregate diagnostics without per-frame SD logging.
 
-## Platform 1.0 Beta 2 — current work
+## Platform 1.0 Beta 2 — Unified Font Engine
 
 ### RGJ-B2-001 — Real-game JAR compatibility corpus
 - Action: AUDIT
-- Status: IMPLEMENTED
+- Status: STATIC-AUDIT-PASS
 - Rule: user-supplied game JARs are compatibility evidence; binaries/assets are not committed.
 - Output: package/API/resource matrices and non-content metadata.
 
 ### RGJ-B2-002 — Unified font semantic audit
 - Action: AUDIT
-- Status: PLANNED
-- Scope: Font metrics + Graphics text calls across the JAR reference set.
-- Goal: ensure measurement and rasterization use one engine.
+- Status: STATIC-AUDIT-PASS
+- Scope: MIDP/DoJa Font metrics, Graphics text calls, anchors, baseline and Unicode resource renderer.
+- Finding: upstream PlatformFont measurement is AWT FontMetrics-based while RG35XX raster is bitmap/direct, creating a metric divergence risk.
 
 ### RGJ-B2-003 — RG35XXFontEngine
 - Action: ADD
-- Status: PLANNED
+- Status: STATIC-AUDIT-PASS
 - Requirement: charWidth/charsWidth/stringWidth/substringWidth/getHeight/baseline and renderer share one metric source.
-- Risk: changing Font semantics can alter menu/layout geometry.
-- Rollback: retain prior Unicode resource renderer and old Font metrics as a matched pair.
+- Preserved: 22,719-glyph embedded Unicode resource, Vietnamese/CJK coverage.
+- Risk: changing metrics can alter menu/layout geometry.
+
+### RGJ-B2-004 — PlatformFont RG35XX measurement backend
+- Action: REPLACE
+- Status: STATIC-AUDIT-PASS
+- Before: java.awt.FontMetrics was authoritative for measurement.
+- After: RG35XX target uses RG35XXFontEngine metrics matching raster advances.
+- Rollback: restore AWT metrics together with matching AWT renderer; do not mix metric sources.
+
+### RGJ-B2-005 — PlatformGraphics unified text raster backend
+- Action: MODIFY
+- Status: STATIC-AUDIT-PASS
+- Reason: text rendering and Font measurement must use identical glyph advances, height and baseline.
+
+### RGJ-B2-006 — LCDUI/PlatformFont validation correctness
+- Action: MODIFY
+- Status: STATIC-AUDIT-PASS
+- Finding: grouped invalid face/style/size checks could allow a single invalid group through.
+- Decision: validate each contract correctly without changing valid MIDP behavior.
+
+### RGJ-B2-007 — DoJa font compatibility
+- Action: KEEP
+- Status: STATIC-AUDIT-PASS
+- Requirement: SIZE_TINY, BOLDITALIC and DoJa measurement helpers continue through the shared font facade/engine.
+
+### RGJ-B2-008 — Embedded font resource path
+- Action: KEEP
+- Status: STATIC-AUDIT-PASS
+- Reason: keep glyph data in JAR resources; no game-loop filesystem font lookup.
+
+### RGJ-B2-009 — Six-JAR static regression audit
+- Action: AUDIT
+- Status: STATIC-AUDIT-PASS
+- Result: font/text API surface remains covered by the shared measurement/raster architecture.
+
+### RGJ-B2-010 — Beta 2 final source audit
+- Action: AUDIT
+- Status: STATIC-AUDIT-PASS
+- Result: 13/13 structural checks passed; no Java/native IPC change.
+- Device build/test: intentionally deferred until Platform 1.0 consolidated RC.
+
+## Platform 1.0 Beta 3 — Media Engine 2.0
+
+### RGJ-B3-001 — Upstream Manager/PlatformPlayer semantic audit
+- Action: AUDIT
+- Status: STATIC-AUDIT-PASS
+- Finding: upstream Manager advertises MIDI, WAV, MLD, AMR, MPEG, tone, MMF, iMelody and audio/basic unconditionally.
+- Finding: upstream PlatformPlayer contains desktop JavaSound/MIDI/MP3 and multiple decoder paths not equivalent to the proven RG35XX native backend.
+- Reason: advertised capabilities must not cause a game to select an unsupported codec on RG35XX.
+
+### RGJ-B3-002 — Truthful RG35XX MMAPI capability reporting
+- Action: MODIFY
+- Status: PLANNED
+- Target source: javax.microedition.media.Manager.getSupportedContentTypes/getSupportedProtocols.
+- Source of truth: RG35XXMediaProfile.
+- Initial target truth: MIDI, WAV/PCM/IMA/A-law/mu-law and tone; AMR/MPEG remain unadvertised until a target decoder is proven.
+- Regression focus: Zombie Infection format negotiation.
+
+### RGJ-B3-003 — RG35XXMediaRegistry
+- Action: ADD
+- Status: PLANNED
+- Responsibility: stable player IDs, type, lifecycle, loop count, volume, media time and native registration state.
+- Rule: Player semantics stay in Java; decode/mix timing truth for native-backed formats stays native.
+
+### RGJ-B3-004 — Dedicated Java-to-native audio transport
+- Action: REPLACE
+- Status: PLANNED
+- Before: media blobs/commands staged through files under /mnt/mmc/BIOS.
+- After target: separate audio command/blob channel that cannot corrupt stdout video IPC.
+- Constraint: do not multiplex large audio payloads into binary video stdout.
+- Rollback: preserve current SD bridge until the new channel passes static/protocol audit.
+
+### RGJ-B3-005 — Native media blob cache
+- Action: ADD
+- Status: PLANNED
+- Purpose: register immutable MIDI/PCM media once by player ID and reuse it for PLAY/STOP/SEEK/VOLUME commands.
+- Benefit: eliminate repeated SD reads/staging during gameplay.
+
+### RGJ-B3-006 — CPU-bounded native mixer/player model
+- Action: ADD
+- Status: PLANNED
+- Target: one BGM MIDI context plus bounded SFX MIDI/PCM voices appropriate for ARM926-class target cost.
+- Preserve: asynchronous libretro audio callback/ring architecture and native END_OF_MEDIA truth.
+
+### RGJ-B3-007 — Media Engine real-JAR regression audit
+- Action: AUDIT
+- Status: PLANNED
+- Diamond Rush: PCM WAV + MMAPI.
+- Asphalt 4: MIDI + PCM + IMA ADPCM + VolumeControl.
+- Zombie Infection: capability negotiation with multiple advertised media variants.
+- Prince of Persia: packed MIDI/PCM and Player lifecycle.
+- God of War: multi-MIDI behavior.
+- Vua Cướp Biển: no invented audio for a binary without actual audio implementation/assets.
