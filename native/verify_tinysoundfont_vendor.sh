@@ -5,8 +5,10 @@ set -eu
 # The native build must be reproducible/offline and must use the exact files
 # reviewed in docs/RC1-TML-TSF-DEPENDENCY-GATE.md.
 PIN="853a0a171759f1ddba0de1442133a75912bbeffa"
-TML_EXPECTED="6b3b6cdd1a212115787d7f32fc63a9e1f680814a"
-TSF_EXPECTED="7c64a18a73d43bb0d4878c2e729b7e259b985cd4"
+# Git blob identities from the authoritative upstream tree at PIN.
+# Verified through GitHub Git Trees API on 2026-09-03.
+TML_EXPECTED="333287377fa860fa7f3d8fe8096d3cf32bfbb6ea"
+TSF_EXPECTED="a81f25d5ca2e210720d646dec2dbfaeb119acb09"
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 TML="$ROOT/native/vendor/TinySoundFont/tml.h"
 TSF="$ROOT/native/vendor/TinySoundFont/tsf.h"
