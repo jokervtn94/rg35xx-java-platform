@@ -1,0 +1,52 @@
+# RGJ-B5-001..006 — RecordStore target storage integration specification
+#
+# Source basis: current FreeJ2ME devel RecordStore semantics. Do not replace
+# record IDs/tags/version/listener/auth/migration behavior.
+#
+# 1. Remove RG35XX-target dependence on java.nio.file.Files. Any helper using
+#    Files.readAllBytes/copy/move must have java.io equivalents on this target.
+#
+# 2. Make RecordStore implement RG35XXRmsCoordinator.FlushableStore only on the
+#    integrated source branch (interface is harmless cross-target if desired).
+#
+# 3. Split existing saveRecordStore() into:
+#      byte[] serializeRecordStoreSnapshot()
+#      void flushRG35XX()
+#    Serialization must preserve the exact upstream file format.
+#
+# 4. For RG35XX/libretro target, mutation sites that currently call
+#    saveRecordStore() synchronously (addRecord/setRecord/deleteRecord and any
+#    equivalent metadata mutation) call:
+#      RG35XXRmsCoordinator.getInstance().markDirty(this)
+#    Non-RG35XX targets retain upstream synchronous behavior.
+#
+# 5. flushRG35XX() serializes a consistent snapshot under the same RecordStore
+#    synchronization used for mutations, then releases the semantic lock before
+#    physical I/O when safe. Persist through:
+#      RG35XXRmsAtomicFile.write(file, snapshot)
+#
+# 6. Force-flush barriers:
+#    - before final close clears in-memory vectors
+#    - MIDlet pause/destroy integration
+#    - game unload / Libretro case 10 transition
+#    - Java libretro shutdown/deinit
+#    Call RG35XXRmsCoordinator.getInstance().forceFlush().
+#
+# 7. Startup recovery:
+#    - target exists => target is authoritative; discard stale target.tmp.
+#    - target missing + temp exists => only promote after existing parser accepts
+#      the complete temp contents; never blindly rename an unvalidated temp.
+#    - backup is a replacement safety artifact, not a second RecordStore format.
+#
+# 8. Logging:
+#    RG35XX production path must not log Arrays.toString(record payload) or emit
+#    per-mutation SD diagnostics. Aggregate/error logging only.
+#
+# 9. Failure:
+#    background failure keeps the store dirty. forceFlush must surface the saved
+#    failure instead of silently reporting persistence success.
+#
+# 10. Rollback:
+#    restoring synchronous saveRecordStore() calls is valid if async persistence
+#    fails device validation. Keep RG35XXRmsAtomicFile independently if it proves
+#    safer than direct overwrite.
