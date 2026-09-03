@@ -1,0 +1,61 @@
+# RG35XX RC1 exact-source integration spec: MobilePlatform dirty-frame scheduling
+# Task: RGJ-RC1-008
+# Owner remains org.recompile.mobile.MobilePlatform.
+# Helper remains the registered org.recompile.mobile.RG35XXFrameScheduler.
+# Do NOT create another frame scheduler, repaint thread, framebuffer owner or MobilePlatform replacement.
+
+Target: upstream FreeJ2ME-Plus devel src/org/recompile/mobile/MobilePlatform.java
+Helper: src/org/recompile/mobile/RG35XXFrameScheduler.java
+
+## Exact-source findings
+
+Current upstream MobilePlatform owns both LCD buffers (`lcd`, `lcdFrontbuffer`), their PlatformGraphics
+contexts, `painter`/`postDraw`, frame-limit timing state, input dispatch and LCD resize. Therefore RG35XX
+must attach dirty signalling to the authoritative point where a newly rendered/backbuffer result becomes
+available to the libretro presentation path. It must not add a second rendering loop.
+
+The current RG35XXFrameScheduler is generation based:
+- markDirty() increments generation and notifyAll();
+- waitForChange(lastSeen) blocks until generation changes;
+- wake() only wakes waiters and does not fabricate a new frame;
+- reset() returns generation to 1 and intentionally makes the first post-reset frame eligible.
+
+## Integration contract
+
+1. `MobilePlatform` remains the sole Java owner of LCD/frontbuffer mutation and repaint semantics.
+2. On RG35XX/libretro only, call `RG35XXFrameScheduler.markDirty()` after the existing upstream render /
+   backbuffer-to-frontbuffer operation has completed and the frame is coherent for the native video sender.
+3. Do NOT call markDirty() at the beginning of paint, before copy/flush, or for every primitive draw call.
+   A dirty generation represents a presentable frame, not arbitrary pixel mutation.
+4. LCD resize/recreation must force a dirty generation after the new buffers/graphics references are fully
+   installed, so the native side cannot continue presenting stale geometry.
+5. Pause/menu/overlay transitions that already invoke the upstream painter may mark dirty only after that
+   painter has produced the visible state. Do not introduce a polling repaint loop.
+6. Game unload/reset uses `RG35XXFrameScheduler.reset()` through RG35XXLifecycle. Final shutdown may use
+   `wake()` only to release a waiting frame worker; wake is not a rendered frame.
+7. The consumer stores its last-seen generation and calls waitForChange(lastSeen). Multiple producer marks
+   may coalesce naturally; this is intentional and prevents a queue of obsolete frames.
+8. No per-frame object allocation, Timer, executor, java.util.concurrent queue or additional Java thread is
+   introduced by this gate.
+9. Existing upstream frame limiting (`lastRenderTime`, `requiredFrametime`, `LockSupport`) remains authoritative.
+   RG35XXFrameScheduler is a dirty/wakeup signal, not another FPS limiter.
+10. Preserve `lcd`/`lcdFrontbuffer`, `painter`, `postDraw`, GameCanvas semantics, DoJa paths and existing
+    front-end callbacks. Do not move framebuffer ownership into RG35XXFrameScheduler.
+
+## Java-runtime compatibility gate
+
+RG35XX project-owned helper code remains Java-6 syntax/API compatible. Current upstream MobilePlatform imports
+`java.util.concurrent.locks.LockSupport`; this is an upstream exact-source compatibility item to verify during
+consolidated JamVM build. This task does not add any new `java.util.concurrent` dependency.
+
+## Duplicate/missing-source result
+
+No new Java class/package is required. Authoritative pair:
+- `MobilePlatform` = rendering/buffer/repaint owner.
+- `RG35XXFrameScheduler` = generation-based dirty/wakeup helper only.
+
+## Gate status
+
+STATIC-AUDIT-PASS for ownership and integration contract.
+BUILD-PASS is forbidden until the exact presentation call-site is applied in the consolidated source and the
+JamVM/Ant build succeeds. DEVICE-TEST-PASS remains separate.
