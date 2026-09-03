@@ -2,6 +2,15 @@
 
 This file extends the immutable project task history for the Platform 1.0 consolidated RC stage. It does not replace `TASKLOG.md`.
 
+## Mandatory tasklog/source-registry reload rule
+Before every future ADD/REMOVE/REPLACE/MODIFY of RG35XX platform code, reload:
+1. `tasklog/TASKLOG.md`
+2. this `tasklog/RC1-TASKLOG.md`
+3. `docs/PLATFORM-SOURCE-REGISTRY.md`
+4. current repository tree/target files
+
+No class/package/native module may be added merely from memory or an older overlay. ADD requires a non-overlap check; REMOVE/REPLACE requires an immutable task entry identifying the old symbol and replacement/rollback.
+
 ## RGJ-B6-009 — RMS failure-path hardening
 - Action: MODIFY
 - Status: STATIC-AUDIT-PASS
@@ -40,9 +49,11 @@ This file extends the immutable project task history for the Platform 1.0 consol
 
 ## RGJ-RC1-003 — Exact-source assembly
 - Action: AUDIT
-- Status: PLANNED
+- Status: IMPLEMENTED
 - Scope: assemble upstream FreeJ2ME source plus project RG35XX classes and patches into one reproducible RC tree.
 - Required checks: PlatformImage, PlatformGraphics, MobilePlatform, PlatformPlayer, Manager, RecordStore, Libretro.java, freej2me_libretro.c, native media modules.
+- Control added: `docs/PLATFORM-SOURCE-REGISTRY.md` is now the authoritative duplicate/missing-class gate for assembly.
+- Remaining: exact upstream call-site application/audit before BUILD-PASS.
 
 ## RGJ-RC1-004 — First host/cross build
 - Action: AUDIT
@@ -50,3 +61,13 @@ This file extends the immutable project task history for the Platform 1.0 consol
 - Java acceptance: `rm -rf build && ant` succeeds.
 - Native acceptance: ARMv5TE/uClibc libretro core links with no undefined RG35XX symbols.
 - Rule: host/cross BUILD-PASS still does not imply DEVICE-TEST-PASS.
+
+## RGJ-RC1-005 — Authoritative source registry / duplicate prevention
+- Action: ADD
+- Status: STATIC-AUDIT-PASS
+- File: `docs/PLATFORM-SOURCE-REGISTRY.md`
+- Purpose: maintain one authoritative inventory of RG35XX Java classes, native modules, upstream integration owners and patch responsibilities.
+- Required behavior: reload tasklogs + registry before every code mutation.
+- ADD gate: prove the responsibility is not already owned by a current class/module.
+- REMOVE/REPLACE gate: record old path/symbol and replacement/rollback before deletion; never silently resurrect superseded code from an older ZIP/patch.
+- Result: future consolidation work is source-registry-driven rather than memory-driven.
