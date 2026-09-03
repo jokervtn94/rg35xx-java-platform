@@ -136,7 +136,9 @@ public final class RG35XXMediaRegistry
             Entry e = (Entry) entries.get(new Integer(playerId));
             if(e == null || e.released) return;
 
-            e.started = false;
+            /* LOOPED is an intermediate restart: playback remains STARTED.
+             * END_OF_MEDIA is the only native event that clears started state. */
+            e.started = (eventType == EVENT_LOOPED);
             e.mediaTimeUs = mediaTimeUs;
             listener = e.eventListener;
         }
