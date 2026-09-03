@@ -5,12 +5,12 @@ import java.util.Hashtable;
 /**
  * Small Java-side registry for RG35XX native-backed MMAPI players.
  *
- * The registry owns Java semantic state only.  Native playback/decode timing
+ * The registry owns Java semantic state only. Native playback/decode timing
  * remains authoritative for native-backed media, including END_OF_MEDIA.
  *
  * Java 6 compatible; no java.util.concurrent dependency is required here.
  *
- * Tasklog: RGJ-B3-003
+ * Tasklog: RGJ-B3-003 / RGJ-RC1-010E
  */
 public final class RG35XXMediaRegistry
 {
@@ -18,6 +18,14 @@ public final class RG35XXMediaRegistry
     public static final int TYPE_MIDI = 1;
     public static final int TYPE_PCM16 = 2;
     public static final int TYPE_TONE = 3;
+
+    public static final int EVENT_END_OF_MEDIA = 1;
+    public static final int EVENT_LOOPED = 2;
+
+    public static interface EventListener
+    {
+        void onNativeMediaEvent(int playerId, int eventType, long mediaTimeUs);
+    }
 
     private static final Hashtable entries = new Hashtable();
     private static int nextPlayerId = 1;
@@ -40,7 +48,11 @@ public final class RG35XXMediaRegistry
     public static synchronized void release(int playerId)
     {
         Entry e = (Entry) entries.remove(new Integer(playerId));
-        if(e != null) { e.released = true; }
+        if(e != null)
+        {
+            e.released = true;
+            e.eventListener = null;
+        }
     }
 
     public static synchronized void reset()
@@ -52,6 +64,31 @@ public final class RG35XXMediaRegistry
     public static synchronized int size()
     {
         return entries.size();
+    }
+
+    /**
+     * Entry point for the existing libretro stdin control channel.
+     * The listener is copied while holding the registry lock, then invoked
+     * outside it so vendor/MMAPI callbacks cannot deadlock registry mutation.
+     */
+    public static void dispatchNativeEvent(int playerId, int eventType, long mediaTimeUs)
+    {
+        EventListener listener = null;
+        long eventTime = mediaTimeUs < 0L ? 0L : mediaTimeUs;
+
+        synchronized(RG35XXMediaRegistry.class)
+        {
+            Entry e = (Entry) entries.get(new Integer(playerId));
+            if(e == null || e.released) return;
+            if(eventType != EVENT_END_OF_MEDIA && eventType != EVENT_LOOPED) return;
+
+            e.started = false;
+            e.mediaTimeUs = eventTime;
+            listener = e.eventListener;
+        }
+
+        if(listener != null)
+            listener.onNativeMediaEvent(playerId, eventType, eventTime);
     }
 
     private static int allocateId()
@@ -89,6 +126,7 @@ public final class RG35XXMediaRegistry
         public boolean registeredNative = false;
         public boolean released = false;
         public boolean started = false;
+        private EventListener eventListener;
 
         private Entry(int playerId, String contentType)
         {
@@ -127,6 +165,11 @@ public final class RG35XXMediaRegistry
         public synchronized void markStarted(boolean value)
         {
             this.started = value;
+        }
+
+        public synchronized void setEventListener(EventListener listener)
+        {
+            this.eventListener = listener;
         }
     }
 }
