@@ -26,15 +26,17 @@
 # libretro control writer and direct multi-threaded writes could interleave with
 # variable-length commands.
 #
-# Existing core owns one callback:
+# Existing core owns one callback. Signature MUST exactly match
+# rg35xx_media_event_cb from rg35xx_media_events.h (event_type is int):
 #
-#   static void rg35xx_core_media_event(uint8_t event_type,
+#   static void rg35xx_core_media_event(int event_type,
 #                                       uint32_t player_id,
 #                                       uint64_t media_time_us)
 #   {
 #       if(event_type != RG35XX_MEDIA_EVENT_END_OF_MEDIA &&
 #          event_type != RG35XX_MEDIA_EVENT_LOOPED) return;
-#       rg35xx_media_event_queue_push(event_type, player_id, media_time_us);
+#       rg35xx_media_event_queue_push((uint8_t)event_type,
+#                                     player_id, media_time_us);
 #   }
 #
 # Startup:
@@ -169,6 +171,7 @@
 # -------------------------------------------
 # STATIC-AUDIT-PASS for the process boundary requires all of the following:
 # - typed native callback has one owner and only enqueues
+# - callback signature exactly matches rg35xx_media_event_cb
 # - queue is bounded/allocation-free and cannot leak events across game reset
 # - core serializes opcode-14 writes through its normal control-writer context
 # - Java case 14 exact-read + case 15 drain retain existing parser ownership
