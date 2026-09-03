@@ -1,17 +1,23 @@
 # RG35XX Java Platform 1.0 — Consolidated RC1 Integration Manifest
 
-Status: PRE-RC / source-integration gate. This document does not claim BUILD-PASS or DEVICE-TEST-PASS.
+Status: STATIC-AUDIT-PASS for the consolidated source policy. BUILD-READY, BUILD-PASS and DEVICE-TEST-PASS are not claimed.
+
+Pinned FreeJ2ME-Plus base: `TASEmulators/freej2me-plus@13ec186903087156c145268f8706eecfaf9f1e50`.
+
+This manifest supersedes the older pre-pin assumptions in the first RC1 draft. In particular, the missing historical `RG35XXFontEngine` is no longer a required class, the pinned RecordStore baseline is synchronous/multi-file rather than the old single-target async design, and the native media source set now includes the complete RC1 mixer/MIDI/runtime/event modules.
 
 ## Runtime facts carried into RC1
 
-- Target runtime is JamVM/GNU Classpath on RG35XX Original / GarlicOS.
-- Desktop JavaSound/ALSA MIDI is not a valid target backend; RG35XX media uses the native TML/TSF + PCM path.
+- Target runtime is JamVM 2.0.0 / GNU Classpath 0.99 on RG35XX Original / GarlicOS.
+- Desktop JavaSound/ALSA MIDI is not a valid target backend; RG35XX supported media uses the native TML/TSF + PCM path.
 - stdout remains binary Java↔libretro video IPC and must never carry diagnostics or audio payloads.
-- Native audio/video worker threads remain independent of retro_run hot-path blocking.
+- Audio uses a dedicated inherited descriptor/pipe; media completion returns through the typed native event path.
+- Native audio/video work remains decoupled from blocking work inside `retro_run()`.
+- Historical device logs are compatibility evidence only; every RC status after source assembly requires fresh build/device evidence.
 
-## Consolidated Java source set
+## Consolidated project Java source set
 
-Required RG35XX classes:
+Required project-owned classes under `org.recompile.mobile`:
 
 - RG35XXPlatformProfile
 - RG35XXFrameScheduler
@@ -24,112 +30,153 @@ Required RG35XX classes:
 - RG35XXAudioTransport
 - RG35XXAudioBootstrap
 - RG35XXNativePlayer
-- RG35XXFontEngine
+- RG35XXToneSequenceEncoder
 - RG35XXTransformCache
-- RG35XXRmsCoordinator
-- RG35XXRmsAtomicFile
+- RG35XXRmsCoordinator — present but dormant on pinned synchronous RMS baseline
+- RG35XXRmsAtomicFile — present but unhooked on pinned multi-file RMS baseline
 - RG35XXLifecycle
 
-Integration targets that must be checked against exact FreeJ2ME source before first build:
+Explicitly NOT required / must not be silently resurrected:
 
-- javax.microedition.lcdui.Font / PlatformFont
-- PlatformGraphics
-- PlatformImage
-- MobilePlatform
-- PlatformPlayer
-- javax.microedition.media.Manager
-- javax.microedition.rms.RecordStore
-- org.recompile.freej2me.Libretro
+- `org.recompile.mobile.RG35XXFontEngine` — historical implementation source/resource was not recovered; responsibility is superseded under RC1-011D by the GNU Classpath headless FontPeer backend while existing FreeJ2ME PlatformFont/PlatformGraphics remain facade/consumer owners.
+
+Pinned upstream integration owners:
+
+- `org.recompile.mobile.PlatformFont`
+- `org.recompile.mobile.PlatformGraphics`
+- `org.recompile.mobile.PlatformImage`
+- `org.recompile.mobile.MobilePlatform`
+- `org.recompile.mobile.PlatformPlayer`
+- `javax.microedition.media.Manager`
+- `javax.microedition.rms.RecordStore`
+- `org.recompile.freej2me.Libretro`
+- `src/libretro/freej2me_libretro.c`
+
+Target-runtime integration owner outside the FreeJ2ME tree:
+
+- GNU Classpath 0.99 `gnu.java.awt.peer.headless.HeadlessToolkit` plus one real cached `ClasspathFontPeer`/FontDelegate path, as defined by patch 0022.
 
 ## Consolidated native source set
 
+Project native modules required exactly once:
+
 - rg35xx_audio_protocol.h
 - rg35xx_media_cache.h/.c
+- rg35xx_media_events.h
+- rg35xx_media_event_queue.h/.c
 - rg35xx_audio_dispatch.h/.c
 - rg35xx_audio_pipe.h/.c
 - rg35xx_mixer.h/.c
 - rg35xx_midi_backend.h/.c
-- existing freej2me_libretro.c audio worker/ring/video receiver/RGB565 paths
+- rg35xx_tsf_worker.h/.c
+- rg35xx_tsf_impl.c — sole `TSF_IMPLEMENTATION` / `TML_IMPLEMENTATION` owner
+- rg35xx_soundfont_source.h/.c
+- rg35xx_media_runtime.h/.c
+- existing pinned/consolidated `freej2me_libretro.c` as the sole core entrypoint/integration owner
+
+Third-party native inputs:
+
+- TinyMidiLoader `tml.h` from `schellingb/TinySoundFont@853a0a171759f1ddba0de1442133a75912bbeffa`, Git blob `333287377fa860fa7f3d8fe8096d3cf32bfbb6ea`.
+- TinySoundFont `tsf.h` from the same pin, Git blob `a81f25d5ca2e210720d646dec2dbfaeb119acb09`.
+- one authoritative SoundFont asset/provider, still unresolved and therefore a hard BUILD-READY gate.
 
 ## Mandatory source gates
 
-### G1 — Java compatibility
+### G1 — Pinned source identity
 
-All new classes must compile with the project Java language level and avoid APIs unavailable on GNU Classpath target. No java.nio.file dependency may be introduced by RG35XX-specific persistence code.
+All integration work is applied against FreeJ2ME-Plus commit `13ec186903087156c145268f8706eecfaf9f1e50`. No moving `devel` source is silently substituted. Rebase to a newer upstream requires a new explicit task and full call-site re-audit.
 
-### G2 — Font metric/raster unity
+### G2 — Java/GNU Classpath compatibility
 
-Font measurement and PlatformGraphics text rasterization must share RG35XXFontEngine metrics. DoJa inheritance must remain valid. Font resource loading must be classpath-based, not per-frame filesystem I/O.
+Project Java code must compile at the project language level and avoid APIs unavailable on JamVM/GNU Classpath. RG35XX persistence code must not introduce `java.nio.file`. Desktop JavaSound, JLayer and ScheduledExecutorService paths may remain upstream for desktop targets but may not become mandatory RG35XX runtime dependencies.
 
-### G3 — Graphics hot path
+### G3 — Headless font backend
 
-Validate drawRGB clipping/alpha specialization, Sprite transform-cache indexing, drawRegion fallback semantics and zero allocations in repeated transformed drawing after cache warm-up.
+FreeJ2ME PlatformFont remains LCDUI/DoJa font policy and metrics facade; PlatformGraphics remains the draw consumer. GNU Classpath headless AWT must return a real non-null FontPeer/FontDelegate for logical fonts. Do not patch `java.awt.Font` to tolerate a null peer and do not globally sanitize Unicode to ASCII. The authoritative font resource must be present at assembly time and must not be loaded per draw call.
 
-### G4 — Image compatibility
+Acceptance includes stable `Font.hashCode()`, `createGlyphVector()`, FontMetrics and deterministic Vietnamese/missing-glyph behavior on the target classpath build.
 
-PlatformImage must preserve indexed PNG tRNS repair and immutable cache-copy semantics. Mutable MIDP images must never share cached mutable backing arrays.
+### G4 — Graphics hot path
 
-### G5 — Input semantics
+Preserve surgical PlatformGraphics integration: drawRGB clipping/alpha specialization, Sprite transform-cache geometry, drawRegion fallback semantics and no allocation in repeated hot inner loops after cache warm-up. Do not replace the heavily compatibility-tuned upstream PlatformGraphics class.
 
-Libretro button mapping must feed RG35XXInputEngine press/release/update deterministically. Numeric keypad direct J2ME codes, star and pound remain available. No release-triggered legacy repeat scan may remain active in parallel.
+### G5 — Image compatibility
 
-### G6 — Media capability truth
+PlatformImage remains decoder/facade owner. Preserve indexed PNG tRNS repair and immutable cache-copy semantics. Mutable MIDP/DoJa images must never share cached mutable backing arrays.
 
-Manager must advertise RG35XXMediaProfile capabilities on target. PlatformPlayer keeps vendor/MMAPI facade compatibility but native-backed formats route through RG35XXNativePlayer/MediaRegistry.
+### G6 — Dirty-frame ownership
 
-### G7 — Dedicated audio transport
+MobilePlatform remains LCD/frontbuffer/render owner. RG35XXFrameScheduler is a generation/wakeup helper only. Do not block the single LibretroIO command parser waiting for dirty generations and do not introduce a second FPS limiter/frame thread. Mark dirty only after coherent frontbuffer production.
 
-Native pipe is created before fork/exec. JamVM child receives the write FD via -Dfreej2me.rg35xx.audio.fd=N. Java opens only /proc/self/fd/N; fd 0/1/2 are rejected. Parent read side is non-blocking and framed by RG35XXAudioProtocol.
+### G7 — Input semantics
 
-### G8 — Native mixer/link contract
+Libretro remains protocol owner; MobilePlatform remains MIDP/vendor dispatch owner; `Mobile.getMobileKey(slot)` remains slot mapping owner. RG35XXInputEngine owns only RG35XX held/repeat state. Replace the upstream direct transition dispatch rather than running both in parallel; preserve numeric/star/pound behavior and keep frontend fast-forward slot handling separate.
 
-All TML/TSF adapter symbols must resolve exactly once. Mixer has no per-render heap allocation. PCM and MIDI share bounded accumulation/output. RELEASE/RESET cannot leave voices referencing freed media blobs.
+### G8 — Media capability truth
 
-### G9 — END_OF_MEDIA
+RG35XX target capabilities advertise only implemented native-backed formats: direct MIDI, WAV/PCM normalization and ToneControl converted to MIDI. Vendor containers whose current upstream decoders still require JavaSound are preserved but not advertised. `device://midi` live ShortMessage transport remains unclaimed.
 
-Native playback completion is authoritative. One finite player completion must produce exactly one Java END_OF_MEDIA event; loop restart must not produce premature completion. Java timers must not synthesize native completion.
+### G9 — Dedicated audio/process boundary
 
-### G10 — RMS persistence
+Native audio pipe is created before fork/exec. JamVM child receives `-Dfreej2me.rg35xx.audio.fd=N` before `-jar`; fd 0/1/2 are rejected. Parent and child close the opposite ends exactly once. Audio is never multiplexed onto stdout video IPC.
 
-RecordStore semantic state remains authoritative in RAM. Dirty writes are coalesced. Background failure must not spin forever; forceFlush retries failed stores once and surfaces persistent failure. Shutdown must stop the RMS worker even when flush fails.
+### G10 — Native mixer, MIDI and dependency contract
 
-### G11 — Lifecycle ordering
+PCM and MIDI share one bounded 44.1-kHz mixer. `rg35xx_tsf_impl.c` is the only TML/TSF implementation translation unit. Exact vendor headers must pass `native/verify_tinysoundfont_vendor.sh`. The audio render hot path performs no project-introduced heap allocation/blocking I/O. RELEASE/RESET cannot leave active voices pointing at freed media.
 
-platformStart:
-1. RMS coordinator start
-2. inherited audio bridge attach (fail-safe)
+### G11 — Media event semantics
 
-beforeGameLoad:
-1. unload active game if needed
-2. defensive native media RESET
-3. Java media registry reset
-4. image/transform/input/frame per-game reset
+Native playback completion is authoritative. Intermediate loop restart emits LOOPED while Java player state remains STARTED. Final finite completion emits END_OF_MEDIA exactly once and transitions the Java facade appropriately. Audio callbacks enqueue typed events; only the existing control-writer context serializes them back to Java.
 
-unloadGame:
-1. RMS forceFlush
-2. native media RESET
-3. Java media registry reset
-4. input/image/transform/frame reset
+### G12 — RMS pinned safe baseline
 
-platformShutdown:
-1. unloadGame
-2. audio bridge shutdown
-3. RMS worker shutdown
-4. propagate first captured failure only after teardown attempts
+Pinned RecordStore persists metadata in `basename.rms` and record payloads in sibling `basename.<recordId>` files. RC1 keeps upstream synchronous persistence semantics until a future explicit transaction task can cover the complete multi-file generation. RG35XXRmsCoordinator/RG35XXRmsAtomicFile remain present but dormant/unhooked; old single-target patch 0009 must not be reapplied.
 
-### G12 — Native shutdown ownership
+Lifecycle barriers may call the dormant coordinator safely but must not create an unnecessary worker on this baseline.
 
-Audio callback must be disabled/stopped before ring/cache destruction. Video receiver and audio worker are joined before freeing their state. Pipe descriptors are closed exactly once in the owning process.
+### G13 — Lifecycle and shutdown ordering
 
-## Real-device evidence already available, but not RC1 PASS
+`platformStart`: initialize target-wide project subsystems without creating per-game duplicate workers.
 
-Historical device logs show JamVM successfully fork/execs and accepts READY, native audio workers start and stop, RGB565 video receiver threads run, and TML/TSF playback can prime the native ring. These logs are compatibility evidence only; RC1 still requires a new build and fresh device regression after consolidation.
+`beforeGameLoad`: unload/reset prior per-game state defensively, but do not commit a successful-load state before `MobilePlatform.load()` succeeds.
 
-## RC1 first-build acceptance
+`afterGameLoad`: commit per-game lifecycle state only after successful load.
 
-The first build is allowed only after G1–G12 are source-audited against the assembled tree. BUILD-PASS requires both:
+`gameLoadFailed`: roll back prepared state when load fails.
 
-1. `rm -rf build && ant` succeeds for Java, and
-2. the ARMv5TE/uClibc libretro core links with no undefined RG35XX media/lifecycle symbols.
+`unloadGame` / final shutdown: preserve RMS semantics, reset native media before discarding Java player ownership, reset input/image/transform/frame state, close/stop media transports/workers and allow Java graceful cleanup before native hard-kill fallback.
 
-No device performance conclusion is allowed from host compilation alone.
+### G14 — Build-input provenance and assembled-source gate
+
+Before the first build all of the following must be physically present in one reproducible tree:
+
+1. exact pinned FreeJ2ME source;
+2. current project Java/native sources exactly once;
+3. authoritative integration patches/contracts accounted for, including 0020/0021/0022;
+4. exact TML/TSF vendor headers with verified Git blob identities;
+5. GNU Classpath 0.99 source/resource integration required by the headless FontPeer contract;
+6. one explicit authoritative SoundFont asset/provider;
+7. consolidated native Makefile/include/link inputs covering every registered native module and required `-lm` linkage.
+
+`native/vendor_tinysoundfont.sh` may be used during source acquisition, but normal release/native builds must be offline and fail closed if dependency files are absent or modified.
+
+## Superseded pre-pin assumptions
+
+The following old assumptions remain historical evidence but are not RC1 build policy:
+
+- `RG35XXFontEngine` as a mandatory project class.
+- shared metrics/raster ownership through the missing historical bitmap class.
+- old single-target asynchronous RMS patch 0009 as the pinned persistence implementation.
+- blocking dirty-frame consumption in the single LibretroIO parser.
+- provisional TML/TSF blob IDs recorded before exact Git-tree reconciliation.
+
+## First-build authorization
+
+The project is NOT yet BUILD-READY. First Java/native compilation is authorized only after G1-G14 are represented in one assembled source tree and the hard external inputs in G3/G10/G14 are present.
+
+BUILD-PASS requires both:
+
+1. `rm -rf build && ant` succeeds for the assembled Java tree, and
+2. the ARMv5TE/uClibc libretro core compiles/links with no undefined RG35XX symbols and exact dependency inputs.
+
+Host/cross BUILD-PASS still does not imply DEVICE-TEST-PASS. Fresh RG35XX regression testing begins only after the consolidated artifacts are produced.
