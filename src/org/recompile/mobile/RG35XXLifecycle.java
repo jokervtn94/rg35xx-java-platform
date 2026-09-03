@@ -4,12 +4,13 @@ package org.recompile.mobile;
  * Central lifecycle contract for the RG35XX target.
  * Subsystems keep their own implementation/state; this class only defines
  * deterministic ordering across game load, unload and platform shutdown.
- * Java 6 compatible. Tasklog: RGJ-B6-001..010.
+ * Java 6 compatible. Tasklog: RGJ-B6-001..010, RGJ-RC1-011B.
  */
 public final class RG35XXLifecycle
 {
     private static boolean platformStarted;
     private static boolean gameActive;
+    private static boolean gameLoadPrepared;
 
     private RG35XXLifecycle() { }
 
@@ -24,6 +25,11 @@ public final class RG35XXLifecycle
         platformStarted = true;
     }
 
+    /**
+     * Complete old-game persistence/reset before MobilePlatform.load() is
+     * allowed to replace loader/suite context. This prepares a load but does
+     * not claim that the next game exists yet.
+     */
     public static synchronized void beforeGameLoad() throws Exception
     {
         platformStart();
@@ -38,7 +44,25 @@ public final class RG35XXLifecycle
         RG35XXTransformCache.reset();
         RG35XXInputEngine.reset();
         RG35XXFrameScheduler.reset();
+        gameActive = false;
+        gameLoadPrepared = true;
+    }
+
+    /** Commit the prepared load only after MobilePlatform.load() succeeds. */
+    public static synchronized void afterGameLoad()
+    {
+        if(!platformStarted || !gameLoadPrepared) return;
         gameActive = true;
+        gameLoadPrepared = false;
+    }
+
+    /** Clear a prepared-but-failed load without fabricating an active game. */
+    public static synchronized void gameLoadFailed()
+    {
+        gameActive = false;
+        gameLoadPrepared = false;
+        RG35XXInputEngine.reset();
+        RG35XXFrameScheduler.reset();
     }
 
     public static synchronized void pauseBarrier() throws Exception
@@ -69,6 +93,7 @@ public final class RG35XXLifecycle
         RG35XXTransformCache.reset();
         RG35XXFrameScheduler.reset();
         gameActive = false;
+        gameLoadPrepared = false;
     }
 
     public static synchronized void platformShutdown() throws Exception
@@ -87,6 +112,7 @@ public final class RG35XXLifecycle
 
         platformStarted = false;
         gameActive = false;
+        gameLoadPrepared = false;
         if(failure != null) throw failure;
     }
 
