@@ -1,9 +1,10 @@
 #include "rg35xx_mixer.h"
 #include "rg35xx_midi_backend.h"
-#include <stdlib.h>
 #include <string.h>
 
-/* Tasklog: RGJ-B3-006 */
+/* Tasklog: RGJ-B3-006 / RGJ-B3-STAB-001 */
+#define RG35XX_MIXER_CHUNK_FRAMES 1024u
+
 struct pcm_voice {
     uint32_t player_id;
     size_t byte_pos;
@@ -13,6 +14,8 @@ struct pcm_voice {
 
 static struct pcm_voice pcm_voices[RG35XX_MEDIA_MAX_PCM_VOICES];
 static rg35xx_media_end_cb media_end_callback;
+/* Static reusable accumulator: no malloc/calloc/free in audio render hot path. */
+static int32_t mix_accum[RG35XX_MIXER_CHUNK_FRAMES * 2u];
 
 static int16_t read_s16le(const uint8_t *p)
 {
@@ -49,6 +52,7 @@ static struct pcm_voice *alloc_voice(uint32_t id)
 void rg35xx_mixer_init(rg35xx_media_end_cb end_cb)
 {
     memset(pcm_voices, 0, sizeof(pcm_voices));
+    memset(mix_accum, 0, sizeof(mix_accum));
     media_end_callback = end_cb;
     rg35xx_midi_backend_init(end_cb);
 }
@@ -56,6 +60,7 @@ void rg35xx_mixer_init(rg35xx_media_end_cb end_cb)
 void rg35xx_mixer_reset(void)
 {
     memset(pcm_voices, 0, sizeof(pcm_voices));
+    memset(mix_accum, 0, sizeof(mix_accum));
     rg35xx_midi_backend_reset();
 }
 
@@ -137,20 +142,15 @@ static void pcm_finish_or_loop(struct rg35xx_media_entry *e, struct pcm_voice *v
     if(media_end_callback) media_end_callback(e->player_id);
 }
 
-size_t rg35xx_mixer_render(int16_t *out, size_t frames)
+static void render_chunk(int16_t *out, size_t frames)
 {
     size_t f;
     int vi;
-    int32_t *accum;
-    if(!out || frames == 0) return 0;
-    accum = (int32_t *)calloc(frames * 2u, sizeof(int32_t));
-    if(!accum) { memset(out, 0, frames * 2u * sizeof(int16_t)); return 0; }
-
-    /* TML/TSF adds stereo samples into the same accumulator as PCM voices. */
-    rg35xx_midi_backend_mix(accum, frames);
+    memset(mix_accum, 0, frames * 2u * sizeof(int32_t));
+    rg35xx_midi_backend_mix(mix_accum, frames);
 
     for(f = 0; f < frames; ++f) {
-        int32_t left = accum[f * 2], right = accum[f * 2 + 1];
+        int32_t left = mix_accum[f * 2], right = mix_accum[f * 2 + 1];
         for(vi = 0; vi < RG35XX_MEDIA_MAX_PCM_VOICES; ++vi) {
             struct pcm_voice *v = &pcm_voices[vi];
             struct rg35xx_media_entry *e;
@@ -169,6 +169,17 @@ size_t rg35xx_mixer_render(int16_t *out, size_t frames)
         }
         out[f * 2] = clamp16(left); out[f * 2 + 1] = clamp16(right);
     }
-    free(accum);
+}
+
+size_t rg35xx_mixer_render(int16_t *out, size_t frames)
+{
+    size_t done = 0;
+    if(!out || frames == 0) return 0;
+    while(done < frames) {
+        size_t chunk = frames - done;
+        if(chunk > RG35XX_MIXER_CHUNK_FRAMES) chunk = RG35XX_MIXER_CHUNK_FRAMES;
+        render_chunk(out + done * 2u, chunk);
+        done += chunk;
+    }
     return frames;
 }
