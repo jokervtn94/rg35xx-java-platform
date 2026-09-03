@@ -1,4 +1,5 @@
 #include "rg35xx_audio_pipe.h"
+#include "rg35xx_audio_dispatch.h"
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
@@ -6,11 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* Implemented by rg35xx_audio_dispatch.c. */
-int rg35xx_audio_dispatch(const struct rg35xx_audio_header *h,
-                          const uint8_t *payload);
-
-/* Tasklog: RGJ-B3-004. Parent owns read end; JamVM child inherits write end. */
+/* Tasklog: RGJ-B3-004 / RGJ-RC1-010G. Parent owns read end; JamVM child inherits write end. */
 void rg35xx_audio_pipe_init(struct rg35xx_audio_pipe *p)
 {
     if(!p) return;
