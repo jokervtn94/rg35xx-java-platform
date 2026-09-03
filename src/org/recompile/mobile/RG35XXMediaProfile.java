@@ -7,7 +7,7 @@ package org.recompile.mobile;
  * actually route to a proven decoder/backend. Generic FreeJ2ME desktop
  * capabilities must not leak into Manager.getSupportedContentTypes().
  *
- * Tasklog: RGJ-B1-008, RGJ-B3-002
+ * Tasklog: RGJ-B1-008, RGJ-B3-002, RGJ-RC1-010L/010M
  */
 public final class RG35XXMediaProfile
 {
@@ -15,7 +15,8 @@ public final class RG35XXMediaProfile
         "audio/midi",
         "audio/x-midi",
         "audio/wav",
-        "audio/x-wav"
+        "audio/x-wav",
+        "audio/x-tone-seq"
     };
 
     private RG35XXMediaProfile() { }
@@ -47,12 +48,11 @@ public final class RG35XXMediaProfile
         if(t.equals("audio/midi") || t.equals("audio/x-midi"))
             return RG35XXPlatformProfile.AUDIO_MIDI;
 
+        if(t.equals("audio/x-tone-seq"))
+            return RG35XXPlatformProfile.AUDIO_MIDI;
+
         if(t.equals("audio/wav") || t.equals("audio/x-wav"))
             return RG35XXPlatformProfile.AUDIO_PCM;
-
-        /* ToneControl conversion is a separate gate. Do not advertise it until
-         * the JavaSound-free A-BNF/vendor conversion path is source-audited. */
-        if(t.equals("audio/x-tone-seq")) return false;
 
         /* Explicitly false until a target decoder is proven. */
         if(t.indexOf("amr") >= 0)
