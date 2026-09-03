@@ -40,11 +40,7 @@ No class/package/native module may be added merely from memory or an older overl
 - Action: AUDIT
 - Status: STATIC-AUDIT-PASS
 - Evidence: historical RG35XX logs supplied during development.
-- Facts retained for RC design:
-  - JamVM 2.0.0 / GNU Classpath target runtime.
-  - desktop JavaSound/ALSA MIDI cannot be a required backend.
-  - native TML/TSF + PCM worker/ring is the target media foundation.
-  - Java↔native stdout remains binary video IPC.
+- Facts retained for RC design: JamVM/GNU Classpath target; native TML/TSF + PCM media foundation; stdout remains binary video IPC.
 - Limitation: historical logs are compatibility evidence, not RC device-test results.
 
 ## RGJ-RC1-003 — Exact-source assembly
@@ -52,7 +48,7 @@ No class/package/native module may be added merely from memory or an older overl
 - Status: IMPLEMENTED
 - Scope: assemble upstream FreeJ2ME source plus project RG35XX classes and patches into one reproducible RC tree.
 - Required checks: PlatformImage, PlatformGraphics, MobilePlatform, PlatformPlayer, Manager, RecordStore, Libretro.java, freej2me_libretro.c, native media modules.
-- Control added: `docs/PLATFORM-SOURCE-REGISTRY.md` is now the authoritative duplicate/missing-class gate for assembly.
+- Control added: `docs/PLATFORM-SOURCE-REGISTRY.md` is the authoritative duplicate/missing-class gate.
 - Remaining: exact upstream call-site application/audit before BUILD-PASS.
 
 ## RGJ-RC1-004 — First host/cross build
@@ -68,9 +64,6 @@ No class/package/native module may be added merely from memory or an older overl
 - File: `docs/PLATFORM-SOURCE-REGISTRY.md`
 - Purpose: maintain one authoritative inventory of RG35XX Java classes, native modules, upstream integration owners and patch responsibilities.
 - Required behavior: reload tasklogs + registry before every code mutation.
-- ADD gate: prove the responsibility is not already owned by a current class/module.
-- REMOVE/REPLACE gate: record old path/symbol and replacement/rollback before deletion; never silently resurrect superseded code from an older ZIP/patch.
-- Result: future consolidation work is source-registry-driven rather than memory-driven.
 
 ## RGJ-RC1-006 — PlatformImage + immutable image-cache exact-source gate
 - Action: MODIFY
@@ -78,16 +71,26 @@ No class/package/native module may be added merely from memory or an older overl
 - Sources checked: upstream `org.recompile.mobile.PlatformImage` on FreeJ2ME-Plus devel; registered `RG35XXImageCache`.
 - Integration spec: `patches/0011-platformimage-rg35xx-cache.patch`.
 - Duplicate result: no new class/package; upstream PlatformImage remains decoder/facade owner and RG35XXImageCache remains the only RG35XX decoded-image cache.
-- Cache API modified in-place: entries now retain width + height + defensive ARGB pixel copy; `put` validates dimensions and bounded byte cost; byte-slice key validation is overflow-safe.
+- Cache API modified in-place: entries retain width + height + defensive ARGB pixel copy.
 - Exact cache-hit contract: immutable byte-array images reconstruct a fresh TYPE_INT_ARGB BufferedImage and copy cached pixels; mutable DoJa images bypass cache.
-- Preserved semantics: mutable blank images, MIDP Image/DoJa deep-copy constructors, immutable Graphics access checks, and upstream type normalization.
-- PNG/tRNS invariant: final compatibility repair occurs before insertion; cache never stores a pre-repair decode.
-- Resource-name/InputStream constructors remain uncached until a stable identity contract is separately audited.
-- Gate result: source/API design is STATIC-AUDIT-PASS. BUILD-PASS is not claimed until the consolidated upstream PlatformImage call-site is applied and compiled.
+- PNG/tRNS invariant: final compatibility repair occurs before insertion.
+- Gate result: STATIC-AUDIT-PASS; BUILD-PASS not claimed until consolidated call-site is compiled.
 
 ## RGJ-RC1-007 — PlatformGraphics exact-source gate
 - Action: AUDIT
+- Status: STATIC-AUDIT-PASS
+- Reload performed: TASKLOG + RC1-TASKLOG + PLATFORM-SOURCE-REGISTRY before inspection/mutation.
+- Exact upstream owner: `org.recompile.mobile.PlatformGraphics`; no parallel graphics class/package added.
+- Reconciled sources: upstream FreeJ2ME-Plus devel PlatformGraphics + patches `0007-platformgraphics-rg35xx-fast-drawrgb.patch` and `0008-platformgraphics-transform-cache.patch` + registered `RG35XXTransformCache`.
+- drawRGB contract: resolve translation/clip once; processAlpha=false forces opaque source; processAlpha=true skips alpha=0, direct-copies alpha=255 and blends only 1..254; no allocation in inner pixel loop.
+- Important correction: do NOT replace processAlpha=false with raw `System.arraycopy`, because MIDP requires source alpha to be ignored/forced opaque.
+- Transform contract: TRANS_NONE retains direct drawRGB path; transformed drawRegion uses geometry-only `RG35XXTransformCache`; mutable pixels are never cached; source bounds/anchor/translation/clip/alpha semantics remain upstream-owned.
+- Exact-source finding: current upstream PlatformGraphics is already heavily hand-rasterized and carries DoJa/DirectGraphics/Mascot compatibility state. RG35XX optimization must be surgical; replacing the class or routing generic drawing through AWT would regress compatibility.
+- Allocation gate: RG35XX additions introduce no per-pixel/per-frame allocation on drawRGB; transform map allocation occurs only on bounded cache miss (24 entries), then maps are reused and reset between games.
+- Gate result: architecture and exact-source integration contract STATIC-AUDIT-PASS. BUILD-PASS is not claimed until patches are applied to the consolidated source and compiled.
+
+## RGJ-RC1-008 — MobilePlatform dirty-frame integration gate
+- Action: AUDIT
 - Status: PLANNED
 - Required reload: tasklogs + source registry before mutation.
-- Scope: reconcile upstream PlatformGraphics with patches 0007/0008, RG35XXTransformCache, alpha/clipping semantics, drawRegion transform behavior and no-allocation hot-path rules.
-- Rule: do not create a parallel graphics class; upstream PlatformGraphics remains owner.
+- Scope: reconcile upstream MobilePlatform repaint/framebuffer flow with registered RG35XXFrameScheduler without duplicating platform ownership.
