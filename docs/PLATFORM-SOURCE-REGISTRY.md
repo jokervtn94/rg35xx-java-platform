@@ -62,6 +62,7 @@ Vendor compatibility facades (Nokia/Siemens/KDDI/DoJa/JBlend and other upstream 
 | `rg35xx_audio_protocol.h` | KEEP / PRESENT |
 | `rg35xx_media_cache.h/.c` | KEEP / PRESENT |
 | `rg35xx_media_events.h` | KEEP / PRESENT — RC1 NATIVE EVENT CALLBACK OWNER |
+| `rg35xx_media_event_queue.h/.c` | KEEP / PRESENT — BOUNDED CROSS-THREAD LOOPED/END HANDOFF; 010K STATIC-AUDIT-PASS |
 | `rg35xx_audio_dispatch.c` | KEEP / PRESENT |
 | `rg35xx_audio_dispatch.h` | KEEP / PRESENT — RC1 DECLARATION OWNERSHIP RESOLVED |
 | `rg35xx_audio_pipe.h/.c` | KEEP / PRESENT |
@@ -74,6 +75,8 @@ Vendor compatibility facades (Nokia/Siemens/KDDI/DoJa/JBlend and other upstream 
 | existing `freej2me_libretro.c` | integration owner; do not create a parallel core entrypoint |
 
 Dependency policy for the TML/TSF worker is locked in `docs/RC1-TML-TSF-DEPENDENCY-GATE.md`. The replacement worker source, explicit SoundFont byte-source contract, and native media runtime lifecycle coordinator now exist, but this does not claim that TinyMidiLoader/TinySoundFont vendored headers, an authoritative SoundFont asset/provider, consolidated core call-sites, native link, or device behavior is complete. The source holder owns no filesystem path, performs no I/O/allocation, and cannot substitute an arbitrary SoundFont for the still-unresolved authoritative asset/provider. Runtime ordering is source_set -> worker_init on startup and worker_shutdown -> source_clear on final shutdown; mixer/audio-pipe ownership remains outside this coordinator.
+
+`RGJ-RC1-010K` closes the media **process-boundary architecture** at STATIC-AUDIT-PASS: mixer callbacks enqueue typed LOOPED/END events into the bounded native queue; only the existing libretro control-writer context serializes case-14 packets; Java case 14 queues and case 15 drains through `RG35XXMediaRegistry`; final Linux shutdown uses control-pipe EOF to give `RG35XXLifecycle.platformShutdown()` an RMS/media barrier opportunity before the existing hard-kill fallback. This does not promote the full media facade or build status.
 
 ## Authoritative integration patches
 
@@ -91,10 +94,13 @@ Dependency policy for the TML/TSF worker is locked in `docs/RC1-TML-TSF-DEPENDEN
 - 0014 Libretro native-media event return channel
 - 0015 exact upstream `freej2me_libretro.c` native-media runtime/process-lifecycle integration
 - 0016 exact upstream `javaOpen()` dedicated-audio FD/argv inheritance contract
+- 0017 consolidated media process-boundary completion: native event handoff + case 14/15 + EOF graceful shutdown
 
 Patch 0015 is based on the inspected upstream devel `src/libretro/freej2me_libretro.c` blob `534b26cc97129c4fe7b04ea9a6b07fb8945d33b0`. It remains an integration contract until applied to the assembled RG35XX core; it must not be treated as a second core implementation.
 
 Patch 0016 keeps `rg35xx_audio_pipe` as the sole dedicated Java→native audio transport owner and narrows the exact Linux process boundary: create before fork, inherit only the child write descriptor across exec, place `-Dfreej2me.rg35xx.audio.fd=<fd>` before `-jar`, close the opposite endpoints after fork, close both endpoints on fork failure/deinit, and never repurpose fd 0/1/2. It supersedes only ambiguous argv wording in patch 0004; it does not add another pipe implementation. BUILD validation of the assembled command line remains pending.
+
+Patch 0017 completes the process-boundary contract without creating another reverse pipe or shutdown opcode. Its static-audit record is `docs/RC1-MEDIA-PROCESS-BOUNDARY-AUDIT.md` and immutable supplemental task `tasklog/RC1-010K-MEDIA-PROCESS-BOUNDARY.md`.
 
 A patch may be superseded by consolidated source, but its behavior must be accounted for before removal.
 
