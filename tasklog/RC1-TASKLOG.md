@@ -127,7 +127,7 @@ No class/package/native module may be added merely from memory or an older overl
 - Exact-source finding: upstream Manager still advertises AMR/MPEG/MMF/MLD/iMelody broadly and directly depends on desktop `javax.sound.midi`; upstream PlatformPlayer also imports JavaSound, ScheduledExecutorService and desktop MPEG playback. These cannot become mandatory RG35XX runtime dependencies.
 - Integration requirement retained: Manager capability reporting must route through `RG35XXMediaProfile`; PlatformPlayer remains the public/vendor-compatible facade and delegates supported RG35XX media to `RG35XXNativePlayer` rather than replacing the facade.
 - Tone caveat: `RG35XXMediaRegistry.TYPE_TONE` is not directly registerable by current RG35XXNativePlayer prefetch; tone must be converted to MIDI first and registered as MIDI, as the earlier integration spec states.
-- Previous blocker: `RG35XXWavDecoder.java` was missing. It is restored under RC1-010B, but this facade gate remains open until the exact PlatformPlayer call site and tone conversion path are reconciled.
+- Previous blocker: `RG35XXWavDecoder.java` was missing. It is restored and source-hardened under RC1-010B/010C. Native PCM rate conversion is corrected under RC1-010D. This facade gate remains open until exact PlatformPlayer WAV/tone call sites are reconciled.
 - BUILD-PASS and STATIC-AUDIT-PASS for RC1-010 are not claimed yet.
 
 ## RGJ-RC1-010A — Current-tree source reconciliation
@@ -148,8 +148,33 @@ No class/package/native module may be added merely from memory or an older overl
 - Pre-change reload: TASKLOG + RC1-TASKLOG + PLATFORM-SOURCE-REGISTRY completed; current-tree search reconfirmed the registered source was absent, so this restores an existing registered responsibility rather than adding a new responsibility/class family.
 - Source basis audited: upstream `WAVTools`, `WAVImaADPCMDecoder`, `WAVLawDecoder` format behavior plus the existing RG35XXNativePlayer contract. No historical missing implementation was found, so no old code was silently resurrected.
 - Target policy: java.io-only RIFF/WAVE parser; no JavaSound, AudioSystem, host sample-rate probing, executor, or host-device resampling.
-- Output contract: always PCM16 little-endian plus original source sampleRate/channels for native registration. Native mixer remains responsible for output-rate conversion.
+- Output contract: always PCM16 little-endian plus original source sampleRate/channels for native registration.
 - Formats implemented: PCM 8-bit unsigned -> PCM16, PCM 16-bit LE pass/copy, Microsoft IMA ADPCM 0x11 mono/stereo block decode, A-law 0x06, mu-law 0x07.
 - Parser behavior: scans RIFF chunks, accepts fmt/data with intervening chunks and RIFF even-byte padding, rejects truncated/invalid chunks and unsupported >2-channel/format cases.
 - Allocation note: decode is a load/prefetch path, not the audio render hot path. No allocations are introduced into native mixing/audio callback paths.
-- Audit caution: stereo IMA ADPCM ordering and malformed-tail behavior require fixture/build validation before STATIC-AUDIT-PASS; therefore this task is IMPLEMENTED only and BUILD-PASS is not claimed.
+- Follow-up: hardened under RC1-010C; native rate ownership corrected under RC1-010D.
+
+## RGJ-RC1-010C — WAV normalization source/fixture hardening
+- Action: MODIFY / AUDIT
+- Status: STATIC-AUDIT-PASS
+- File: `src/org/recompile/mobile/RG35XXWavDecoder.java`.
+- Document: `docs/RC1-WAV-PCM-AUDIT.md`.
+- Pre-change reload: TASKLOG + RC1-TASKLOG + PLATFORM-SOURCE-REGISTRY completed.
+- PCM invariant: reject incomplete PCM8/PCM16 channel frames rather than silently truncating one sample/channel.
+- Law invariant: reject incomplete multi-channel A-law/mu-law frames.
+- IMA invariant: require 4-bit IMA; decode low nibble first; stereo consumes 4 left bytes + 4 right bytes per group and emits eight interleaved L/R frames.
+- Allocation correction: removed per-stereo-group `byte[][]` and `int[]` allocations from the decoder loop.
+- Malformed-tail policy: a full stereo IMA block with non-8-byte body alignment is rejected; a short final block decodes only complete L/R groups and never emits an unmatched channel tail.
+- Basis: upstream decoder behavior plus IMA-WAV block packing specification and synthetic format fixtures documented in RC1-WAV-PCM-AUDIT.
+- BUILD-PASS is not claimed; consolidated Java compilation remains pending.
+
+## RGJ-RC1-010D — Native PCM source-rate correction
+- Action: MODIFY / AUDIT
+- Status: STATIC-AUDIT-PASS
+- File: `native/rg35xx_mixer.c`.
+- Discovery: prior PCM render consumed one source frame per 44.1 kHz output frame. `sample_rate` affected media-time only, so non-44.1 kHz WAV had incorrect duration/pitch.
+- Correction: each PCM voice now owns Q15 source position + rate step (`sourceRate * 32768 / 44100`) and performs linear interpolation between adjacent PCM16 frames.
+- Hot-path constraint: no malloc/calloc/free added; interpolation uses bounded signed 32-bit multiply, with uint64_t only for persistent position/time arithmetic.
+- Sanity rates documented: one second at 8k/11.025k/14.7k/22.05k/32k/44.1k/48k maps to approximately one second of 44.1 kHz output, with only bounded Q15 rounding.
+- Preserved: mono duplicates to stereo, volume/loop/media-time semantics, native END_OF_MEDIA callback, fixed `RG35XX_MIXER_RATE=44100`.
+- BUILD-PASS and device audio-quality validation remain pending.
