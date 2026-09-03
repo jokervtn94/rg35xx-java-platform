@@ -12,6 +12,8 @@ public final class RG35XXPlatformProfile
     private RG35XXPlatformProfile() { }
 
     public static final String NAME = "RG35XX Original / ATM7059A / GarlicOS";
+    public static final String ACTIVE_PROPERTY = "freej2me.rg35xx";
+
     public static final int LCD_MAX_WIDTH = 800;
     public static final int LCD_MAX_HEIGHT = 800;
 
@@ -35,4 +37,15 @@ public final class RG35XXPlatformProfile
     public static final boolean AUDIO_MPEG = false;
 
     public static final int STATS_LOG_INTERVAL_MS = 30000;
+
+    /**
+     * Explicit target selector used by shared upstream facades such as Manager
+     * and PlatformPlayer. The RG35XX libretro core supplies this JVM property
+     * before -jar. Desktop/AWT runs remain false and retain upstream behavior.
+     */
+    public static boolean isActive()
+    {
+        String value = System.getProperty(ACTIVE_PROPERTY);
+        return "1".equals(value) || "true".equalsIgnoreCase(value);
+    }
 }
