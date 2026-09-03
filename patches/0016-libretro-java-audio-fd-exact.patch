@@ -1,0 +1,108 @@
+# RGJ-RC1-010J — exact javaOpen() dedicated-audio FD contract
+#
+# Source basis
+# ------------
+# Existing upstream integration owner: TASEmulators/freej2me-plus devel
+# src/libretro/freej2me_libretro.c blob 534b26cc97129c4fe7b04ea9a6b07fb8945d33b0.
+# Existing project owner: native/rg35xx_audio_pipe.h/.c.
+# This patch supersedes only the ambiguous argv wording in patch 0004; it does
+# not replace rg35xx_audio_pipe or create a second process owner.
+#
+# Exact upstream argv today
+# -------------------------
+# NUM_ARGUMENTS = 7
+# params[0] = java/javaw
+# params[1] = -jar
+# params[2] = encoding option
+# params[3] = freej2me_plus-lr.jar
+# params[4] = width
+# params[5] = height
+# params[6] = NULL
+# javaOpen(params[0], params) then execvp(cmd, params).
+#
+# IMPORTANT: execvp receives params[0] as argv[0]. Therefore a JVM -D property
+# must be inserted before -jar. The encoding option must retain its existing
+# relative position unless its exact syntax proves otherwise during build.
+#
+# Linux-only process contract
+# ---------------------------
+# Add one process-lifetime object beside pRead/pWrite:
+#   static struct rg35xx_audio_pipe rg35xx_java_audio_pipe;
+#
+# Initialize it to closed state before first use. Before fork() in javaOpen():
+#   rg35xx_audio_pipe_init(&rg35xx_java_audio_pipe);
+#   audio_pipe_ready = rg35xx_audio_pipe_create(&rg35xx_java_audio_pipe);
+#
+# Do not abort Java startup when audio pipe creation fails. In that case omit
+# the property and leave RG35XXAudioBootstrap unavailable/fail-safe.
+#
+# The child write descriptor value is known BEFORE fork and survives exec because
+# rg35xx_audio_pipe_create() deliberately does not set FD_CLOEXEC on write_fd.
+# Build the property in parent-owned launch argument storage BEFORE fork:
+#   -Dfreej2me.rg35xx.audio.fd=<write_fd>
+# This avoids constructing a pointer to child stack storage and avoids mutating
+# heap/stdio state between fork() and execvp() unnecessarily.
+#
+# Required argv when audio pipe exists
+# ------------------------------------
+# Increase NUM_ARGUMENTS from 7 to 8 and use:
+#   params[0] = java/javaw
+#   params[1] = audio_fd_property
+#   params[2] = -jar
+#   params[3] = encoding option
+#   params[4] = freej2me_plus-lr.jar
+#   params[5] = width
+#   params[6] = height
+#   params[7] = NULL
+#
+# HOWEVER the exact upstream command-line parser must be compile/runtime checked:
+# upstream currently places the encoding argument after -jar. Preserve that
+# existing order relative to -jar/JAR unless the assembled source shows the
+# encoding token is actually a JVM option. The non-negotiable rule is only that
+# the RG35XX -D property itself appears before -jar.
+#
+# To keep one stable allocation shape even when audio pipe creation fails,
+# params[1] may be omitted by shifting entries back to the original layout, or
+# the builder may use a compact argument count. Never pass an empty argv token.
+#
+# Child branch immediately after fork(), before dup/exec completion:
+#   if(audio_pipe_ready)
+#       rg35xx_audio_pipe_child_after_fork(&rg35xx_java_audio_pipe);
+# This closes only the dedicated audio read end. Existing pRead/pWrite stdin and
+# stdout dup2 ownership remains unchanged. Never dup audio to fd 0, 1, or 2.
+#
+# Parent branch after successful fork():
+#   if(audio_pipe_ready)
+#       rg35xx_audio_pipe_parent_after_fork(&rg35xx_java_audio_pipe);
+# This closes the parent's dedicated write end, leaving only read_fd for drain.
+#
+# Fork failure:
+#   rg35xx_audio_pipe_close(&rg35xx_java_audio_pipe);
+# so neither endpoint leaks.
+#
+# Restart/deinit ownership
+# ------------------------
+# retro_reset() calls retro_deinit() -> retro_init() -> javaOpen(). Therefore
+# retro_deinit must close the old dedicated pipe before javaOpen initializes and
+# creates the next one. rg35xx_audio_pipe_init() must not be called over a live
+# descriptor pair because it would forget descriptors without closing them.
+#
+# Drain ownership
+# ---------------
+# Do not drain this pipe from retro_run(). Patch 0015 requires the independent
+# native audio worker to call rg35xx_audio_pipe_drain(). This exact process patch
+# only establishes descriptor/argv inheritance.
+#
+# Audit invariants
+# ----------------
+# - stdout remains Java -> native binary video IPC
+# - stdin remains native -> Java control/event IPC
+# - stderr remains diagnostics
+# - dedicated audio write fd >= 3 is inherited across exec
+# - parent never retains the audio write end after successful fork
+# - child never retains the audio read end
+# - failed fork/teardown closes both ends
+# - no second audio pipe or process owner is introduced
+# - Java startup remains fail-safe when dedicated audio pipe creation fails
+#
+# Status: IMPLEMENTED integration contract. Not BUILD-PASS and not DEVICE-TEST-PASS.
