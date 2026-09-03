@@ -58,19 +58,21 @@ already translates events for MIDP, Siemens, Nokia, KDDI, DoJa and JBlend and
 must remain the only facade notification fan-out.
 
 NATIVE CALLBACK
-- rg35xx_mixer / rg35xx_midi_backend completion must be converted by the
-  consolidated libretro core into case-14 packets on the existing core->Java
-  stdin pipe.
-- Final completion must emit END_OF_MEDIA exactly once.
-- Intermediate native loops should emit LOOPED so KDDI/DoJa/JBlend loop events
-  are not lost. Current native modules do not yet expose a proven intermediate
-  MIDI-loop callback; this remains an explicit RC1 gate and prevents declaring
-  the full media facade STATIC-AUDIT-PASS.
+- rg35xx_mixer / rg35xx_midi_backend completion is converted by the consolidated
+  libretro core into case-14 packets on the existing core->Java stdin pipe.
+- Final completion emits END_OF_MEDIA exactly once.
+- Intermediate MIDI/PCM restart now has a typed LOOPED producer through the
+  shared `rg35xx_media_events.h` callback contract; loop count remains worker/
+  mixer owned and is not duplicated in the adapter.
+- Cross-thread core handoff and control-pipe serialization are completed by
+  `native/rg35xx_media_event_queue.*` and patch 0017. Do not write pWrite[1]
+  directly from the audio callback.
 
 LIFECYCLE
 - RELEASE removes the registry entry/listener; late events for released IDs are
   ignored.
-- RESET/game unload clears the event ring together with registry entries.
+- RESET/game unload clears both the native handoff queue and Java event ring
+  together with registry entries.
 - No event may survive into the next JAR after RG35XXLifecycle reset.
 
 ROLLBACK
