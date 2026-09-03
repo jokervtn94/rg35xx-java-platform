@@ -1,0 +1,44 @@
+# RGJ-B3-003 / RGJ-B3-006 — PlatformPlayer integration specification
+#
+# This patch specification is intentionally semantic rather than a blind full
+# replacement of upstream PlatformPlayer. Upstream carries MIDP plus Nokia,
+# Siemens, KDDI, DoJa and JBlend listener/control compatibility and must remain
+# the public facade.
+#
+# Add target backend field:
+#   private RG35XXNativePlayer rg35xxPlayer;
+#
+# Constructor policy for RG35XX/libretro target:
+#   MIDI/tone -> RG35XXNativePlayer; tone remains conversion-to-MIDI before
+#                registration where existing FreeJ2ME semantics require it.
+#   WAV       -> RG35XXWavDecoder first, then setPcm16(decoded PCM/rate/channels).
+#   unsupported advertised types -> do not route to desktop JavaSound/MP3.
+#   generic/non-RG35XX target -> preserve upstream PlatformPlayer behavior.
+#
+# Lifecycle delegation on RG35XX target:
+#   realize()      -> rg35xxPlayer.realize()
+#   prefetch()     -> rg35xxPlayer.prefetch()
+#   start()        -> rg35xxPlayer.start(), then existing listener notifications
+#   stop()         -> rg35xxPlayer.stop(), then existing listener notifications
+#   setMediaTime() -> rg35xxPlayer.setMediaTime()
+#   setLoopCount() -> rg35xxPlayer.setLoopCount()
+#   close()        -> rg35xxPlayer.close(), then existing CLOSED notifications
+#
+# VolumeControl:
+#   setLevel(level) must call rg35xxPlayer.setVolume(level) on target backend.
+#   Mute remains Java semantic state but maps effective native volume to zero;
+#   unmute restores the previous requested level.
+#
+# END_OF_MEDIA:
+#   Do NOT synthesize END_OF_MEDIA from Java timers for native-backed media.
+#   Native playback remains authoritative and sends the proven completion event
+#   back to Java. That event updates PlatformPlayer state/listeners exactly once.
+#
+# RELEASE / game change:
+#   close every registered player before RG35XXAudioBootstrap.shutdown().
+#   shutdown sends RESET as final defensive native-cache cleanup.
+#
+# Rollback:
+#   Keep the existing SD command/media bridge until this backend and native mixer
+#   have passed consolidated static/protocol audit. Do not delete the old bridge
+#   in this task.
