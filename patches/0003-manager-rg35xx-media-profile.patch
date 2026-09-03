@@ -1,0 +1,33 @@
+From: RG35XX Java Platform
+Task: RGJ-B3-002
+Subject: [PATCH] MMAPI Manager: use truthful RG35XX media capabilities
+
+--- a/src/javax/microedition/media/Manager.java
++++ b/src/javax/microedition/media/Manager.java
+@@
+ import org.recompile.mobile.Mobile;
+ import org.recompile.mobile.PlatformPlayer;
+ import org.recompile.mobile.JavaxPlatformPlayer;
+ import org.recompile.mobile.SiemensPlatformPlayer;
++import org.recompile.mobile.RG35XXMediaProfile;
+@@
+ 	public static String[] getSupportedContentTypes(String protocol)
+ 	{
+ 		Mobile.log(Mobile.LOG_DEBUG, Manager.class.getPackage().getName() + "." + Manager.class.getSimpleName() + ": " + "Get Supported Media Content Types");
+-		return new String[]{"audio/midi", "audio/x-wav", "audio/x-mld",
+-			"audio/amr", "audio/mpeg", "audio/x-tone-seq", "audio/mmf",
+-			"audio/x-imy", "audio/basic" };
++		return RG35XXMediaProfile.getSupportedTypes(protocol);
+ 	}
+
+Rationale:
+- The generic FreeJ2ME list advertises codecs that are not proven on the
+  JamVM/uClibc/native RG35XX path.
+- Audited JARs may select media variants based on this list; false advertising
+  can make a game choose AMR/MMF/MPEG instead of its MIDI/WAV alternatives.
+- The target capability table remains intentionally conservative until a
+  decoder/backend is proven on the RG35XX architecture.
+
+Rollback:
+Restore the original generic list only together with a target implementation
+that actually supports every re-advertised type.
