@@ -1,0 +1,102 @@
+# RG35XX Java Platform — Authoritative Source Registry
+
+Status: RC1 PRE-BUILD control document.
+
+This registry is the mandatory duplicate/missing-source gate for all future platform work. Before ADD/REMOVE/REPLACE of any RG35XX class, package, native module or integration patch, both `tasklog/TASKLOG.md`, `tasklog/RC1-TASKLOG.md` and this registry must be reloaded.
+
+## Rules
+
+1. Never create a second class for an existing responsibility without an explicit REPLACE task.
+2. Never resurrect a removed/superseded class or package from an older ZIP/patch without an explicit REVERT task.
+3. Never remove a class/package solely because an old patch no longer references it; verify current source registry and integration manifest first.
+4. Project-owned RG35XX Java code lives under `org.recompile.mobile` unless upstream API compatibility requires modifying an existing upstream package/class.
+5. Do not create parallel RG35XX implementations inside `javax.microedition.*`; modify/adapt the existing upstream facade instead.
+6. stdout is reserved for binary video IPC. Audio uses the dedicated RG35XX audio transport.
+7. BUILD-PASS and DEVICE-TEST-PASS may only be recorded after the corresponding real validation.
+
+## Authoritative RG35XX Java classes
+
+Package `org.recompile.mobile`:
+
+| Class | Responsibility | State |
+|---|---|---|
+| RG35XXPlatformProfile | target/profile feature policy | KEEP |
+| RG35XXFrameScheduler | dirty-frame generation/wakeup | KEEP |
+| RG35XXImageCache | immutable decoded-image LRU/cache | KEEP |
+| RG35XXInputEngine | deterministic key press/release/repeat | KEEP |
+| RG35XXWavDecoder | target WAV decode/normalization helper | KEEP |
+| RG35XXMediaProfile | truthful target MMAPI capability policy | KEEP |
+| RG35XXMediaRegistry | Java semantic player registry | KEEP |
+| RG35XXAudioProtocol | Java/native framed audio protocol | KEEP |
+| RG35XXAudioTransport | dedicated Java→native audio writer | KEEP |
+| RG35XXAudioBootstrap | inherited audio-FD bootstrap/ownership | KEEP |
+| RG35XXNativePlayer | native-backed MMAPI adapter | KEEP |
+| RG35XXFontEngine | unified font metrics/raster policy | KEEP |
+| RG35XXTransformCache | bounded MIDP Sprite transform maps | KEEP |
+| RG35XXRmsCoordinator | coalesced low-priority RMS persistence | KEEP |
+| RG35XXRmsAtomicFile | Java-6-compatible atomic replacement helper | KEEP |
+| RG35XXLifecycle | central subsystem lifecycle ordering | KEEP |
+
+No additional `RG35XX*` Java class should be introduced until this table is checked and the new responsibility is proven non-overlapping.
+
+## Existing upstream classes to integrate, not duplicate
+
+These remain upstream-owned facades/implementations. RG35XX behavior must be hooked into them rather than creating replacement packages/classes with conflicting ownership:
+
+- `javax.microedition.media.Manager`
+- `javax.microedition.rms.RecordStore`
+- `org.recompile.freej2me.Libretro`
+- `org.recompile.mobile.MobilePlatform`
+- `org.recompile.mobile.PlatformGraphics`
+- `org.recompile.mobile.PlatformImage`
+- `org.recompile.mobile.PlatformPlayer`
+- upstream Font/PlatformFont implementation
+
+Vendor compatibility facades (Nokia/Siemens/KDDI/DoJa/JBlend and other upstream compatibility packages) are preserved unless a specific compatibility audit records a replacement/removal.
+
+## Authoritative native modules
+
+- `rg35xx_audio_protocol.h`
+- `rg35xx_media_cache.h/.c`
+- `rg35xx_audio_dispatch.h/.c`
+- `rg35xx_audio_pipe.h/.c`
+- `rg35xx_mixer.h/.c`
+- `rg35xx_midi_backend.h/.c`
+- existing `freej2me_libretro.c` remains the libretro integration owner; do not create a parallel core entrypoint.
+
+## Authoritative integration patches
+
+- 0003 Manager media profile
+- 0004 dedicated audio pipe
+- 0005 Java audio bootstrap
+- 0006 PlatformPlayer native backend
+- 0007 PlatformGraphics drawRGB fast path
+- 0008 PlatformGraphics transform cache
+- 0009 RecordStore RG35XX storage policy
+- 0010 Libretro/platform lifecycle
+
+A patch may be superseded by consolidated source, but its behavior must be accounted for before removal.
+
+## Mandatory pre-change procedure
+
+For every subsequent implementation turn:
+
+1. Reload `tasklog/TASKLOG.md`.
+2. Reload `tasklog/RC1-TASKLOG.md`.
+3. Reload this registry.
+4. Inspect repository tree/current target files.
+5. Classify intended change as KEEP/MODIFY/ADD/REPLACE/REMOVE.
+6. For ADD, prove no current class/module already owns the responsibility.
+7. For REMOVE/REPLACE, record the old symbol/path and replacement/rollback in Tasklog before deletion.
+8. After modification, audit imports/package names/call sites against the registry.
+
+## RC1 missing/duplicate gate
+
+The source tree is not considered consolidated until:
+
+- every KEEP Java class above exists exactly once;
+- every native module above exists exactly once;
+- no deleted/superseded RG35XX class is reintroduced by old overlays;
+- integration targets reference current method names (`reset()`, `resetNative()`, etc.);
+- every project class referenced by lifecycle/patches exists;
+- no project class exists without a documented responsibility or integration path.
