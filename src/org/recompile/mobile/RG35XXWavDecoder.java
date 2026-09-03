@@ -18,7 +18,7 @@ import java.io.InputStream;
  *  - A-law (format 6)
  *  - mu-law (format 7)
  *
- * Tasklog: RGJ-RC1-010B.
+ * Tasklog: RGJ-RC1-010B / RGJ-RC1-010C.
  */
 public final class RG35XXWavDecoder
 {
@@ -102,10 +102,12 @@ public final class RG35XXWavDecoder
             }
 
             long next = (long)body + (long)chunkSize + (long)(chunkSize & 1);
-            if(next > wav.length) {
+            if(next > wav.length)
+            {
                 if(body + chunkSize == wav.length) p = wav.length;
                 else throw new IOException("truncated WAV padding");
-            } else p = (int)next;
+            }
+            else p = (int)next;
         }
 
         if(format < 0 || dataOffset < 0) throw new IOException("missing WAV fmt/data chunk");
@@ -116,9 +118,15 @@ public final class RG35XXWavDecoder
         if(format == FORMAT_PCM)
             pcm = decodePcm(wav, dataOffset, dataLength, channels, bits, blockAlign);
         else if(format == FORMAT_IMA_ADPCM)
+        {
+            if(bits != 4) throw new IOException("unsupported IMA bits: " + bits);
             pcm = decodeIma(wav, dataOffset, dataLength, channels, blockAlign);
+        }
         else if(format == FORMAT_ALAW || format == FORMAT_ULAW)
+        {
+            if(dataLength % channels != 0) throw new IOException("misaligned law PCM frame");
             pcm = decodeLaw(wav, dataOffset, dataLength, format == FORMAT_ALAW);
+        }
         else
             throw new IOException("unsupported WAV format: " + format);
 
@@ -129,14 +137,17 @@ public final class RG35XXWavDecoder
     {
         if(bits == 16)
         {
-            if(blockAlign != 0 && blockAlign < channels * 2) throw new IOException("invalid PCM blockAlign");
-            int usable = len & ~1;
-            byte[] out = new byte[usable];
-            System.arraycopy(src, off, out, 0, usable);
+            int frameBytes = channels * 2;
+            if(blockAlign != 0 && blockAlign < frameBytes) throw new IOException("invalid PCM blockAlign");
+            if(len % frameBytes != 0) throw new IOException("misaligned PCM16 frame");
+            byte[] out = new byte[len];
+            System.arraycopy(src, off, out, 0, len);
             return out;
         }
         if(bits == 8)
         {
+            if(blockAlign != 0 && blockAlign < channels) throw new IOException("invalid PCM blockAlign");
+            if(len % channels != 0) throw new IOException("misaligned PCM8 frame");
             byte[] out = new byte[len * 2];
             int o = 0;
             for(int i = 0; i < len; i++)
@@ -195,7 +206,8 @@ public final class RG35XXWavDecoder
 
         while(block < end)
         {
-            int blockEnd = block + blockAlign;
+            int nominalEnd = block + blockAlign;
+            int blockEnd = nominalEnd;
             if(blockEnd > end) blockEnd = end;
             if(blockEnd - block < header) break;
 
@@ -222,25 +234,34 @@ public final class RG35XXWavDecoder
             }
             else
             {
-                while(p < blockEnd)
-                {
-                    byte[][] group = new byte[2][4];
-                    int[] count = new int[2];
-                    for(int ch = 0; ch < 2; ch++)
-                        while(count[ch] < 4 && p < blockEnd) group[ch][count[ch]++] = src[p++];
+                int remaining = blockEnd - p;
+                if(nominalEnd <= end && (remaining & 7) != 0)
+                    throw new IOException("misaligned stereo IMA block");
 
-                    int frames = Math.max(count[0], count[1]) * 2;
-                    for(int frame = 0; frame < frames; frame++)
+                /*
+                 * IMA-WAV stereo packs 4 bytes of left-channel nibbles then
+                 * 4 bytes of right-channel nibbles. One 8-byte group produces
+                 * eight interleaved stereo frames after the predictor frame.
+                 * For a short final block, decode only complete channel groups;
+                 * never emit an unmatched left/right tail.
+                 */
+                while(p + 8 <= blockEnd)
+                {
+                    int leftBase = p;
+                    int rightBase = p + 4;
+                    p += 8;
+
+                    for(int frame = 0; frame < 8; frame++)
                     {
-                        for(int ch = 0; ch < 2; ch++)
-                        {
-                            int bi = frame >> 1;
-                            if(bi >= count[ch]) continue;
-                            int b = group[ch][bi] & 0xff;
-                            int nib = (frame & 1) == 0 ? (b & 0x0f) : ((b >> 4) & 0x0f);
-                            predictor[ch] = imaNibble(predictor[ch], index, ch, nib);
-                            writeSample(out, predictor[ch]);
-                        }
+                        int bi = frame >> 1;
+                        int lb = src[leftBase + bi] & 0xff;
+                        int rb = src[rightBase + bi] & 0xff;
+                        int ln = (frame & 1) == 0 ? (lb & 0x0f) : ((lb >> 4) & 0x0f);
+                        int rn = (frame & 1) == 0 ? (rb & 0x0f) : ((rb >> 4) & 0x0f);
+                        predictor[0] = imaNibble(predictor[0], index, 0, ln);
+                        predictor[1] = imaNibble(predictor[1], index, 1, rn);
+                        writeSample(out, predictor[0]);
+                        writeSample(out, predictor[1]);
                     }
                 }
             }
