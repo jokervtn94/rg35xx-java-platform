@@ -1,0 +1,46 @@
+# RC1 integration contract: GNU Classpath 0.99 headless font peer
+#
+# This is an assembly contract, not a fabricated historical diff.
+# Apply only against the exact GNU Classpath 0.99 source used by the RG35XX/JamVM build.
+# Source basis and acceptance criteria: docs/RC1-FONT-HEADLESS-PEER-AUDIT.md
+#
+# REPLACED assumption:
+#   missing org.recompile.mobile.RG35XXFontEngine owns bitmap metrics/rasterization.
+#
+# RC1 owner:
+#   gnu.java.awt.peer.headless.HeadlessToolkit + one real ClasspathFontPeer
+#   (prefer existing gnu.java.awt.font.OpenTypeFontPeer/FontDelegate path),
+#   consumed by existing FreeJ2ME PlatformFont/PlatformGraphics.
+#
+# Required integration operations:
+#
+# 1. HeadlessToolkit must implement both font-peer entry paths used by java.awt.Font:
+#      protected FontPeer getFontPeer(String name, int style)
+#      public ClasspathFontPeer getClasspathFontPeer(String name, Map attrs)
+#    They must return a non-null peer backed by a valid delegate.
+#
+# 2. Reuse/cache the existing OpenTypeFontPeer or another existing ClasspathFontPeer.
+#    Do not instantiate/load/map a font file for every drawString call.
+#
+# 3. Provide a deterministic target font mapping/resource during platform assembly.
+#    No guessed host font path is accepted. Resource ownership and license must be explicit.
+#
+# 4. If mapped font/delegate initialization fails, fail during platform/font initialization
+#    with a clear diagnostic. Never keep a peer with fontDelegate == null; historical logs
+#    show this later explodes in Font.hashCode/createGlyphVector/AbstractGraphics2D.drawString.
+#
+# 5. Do not patch java.awt.Font getters/hashCode/createGlyphVector to tolerate null peer.
+#    That would mask the broken backend and produce inconsistent metrics/layout.
+#
+# 6. Do not globally sanitize Unicode to ASCII in PlatformGraphics.
+#    Missing-glyph fallback must preserve layout/width semantics.
+#
+# 7. Existing FreeJ2ME PlatformFont size/face/style and PlatformGraphics anchor/clip behavior
+#    remain authoritative. This patch must not create a second font facade or text renderer.
+#
+# Build/validation gates:
+# - exact GNU Classpath tree present in reproducible source assembly;
+# - authoritative font resource present;
+# - non-null peer/delegate for SansSerif/Dialog/Monospaced;
+# - Font.hashCode/createGlyphVector/FontMetrics smoke probes pass on JamVM;
+# - target game corpus passes font rendering without safe-ASCII fallback diagnostics.
