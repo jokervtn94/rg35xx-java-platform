@@ -1,0 +1,19 @@
+# RGJ-B3-004 — Java integration patch specification
+#
+# Apply to the Platform 1.0 Libretro.java overlay.
+#
+# Import:
+#   import org.recompile.mobile.RG35XXAudioBootstrap;
+#
+# Startup: after ipcOut has been captured and before a MIDlet is loaded:
+#   RG35XXAudioBootstrap.initialize();
+#
+# Game/core shutdown: after players are stopped/released and before process
+# exit, invoke:
+#   RG35XXAudioBootstrap.shutdown();
+#
+# IMPORTANT:
+# - initialize() must never replace/redirect System.out.
+# - failure is non-fatal while the legacy bridge exists.
+# - initialization is once per Java process, not once per Player.
+# - native RESET is sent during shutdown before the Java duplicate FD closes.
