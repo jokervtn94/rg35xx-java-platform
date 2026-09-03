@@ -72,11 +72,19 @@ Vendor compatibility facades and upstream container decoders (Nokia/Siemens/KDDI
 | `rg35xx_midi_backend.h/.c` | KEEP / PRESENT |
 | `rg35xx_tsf_worker.h/.c` | KEEP / PRESENT — RC1 REPLACEMENT IMPLEMENTATION; DEPENDENCY/BUILD AUDIT PENDING 010F |
 | `rg35xx_tsf_impl.c` | KEEP / PRESENT — SINGLE TML/TSF IMPLEMENTATION TRANSLATION UNIT; VENDOR HEADERS PENDING |
-| `rg35xx_soundfont_source.h/.c` | KEEP / PRESENT — EXPLICIT ALLOCATION-FREE SF2 BYTE SOURCE CONTRACT; CORE PROVIDER PENDING |
+| `rg35xx_soundfont_source.h/.c` | KEEP / PRESENT — EXPLICIT ALLOCATION-FREE SF2 BYTE SOURCE CONTRACT; PROVIDER PINNED BY 011G |
 | `rg35xx_media_runtime.h/.c` | KEEP / PRESENT — NATIVE SF2 SOURCE→TSF WORKER INIT/SHUTDOWN ORDER OWNER; CORE CALL-SITE PENDING |
 | existing `freej2me_libretro.c` | integration owner; do not create a parallel core entrypoint |
 
-Dependency policy for the TML/TSF worker is locked in `docs/RC1-TML-TSF-DEPENDENCY-GATE.md`. The replacement worker source, explicit SoundFont byte-source contract, and native media runtime lifecycle coordinator now exist, but this does not claim that TinyMidiLoader/TinySoundFont vendored headers, an authoritative SoundFont asset/provider, consolidated core call-sites, native link, or device behavior is complete. The source holder owns no filesystem path, performs no I/O/allocation, and cannot substitute an arbitrary SoundFont for the still-unresolved authoritative asset/provider. Runtime ordering is source_set -> worker_init on startup and worker_shutdown -> source_clear on final shutdown; mixer/audio-pipe ownership remains outside this coordinator.
+## Authoritative external build inputs
+
+- FreeJ2ME-Plus: `TASEmulators/freej2me-plus@13ec186903087156c145268f8706eecfaf9f1e50`.
+- TinySoundFont/TinyMidiLoader: `schellingb/TinySoundFont@853a0a171759f1ddba0de1442133a75912bbeffa`; exact header blobs are enforced by the vendor verifier.
+- RC1 SoundFont provider: `mrbumpy409/GeneralUser-GS@684543d5e5efaef08d02be50dcda8d552478fa60`, `GeneralUser-GS.sf2`, blob `298b552d2e9d1307e03e5c5c99d2c046aaed9ec3`, size `32319396`. Preserve upstream `documentation/LICENSE.txt`; upstream explicitly permits software use of the complete work while documenting sample-provenance uncertainty. See `docs/RC1-EXTERNAL-RUNTIME-ASSEMBLY.md`.
+- GNU Classpath: exact 0.99 target source tree required. Headless FontPeer contract is 0022.
+- Target TTF/OTF font resource: UNRESOLVED BUILD-READY blocker; no host-path guess is authoritative.
+
+Dependency policy for the TML/TSF worker is locked in `docs/RC1-TML-TSF-DEPENDENCY-GATE.md`. The replacement worker source, explicit SoundFont byte-source contract, and native media runtime lifecycle coordinator exist. The SoundFont provider identity is now pinned, but physical SF2 materialization, exact TML/TSF vendoring, GNU Classpath/font resource assembly, consolidated core call-sites, native link and device behavior remain build gates. The source holder owns no filesystem path, performs no I/O/allocation, and runtime ordering remains source_set -> worker_init on startup and worker_shutdown -> source_clear on final shutdown; mixer/audio-pipe ownership remains outside this coordinator.
 
 `RGJ-RC1-010K` closes the media process-boundary architecture at STATIC-AUDIT-PASS: mixer callbacks enqueue typed LOOPED/END events into the bounded native queue; only the existing libretro control-writer context serializes case-14 packets; Java case 14 queues and case 15 drains through `RG35XXMediaRegistry`; final Linux shutdown uses control-pipe EOF to give `RG35XXLifecycle.platformShutdown()` an RMS/media barrier opportunity before the existing hard-kill fallback.
 
@@ -91,6 +99,8 @@ Dependency policy for the TML/TSF worker is locked in `docs/RC1-TML-TSF-DEPENDEN
 `RGJ-RC1-011C` closes the pinned RMS safe baseline at STATIC-AUDIT-PASS. Historical single-target async/atomic integration is superseded for the pinned multi-file RecordStore; upstream synchronous persistence remains the RC1 baseline while RG35XXRmsCoordinator/RG35XXRmsAtomicFile stay present but dormant/unhooked. Audit: `docs/RC1-RMS-PINNED-BASELINE-AUDIT.md`.
 
 `RGJ-RC1-011D` closes font ownership/root-cause reconciliation at STATIC-AUDIT-PASS. The missing historical `RG35XXFontEngine` class is explicitly superseded rather than reconstructed. Existing FreeJ2ME PlatformFont/PlatformGraphics remain facade/consumer owners and the target GNU Classpath headless Toolkit/FontPeer path becomes the replacement backend owner. Audit: `docs/RC1-FONT-HEADLESS-PEER-AUDIT.md`.
+
+`RGJ-RC1-011G` pins the authoritative SoundFont provider and external runtime assembly policy. It does not vendor the 32.3 MB binary through the text repository API and does not invent a font asset. Physical external inputs and final native link assembly remain before BUILD-READY.
 
 ## Authoritative integration patches
 
@@ -144,6 +154,6 @@ The source tree is not considered consolidated until:
 - every project class referenced by lifecycle/patches exists;
 - no project class exists without a documented responsibility or integration path;
 - the GNU Classpath headless FontPeer/resource gate is present in the reproducible assembled source;
-- pinned TML/TSF headers, authoritative SoundFont provider and consolidated native call-sites are present before native BUILD-PASS.
+- pinned TML/TSF headers, pinned SoundFont provider bytes and consolidated native call-sites are present before native BUILD-PASS.
 
 Current reconciliation evidence: `docs/RC1-SOURCE-RECONCILIATION.md`.
