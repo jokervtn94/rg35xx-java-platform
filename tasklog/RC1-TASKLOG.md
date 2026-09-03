@@ -127,7 +127,7 @@ No class/package/native module may be added merely from memory or an older overl
 - Exact-source finding: upstream Manager still advertises AMR/MPEG/MMF/MLD/iMelody broadly and directly depends on desktop `javax.sound.midi`; upstream PlatformPlayer also imports JavaSound, ScheduledExecutorService and desktop MPEG playback. These cannot become mandatory RG35XX runtime dependencies.
 - Integration requirement retained: Manager capability reporting must route through `RG35XXMediaProfile`; PlatformPlayer remains the public/vendor-compatible facade and delegates supported RG35XX media to `RG35XXNativePlayer` rather than replacing the facade.
 - Tone caveat: `RG35XXMediaRegistry.TYPE_TONE` is not directly registerable by current RG35XXNativePlayer prefetch; tone must be converted to MIDI first and registered as MIDI, as the earlier integration spec states.
-- Gate blocker discovered by source reconciliation: registered `RG35XXWavDecoder.java` is missing from the current repository. Because native PCM registration requires normalized PCM16/rate/channels, this gate must not be locked until that responsibility is restored or explicitly REPLACED.
+- Previous blocker: `RG35XXWavDecoder.java` was missing. It is restored under RC1-010B, but this facade gate remains open until the exact PlatformPlayer call site and tone conversion path are reconciled.
 - BUILD-PASS and STATIC-AUDIT-PASS for RC1-010 are not claimed yet.
 
 ## RGJ-RC1-010A — Current-tree source reconciliation
@@ -135,8 +135,21 @@ No class/package/native module may be added merely from memory or an older overl
 - Status: STATIC-AUDIT-PASS
 - Document: `docs/RC1-SOURCE-RECONCILIATION.md`.
 - Purpose: verify that registry KEEP entries actually exist before dependent gates proceed.
-- Confirmed missing Java sources: `RG35XXWavDecoder.java`, `RG35XXFontEngine.java`.
+- Confirmed missing Java sources at audit time: `RG35XXWavDecoder.java`, `RG35XXFontEngine.java`.
 - Confirmed native registry mismatch: `native/rg35xx_audio_dispatch.h` is absent while `rg35xx_audio_dispatch.c` exists; need/ownership must be resolved rather than assuming the header exists.
 - Prior-source search: Library/conversation search did not locate authoritative copies of the two missing Java classes; a prior combined patch did not contain their exact class names.
-- Registry correction: missing entries are now explicitly marked `MISSING — RESTORE REQUIRED`; future KEEP checks require current-tree presence verification.
+- Registry correction: missing entries were explicitly marked `MISSING — RESTORE REQUIRED`; future KEEP checks require current-tree presence verification.
 - Rule: do not reconstruct missing classes from memory and do not silently substitute unrelated upstream code without a REPLACE task.
+
+## RGJ-RC1-010B — Restore RG35XXWavDecoder from audited upstream format basis
+- Action: ADD / RESTORE
+- Status: IMPLEMENTED
+- File: `src/org/recompile/mobile/RG35XXWavDecoder.java`.
+- Pre-change reload: TASKLOG + RC1-TASKLOG + PLATFORM-SOURCE-REGISTRY completed; current-tree search reconfirmed the registered source was absent, so this restores an existing registered responsibility rather than adding a new responsibility/class family.
+- Source basis audited: upstream `WAVTools`, `WAVImaADPCMDecoder`, `WAVLawDecoder` format behavior plus the existing RG35XXNativePlayer contract. No historical missing implementation was found, so no old code was silently resurrected.
+- Target policy: java.io-only RIFF/WAVE parser; no JavaSound, AudioSystem, host sample-rate probing, executor, or host-device resampling.
+- Output contract: always PCM16 little-endian plus original source sampleRate/channels for native registration. Native mixer remains responsible for output-rate conversion.
+- Formats implemented: PCM 8-bit unsigned -> PCM16, PCM 16-bit LE pass/copy, Microsoft IMA ADPCM 0x11 mono/stereo block decode, A-law 0x06, mu-law 0x07.
+- Parser behavior: scans RIFF chunks, accepts fmt/data with intervening chunks and RIFF even-byte padding, rejects truncated/invalid chunks and unsupported >2-channel/format cases.
+- Allocation note: decode is a load/prefetch path, not the audio render hot path. No allocations are introduced into native mixing/audio callback paths.
+- Audit caution: stereo IMA ADPCM ordering and malformed-tail behavior require fixture/build validation before STATIC-AUDIT-PASS; therefore this task is IMPLEMENTED only and BUILD-PASS is not claimed.
