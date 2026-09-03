@@ -91,6 +91,21 @@ No class/package/native module may be added merely from memory or an older overl
 
 ## RGJ-RC1-008 — MobilePlatform dirty-frame integration gate
 - Action: AUDIT
+- Status: STATIC-AUDIT-PASS
+- Reload performed: TASKLOG + RC1-TASKLOG + PLATFORM-SOURCE-REGISTRY before inspection/mutation.
+- Sources: upstream FreeJ2ME-Plus devel `MobilePlatform` + registered `RG35XXFrameScheduler`.
+- Integration spec: `patches/0012-mobileplatform-dirty-frame.patch`.
+- Ownership: MobilePlatform remains sole LCD/frontbuffer/repaint owner; RG35XXFrameScheduler remains generation-based dirty/wakeup helper only. No second renderer, frame queue, Timer, executor or Java frame thread is introduced.
+- Producer contract: mark dirty only after an existing upstream render/backbuffer-to-frontbuffer operation has produced a coherent presentable frame; never mark per primitive or before paint/copy completion.
+- Resize contract: after replacement LCD buffers/graphics references are fully installed, force a dirty generation so native presentation cannot retain stale geometry.
+- Consumer contract: remember last-seen generation and wait for change; multiple producer marks may coalesce intentionally rather than queue obsolete frames.
+- Lifecycle: game reset uses `RG35XXFrameScheduler.reset()`; final shutdown may call `wake()` only to release a waiter and must not treat wake as a rendered frame.
+- FPS ownership: existing upstream MobilePlatform frame-limit timing remains authoritative; dirty scheduling must not become a second FPS limiter.
+- Runtime audit note: current upstream MobilePlatform imports `java.util.concurrent.locks.LockSupport`; this pre-existing dependency must be verified against the target JamVM/GNU Classpath during consolidated build. RC1-008 adds no new concurrent API dependency.
+- Gate result: STATIC-AUDIT-PASS for architecture/integration contract. BUILD-PASS is not claimed until the exact presentation call-site is applied and compiled.
+
+## RGJ-RC1-009 — Libretro input adapter exact-source gate
+- Action: AUDIT
 - Status: PLANNED
 - Required reload: tasklogs + source registry before mutation.
-- Scope: reconcile upstream MobilePlatform repaint/framebuffer flow with registered RG35XXFrameScheduler without duplicating platform ownership.
+- Scope: reconcile `org.recompile.freej2me.Libretro`, upstream MobilePlatform key dispatch and registered `RG35XXInputEngine`; preserve the already-stable RG35XX key mapping and numeric keypad behavior without creating a second input owner.
