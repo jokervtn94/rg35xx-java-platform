@@ -27,11 +27,11 @@ Package `org.recompile.mobile`:
 | RG35XXInputEngine | deterministic key press/release/repeat | KEEP / PRESENT |
 | RG35XXWavDecoder | target WAV decode/normalization helper | KEEP / PRESENT — RC1 RESTORED |
 | RG35XXMediaProfile | truthful target MMAPI capability policy | KEEP / PRESENT |
-| RG35XXMediaRegistry | Java semantic player registry | KEEP / PRESENT |
+| RG35XXMediaRegistry | Java semantic player registry + bounded native-event queue | KEEP / PRESENT |
 | RG35XXAudioProtocol | Java/native framed audio protocol | KEEP / PRESENT |
 | RG35XXAudioTransport | dedicated Java→native audio writer | KEEP / PRESENT |
 | RG35XXAudioBootstrap | inherited audio-FD bootstrap/ownership | KEEP / PRESENT |
-| RG35XXNativePlayer | native-backed MMAPI adapter | KEEP / PRESENT |
+| RG35XXNativePlayer | native-backed MMAPI adapter + event binding | KEEP / PRESENT |
 | RG35XXFontEngine | unified font metrics/raster policy | MISSING — RESTORE REQUIRED |
 | RG35XXTransformCache | bounded MIDP Sprite transform maps | KEEP / PRESENT |
 | RG35XXRmsCoordinator | coalesced low-priority RMS persistence | KEEP / PRESENT |
@@ -81,6 +81,7 @@ Vendor compatibility facades (Nokia/Siemens/KDDI/DoJa/JBlend and other upstream 
 - 0011 PlatformImage RG35XX cache
 - 0012 MobilePlatform dirty-frame integration
 - 0013 Libretro RG35XX input engine
+- 0014 Libretro native-media event return channel
 
 A patch may be superseded by consolidated source, but its behavior must be accounted for before removal.
 
