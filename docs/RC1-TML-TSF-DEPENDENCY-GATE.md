@@ -1,14 +1,16 @@
 # RC1 TML/TSF Dependency Gate
 
-Status: STATIC-AUDIT-PASS for dependency/source policy only. This is not BUILD-PASS and does not implement the missing worker.
+Status: STATIC-AUDIT-PASS for dependency/source policy only. Worker and single implementation translation-unit ownership are now present; this is not BUILD-PASS.
 
 Task basis: `RGJ-RC1-010F` in `tasklog/RC1-TASKLOG.md` authorizes RESTORE-BY-REIMPLEMENTATION of the historical native TML/TSF worker while preserving `native/rg35xx_midi_backend.c` as the bounded two-context adapter.
 
 ## 1. Current-tree finding
 
-The current `native/` tree contains the RG35XX audio protocol, pipe, dispatcher, media cache, mixer and MIDI adapter. It does not contain `tml.h`, `tsf.h`, a TML/TSF implementation translation unit, a SoundFont asset, or an implementation of the `rg35xx_tsf_*` hooks declared by `rg35xx_midi_backend.c`.
+The current `native/` tree contains the RG35XX audio protocol, pipe, dispatcher, media cache, mixer, MIDI adapter, replacement `rg35xx_tsf_worker.h/.c`, and `rg35xx_tsf_impl.c` as the single TML/TSF implementation translation unit.
 
-Therefore the first native build with the current MIDI adapter would remain link-blocked until the worker implementation and its exact third-party source inputs are assembled.
+Repository search before adding `rg35xx_tsf_impl.c` found no existing `TSF_IMPLEMENTATION`/`TML_IMPLEMENTATION` owner, so this ADD does not duplicate an existing implementation responsibility.
+
+The repository still does not contain the pinned `tml.h` and `tsf.h` source inputs or an authoritative SoundFont asset/source contract. Native build therefore remains dependency-blocked until those inputs are assembled.
 
 ## 2. Authoritative third-party source pin
 
@@ -24,6 +26,8 @@ Required upstream files at that pin:
 - `tsf.h` — TinySoundFont v0.9, MIT license.
 
 RC1 must vendor exact files from the pinned commit (including upstream license text) or otherwise provide byte-identical sources to the native build. Do not follow moving `main` during a release build.
+
+`native/rg35xx_tsf_impl.c` is the sole project translation unit permitted to define `TML_IMPLEMENTATION` and `TSF_IMPLEMENTATION`. It also defines `TML_NO_STDIO` and `TSF_NO_STDIO`: MIDI and SoundFont data enter through memory APIs, so the third-party layer does not own filesystem paths.
 
 ## 3. Implementation ownership
 
@@ -46,88 +50,47 @@ Before the worker can become BUILD-PASS, consolidated `freej2me_libretro.c` must
 1. an exact project-owned SoundFont file/path established by recovered source or device layout evidence; or
 2. an explicit core configuration/input contract recorded in Tasklog before implementation.
 
-Until one is proven, worker code may define the initialization API contract but must fail cleanly when no SoundFont is supplied.
+Until one is proven, worker code exposes `rg35xx_tsf_worker_init(soundfont, size)` and fails cleanly when no SoundFont is supplied.
 
 ## 5. TML timeline contract
 
 `tml_load_memory()` is the load-time parser for each registered MIDI blob. TML allocations are allowed during register/open/setup, not in the audio render hot path.
 
-Each worker slot retains:
-
-- the TML first-message pointer for later `tml_free()`;
-- the current message pointer;
-- total MIDI length from `tml_get_info()`;
-- current media time;
-- requested loop count / remaining iterations;
-- active, paused, finished and loop-boundary state.
-
-MIDI event timestamps are milliseconds. Worker render scheduling must convert the rendered audio-frame position to the same timeline deterministically instead of using wall-clock timers.
+Each worker slot retains the TML first-message pointer, current cursor, total duration, absolute 44.1-kHz frame position, loop state and lifecycle state. MIDI timestamps are milliseconds and are converted to absolute output-frame boundaries, avoiding per-segment microsecond rounding drift.
 
 ## 6. TSF context contract
 
-One SoundFont foundation is loaded once. Each active MIDI slot uses an independent playback TSF context derived from that foundation (`tsf_copy()` is the intended upstream mechanism when supported by the pinned source).
+One SoundFont foundation is loaded once. Each active MIDI slot uses an independent playback TSF context derived with `tsf_copy()`.
 
-Before entering normal rendering, setup must:
-
-- configure fixed output mode/sample rate;
-- pre-allocate the chosen maximum voice count with `tsf_set_max_voices()`;
-- initialize every MIDI channel that the worker can dispatch so channel creation cannot first occur inside the render callback;
-- set initial bank/program/controller state deterministically.
-
-The historical stable target is 16 voices. Changing this target requires a separately recorded replacement decision.
+Before normal rendering, setup configures 44.1-kHz stereo output, pre-allocates 16 voices and initializes all 16 MIDI channels. This prevents intentional first-use channel/voice allocation from being introduced by the RG35XX render path.
 
 ## 7. Render hot-path rule
 
-After `open/start` setup, `rg35xx_tsf_mix_slot()` must not call `malloc`, `calloc`, `realloc` or `free` directly and must not intentionally trigger first-use TSF channel/voice allocation.
+After `open/start` setup, `rg35xx_tsf_mix_slot()` does not call `malloc`, `calloc`, `realloc` or `free` directly. MIDI is rendered in event-boundary segments into fixed scratch storage and accumulated into the existing mixer.
 
-No second RG35XX worker ring is required by the current architecture. MIDI samples accumulate directly into the existing static mixer accumulator, then PCM voices are added and the existing mixer performs final PCM16 clamp/output.
-
-Historical worker-ring logs remain compatibility/performance evidence, not an instruction to duplicate the current mixer ownership.
+No second RG35XX worker ring is introduced. Historical worker-ring logs remain compatibility/performance evidence, not an instruction to duplicate current mixer ownership.
 
 ## 8. MIDI event mapping
 
-The worker must handle at minimum the TML channel messages used by TinySoundFont's channel API:
-
-- NOTE_ON / NOTE_OFF
-- PROGRAM_CHANGE
-- CONTROL_CHANGE
-- PITCH_BEND
-
-Unsupported/non-rendering metadata must advance the timeline without crashing or allocating an alternate backend.
-
-Drum channel semantics must follow TinySoundFont's channel/preset API rather than a project-local synth implementation.
+The replacement worker handles NOTE_ON / NOTE_OFF, PROGRAM_CHANGE, CONTROL_CHANGE and PITCH_BEND through TinySoundFont channel APIs. Unsupported/non-rendering metadata advances the TML timeline without selecting another backend. Channel 10 (zero-based channel 9) uses TinySoundFont MIDI-drum preset semantics.
 
 ## 9. Seek/reset contract
 
-Seek is deterministic replay, not wall-clock skipping:
-
-1. reset TSF voice/channel state;
-2. reset TML cursor to the first message;
-3. replay state-changing MIDI events up to the requested media time without rendering obsolete audio;
-4. set the current cursor/time to the first event after the seek point.
-
-STOP returns media time to zero. PAUSE preserves media time. RESET/RELEASE frees the slot TML list and playback TSF context but does not destroy another slot's shared SoundFont foundation.
+Seek resets TSF state, resets the TML cursor and deterministically replays state-changing MIDI messages through the requested absolute frame. STOP returns the frame clock to zero; PAUSE preserves it. RELEASE frees only the slot's TML list and copied TSF context.
 
 ## 10. Loop/event ownership
 
-Exactly one native layer owns MIDI looping: the replacement worker.
+Exactly one native layer owns MIDI looping: the replacement worker. `loop_count == -1` is infinite; positive loop counts are decremented only at actual timeline restart. Each intermediate restart sets one pending LOOPED indication; final completion is exposed once to the existing adapter.
 
-- `loop_count == -1`: infinite restart.
-- positive loop count: worker decrements remaining iterations at actual end-of-timeline restart.
-- intermediate restart produces one loop-boundary notification for RC1-010E.
-- final iteration marks the slot finished exactly once; the existing MIDI adapter then emits the final END callback once.
+## 11. Remaining build gates
 
-The adapter must not independently decrement/restart the same loop count.
-
-## 11. Build gates before implementation can be promoted
-
-The worker cannot move beyond IMPLEMENTED until all of these are exact-source resolved:
+`RGJ-RC1-010F` cannot become BUILD-PASS until all of these are exact-source resolved:
 
 - pinned `tml.h` and `tsf.h` are present in the assembled native tree;
-- exactly one translation unit owns `TML_IMPLEMENTATION` and `TSF_IMPLEMENTATION`;
+- `native/rg35xx_tsf_impl.c` remains the only translation unit defining `TML_IMPLEMENTATION` and `TSF_IMPLEMENTATION`;
 - SoundFont initialization ownership is explicit and not guessed;
-- worker symbols exactly match the current `rg35xx_midi_backend.c` hook declarations;
-- no second synth/ring/backend is introduced;
-- ARMv5TE/uClibc link command includes the worker and required math linkage if the pinned TSF build requires it.
+- consolidated core initializes/shuts down the worker and transports native media events;
+- ARMv5TE/uClibc link includes worker, implementation unit and required math linkage;
+- actual native cross-build succeeds.
 
-Only after those checks should `RGJ-RC1-010F` worker source be added and statically audited. BUILD-PASS still requires the actual cross-link.
+No BUILD-PASS or DEVICE-TEST-PASS is claimed by this document.
