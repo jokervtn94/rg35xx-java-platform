@@ -1,0 +1,27 @@
+# Copyrighted/private compatibility corpus
+*.jar
+roms/
+games/
+compatibility/private/
+
+# Build products
+build/
+*.class
+*.so
+*.o
+*.a
+
+# Runtime/deployment binaries
+runtime/
+BIOS/
+*.sf2
+
+# Logs and local device captures
+*.log
+logs/
+
+# IDE/OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
