@@ -124,6 +124,26 @@ static int restart_loop(struct rg35xx_tsf_slot *s)
     return 0;
 }
 
+static size_t frames_until_us(uint64_t now_us, uint64_t target_us)
+{
+    uint64_t delta;
+    uint64_t frames;
+    if(target_us <= now_us) return 0;
+    delta = target_us - now_us;
+    frames = (delta * RG35XX_TSF_RATE + UINT64_C(999999)) / UINT64_C(1000000);
+    if(frames > (uint64_t)RG35XX_TSF_RENDER_FRAMES) frames = RG35XX_TSF_RENDER_FRAMES;
+    return (size_t)frames;
+}
+
+static void render_frames(struct rg35xx_tsf_slot *s, int32_t *accum, size_t offset, size_t frames)
+{
+    size_t i;
+    if(!frames) return;
+    tsf_render_short(s->synth, render_pcm, (int)frames, 0);
+    for(i = 0; i < frames * 2u; ++i) accum[(offset * 2u) + i] += (int32_t)render_pcm[i];
+    s->time_us += ((uint64_t)frames * UINT64_C(1000000)) / RG35XX_TSF_RATE;
+}
+
 int rg35xx_tsf_worker_init(const uint8_t *soundfont, size_t size)
 {
     if(soundfont_base) return 1;
@@ -263,25 +283,26 @@ size_t rg35xx_tsf_mix_slot(int slot, int32_t *accum, size_t frames)
     if(!s->opened || !s->synth || !s->playing || s->paused || s->finished) return 0;
 
     while(done < frames && s->playing) {
-        size_t chunk = frames - done;
-        size_t i;
-        uint64_t chunk_end_us;
-        if(chunk > RG35XX_TSF_RENDER_FRAMES) chunk = RG35XX_TSF_RENDER_FRAMES;
-        chunk_end_us = s->time_us + ((uint64_t)chunk * UINT64_C(1000000)) / RG35XX_TSF_RATE;
+        size_t remaining = frames - done;
+        size_t segment;
+        uint64_t next_event_us = s->next ? (uint64_t)s->next->time * UINT64_C(1000) : s->duration_us;
 
-        while(s->next && ((uint64_t)s->next->time * UINT64_C(1000)) <= chunk_end_us) {
+        while(s->next && next_event_us <= s->time_us) {
             apply_message(s->synth, s->next);
             s->next = s->next->next;
+            next_event_us = s->next ? (uint64_t)s->next->time * UINT64_C(1000) : s->duration_us;
         }
-
-        tsf_render_short(s->synth, render_pcm, (int)chunk, 0);
-        for(i = 0; i < chunk * 2u; ++i) accum[(done * 2u) + i] += (int32_t)render_pcm[i];
-        s->time_us = chunk_end_us;
-        done += chunk;
 
         if(!s->next && s->time_us >= s->duration_us) {
             if(!restart_loop(s)) break;
+            continue;
         }
+
+        segment = frames_until_us(s->time_us, next_event_us);
+        if(!segment) segment = 1;
+        if(segment > remaining) segment = remaining;
+        render_frames(s, accum, done, segment);
+        done += segment;
     }
     return done;
 }
