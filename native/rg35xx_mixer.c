@@ -1,12 +1,9 @@
 #include "rg35xx_mixer.h"
+#include "rg35xx_midi_backend.h"
+#include <stdlib.h>
 #include <string.h>
 
-/*
- * Bounded target mixer. PCM16 voices are implemented here. MIDI rendering is
- * connected through hooks so the proven TinyMidiLoader/TinySoundFont worker
- * can remain the synthesizer implementation rather than being duplicated.
- * Tasklog: RGJ-B3-006.
- */
+/* Tasklog: RGJ-B3-006 */
 struct pcm_voice {
     uint32_t player_id;
     size_t byte_pos;
@@ -16,14 +13,6 @@ struct pcm_voice {
 
 static struct pcm_voice pcm_voices[RG35XX_MEDIA_MAX_PCM_VOICES];
 static rg35xx_media_end_cb media_end_callback;
-
-/* Implement these adapters in the existing TML/TSF audio worker integration. */
-int rg35xx_midi_backend_play(struct rg35xx_media_entry *e);
-int rg35xx_midi_backend_pause(uint32_t player_id);
-int rg35xx_midi_backend_stop(uint32_t player_id);
-int rg35xx_midi_backend_seek(uint32_t player_id, uint64_t media_time_us);
-void rg35xx_midi_backend_release(uint32_t player_id);
-size_t rg35xx_midi_backend_mix(int32_t *accum, size_t frames);
 
 static int16_t read_s16le(const uint8_t *p)
 {
@@ -51,11 +40,7 @@ static struct pcm_voice *alloc_voice(uint32_t id)
     struct pcm_voice *v = find_voice(id);
     if(v) return v;
     for(i = 0; i < RG35XX_MEDIA_MAX_PCM_VOICES; ++i)
-        if(pcm_voices[i].player_id == 0) {
-            pcm_voices[i].player_id = id;
-            return &pcm_voices[i];
-        }
-    /* deterministic voice steal: slot zero, avoiding heap/allocation churn */
+        if(pcm_voices[i].player_id == 0) { pcm_voices[i].player_id = id; return &pcm_voices[i]; }
     memset(&pcm_voices[0], 0, sizeof(pcm_voices[0]));
     pcm_voices[0].player_id = id;
     return &pcm_voices[0];
@@ -65,13 +50,13 @@ void rg35xx_mixer_init(rg35xx_media_end_cb end_cb)
 {
     memset(pcm_voices, 0, sizeof(pcm_voices));
     media_end_callback = end_cb;
+    rg35xx_midi_backend_init(end_cb);
 }
 
 void rg35xx_mixer_reset(void)
 {
-    int i;
-    for(i = 0; i < RG35XX_MEDIA_MAX_PCM_VOICES; ++i)
-        memset(&pcm_voices[i], 0, sizeof(pcm_voices[i]));
+    memset(pcm_voices, 0, sizeof(pcm_voices));
+    rg35xx_midi_backend_reset();
 }
 
 int rg35xx_mixer_play(uint32_t id)
@@ -83,9 +68,7 @@ int rg35xx_mixer_play(uint32_t id)
     if(e->type != RG35XX_MEDIA_PCM16) return 0;
     v = alloc_voice(id);
     if(!v) return 0;
-    v->active = 1;
-    v->paused = 0;
-    e->state = RG35XX_MEDIA_PLAYING;
+    v->active = 1; v->paused = 0; e->state = RG35XX_MEDIA_PLAYING;
     return 1;
 }
 
@@ -95,11 +78,8 @@ int rg35xx_mixer_pause(uint32_t id)
     struct pcm_voice *v;
     if(!e) return 0;
     if(e->type == RG35XX_MEDIA_MIDI) return rg35xx_midi_backend_pause(id);
-    v = find_voice(id);
-    if(!v) return 0;
-    v->paused = 1;
-    e->state = RG35XX_MEDIA_PAUSED;
-    return 1;
+    v = find_voice(id); if(!v) return 0;
+    v->paused = 1; e->state = RG35XX_MEDIA_PAUSED; return 1;
 }
 
 int rg35xx_mixer_stop(uint32_t id)
@@ -108,11 +88,8 @@ int rg35xx_mixer_stop(uint32_t id)
     struct pcm_voice *v;
     if(!e) return 0;
     if(e->type == RG35XX_MEDIA_MIDI) return rg35xx_midi_backend_stop(id);
-    v = find_voice(id);
-    if(v) { v->active = 0; v->paused = 0; v->byte_pos = 0; }
-    e->state = RG35XX_MEDIA_STOPPED;
-    e->media_time_us = 0;
-    return 1;
+    v = find_voice(id); if(v) { v->active = 0; v->paused = 0; v->byte_pos = 0; }
+    e->state = RG35XX_MEDIA_STOPPED; e->media_time_us = 0; return 1;
 }
 
 int rg35xx_mixer_seek(uint32_t id, uint64_t us)
@@ -120,35 +97,26 @@ int rg35xx_mixer_seek(uint32_t id, uint64_t us)
     struct rg35xx_media_entry *e = rg35xx_media_cache_find(id);
     struct pcm_voice *v;
     uint64_t frame;
-    size_t bytes_per_frame;
+    size_t bpf;
     if(!e) return 0;
     if(e->type == RG35XX_MEDIA_MIDI) return rg35xx_midi_backend_seek(id, us);
     if(e->type != RG35XX_MEDIA_PCM16 || e->sample_rate <= 0) return 0;
-    v = alloc_voice(id);
-    bytes_per_frame = (size_t)e->channels * 2u;
+    v = alloc_voice(id); bpf = (size_t)e->channels * 2u;
     frame = (us * (uint64_t)e->sample_rate) / UINT64_C(1000000);
-    v->byte_pos = (size_t)(frame * bytes_per_frame);
-    if(v->byte_pos > e->blob_size) v->byte_pos = e->blob_size;
-    e->media_time_us = us;
-    return 1;
+    v->byte_pos = (size_t)(frame * bpf); if(v->byte_pos > e->blob_size) v->byte_pos = e->blob_size;
+    e->media_time_us = us; return 1;
 }
 
 int rg35xx_mixer_set_volume(uint32_t id, int level)
 {
     struct rg35xx_media_entry *e = rg35xx_media_cache_find(id);
-    if(!e) return 0;
-    if(level < 0) level = 0;
-    if(level > 100) level = 100;
-    e->volume = level;
-    return 1;
+    if(!e) return 0; if(level < 0) level = 0; if(level > 100) level = 100; e->volume = level; return 1;
 }
 
 int rg35xx_mixer_set_loop_count(uint32_t id, int count)
 {
     struct rg35xx_media_entry *e = rg35xx_media_cache_find(id);
-    if(!e || count == 0) return 0;
-    e->loop_count = count;
-    return 1;
+    if(!e || count == 0) return 0; e->loop_count = count; return 1;
 }
 
 void rg35xx_mixer_release(uint32_t id)
@@ -161,15 +129,11 @@ void rg35xx_mixer_release(uint32_t id)
 
 static void pcm_finish_or_loop(struct rg35xx_media_entry *e, struct pcm_voice *v)
 {
-    if(e->loop_count == -1 || e->loop_count > 1)
-    {
+    if(e->loop_count == -1 || e->loop_count > 1) {
         if(e->loop_count > 1) e->loop_count--;
-        v->byte_pos = 0;
-        return;
+        v->byte_pos = 0; return;
     }
-    v->active = 0;
-    e->state = RG35XX_MEDIA_STOPPED;
-    e->media_time_us = 0;
+    v->active = 0; e->state = RG35XX_MEDIA_STOPPED; e->media_time_us = 0;
     if(media_end_callback) media_end_callback(e->player_id);
 }
 
@@ -177,38 +141,34 @@ size_t rg35xx_mixer_render(int16_t *out, size_t frames)
 {
     size_t f;
     int vi;
+    int32_t *accum;
     if(!out || frames == 0) return 0;
+    accum = (int32_t *)calloc(frames * 2u, sizeof(int32_t));
+    if(!accum) { memset(out, 0, frames * 2u * sizeof(int16_t)); return 0; }
 
-    for(f = 0; f < frames; ++f)
-    {
-        int32_t left = 0, right = 0;
-        for(vi = 0; vi < RG35XX_MEDIA_MAX_PCM_VOICES; ++vi)
-        {
+    /* TML/TSF adds stereo samples into the same accumulator as PCM voices. */
+    rg35xx_midi_backend_mix(accum, frames);
+
+    for(f = 0; f < frames; ++f) {
+        int32_t left = accum[f * 2], right = accum[f * 2 + 1];
+        for(vi = 0; vi < RG35XX_MEDIA_MAX_PCM_VOICES; ++vi) {
             struct pcm_voice *v = &pcm_voices[vi];
             struct rg35xx_media_entry *e;
             size_t bpf;
             int32_t l, r;
-            if(!v->active || v->paused || v->player_id == 0) continue;
+            if(!v->active || v->paused || !v->player_id) continue;
             e = rg35xx_media_cache_find(v->player_id);
             if(!e || e->type != RG35XX_MEDIA_PCM16) continue;
             bpf = (size_t)e->channels * 2u;
-            if(v->byte_pos + bpf > e->blob_size) {
-                pcm_finish_or_loop(e, v);
-                if(!v->active) continue;
-            }
-            if(e->channels == 1) {
-                l = r = read_s16le(e->blob + v->byte_pos);
-            } else {
-                l = read_s16le(e->blob + v->byte_pos);
-                r = read_s16le(e->blob + v->byte_pos + 2);
-            }
+            if(v->byte_pos + bpf > e->blob_size) { pcm_finish_or_loop(e, v); if(!v->active) continue; }
+            if(e->channels == 1) l = r = read_s16le(e->blob + v->byte_pos);
+            else { l = read_s16le(e->blob + v->byte_pos); r = read_s16le(e->blob + v->byte_pos + 2); }
             v->byte_pos += bpf;
-            left += (l * e->volume) / 100;
-            right += (r * e->volume) / 100;
+            left += (l * e->volume) / 100; right += (r * e->volume) / 100;
             e->media_time_us = ((uint64_t)(v->byte_pos / bpf) * UINT64_C(1000000)) / (uint64_t)e->sample_rate;
         }
-        out[f * 2] = clamp16(left);
-        out[f * 2 + 1] = clamp16(right);
+        out[f * 2] = clamp16(left); out[f * 2 + 1] = clamp16(right);
     }
+    free(accum);
     return frames;
 }
