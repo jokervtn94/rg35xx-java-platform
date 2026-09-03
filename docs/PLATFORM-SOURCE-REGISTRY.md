@@ -89,6 +89,9 @@ Dependency policy for the TML/TSF worker is locked in `docs/RC1-TML-TSF-DEPENDEN
 - 0012 MobilePlatform dirty-frame integration
 - 0013 Libretro RG35XX input engine
 - 0014 Libretro native-media event return channel
+- 0015 exact upstream `freej2me_libretro.c` native-media runtime/process-lifecycle integration
+
+Patch 0015 is based on the inspected upstream devel `src/libretro/freej2me_libretro.c` blob `534b26cc97129c4fe7b04ea9a6b07fb8945d33b0`. It remains an integration contract until applied to the assembled RG35XX core; it must not be treated as a second core implementation.
 
 A patch may be superseded by consolidated source, but its behavior must be accounted for before removal.
 
