@@ -1,0 +1,78 @@
+# RG35XX RC1 integration specification — native media events to PlatformPlayer
+# Task: RGJ-RC1-010E
+# Status target: IMPLEMENTED contract only; not BUILD-PASS.
+
+OWNERSHIP
+- Java -> native audio commands remain on the dedicated RG35XX audio FD.
+- Java stdout remains binary video IPC only; never write media events there.
+- Native -> Java media completion reuses the already-existing libretro-core ->
+  Libretro.java stdin control channel. Do not add a second reverse pipe/thread.
+- RG35XXMediaRegistry owns player-id lookup and a bounded event queue.
+- PlatformPlayer remains the MMAPI/vendor listener facade.
+
+EXACT LIBRETRO SOURCE FINDING
+- Upstream Libretro.java parses a 5-byte control header: one opcode followed by
+  a big-endian 32-bit value named `code`.
+- Existing cases include 13=run jar and 15=frame/update tick.
+- Case 14 is unused in the inspected devel source and is reserved here for
+  RG35XX native-media events.
+
+CASE 14 WIRE FORMAT
+Header:
+  byte 0    = 14
+  bytes 1-4 = big-endian payload length, MUST equal 13
+Payload (13 bytes):
+  byte 0    = event type (1 END_OF_MEDIA, 2 LOOPED)
+  bytes 1-4 = big-endian player id
+  bytes 5-12= big-endian unsigned media time in microseconds
+
+Libretro.java case 14 must:
+1. Require code == 13; otherwise discard/ignore safely.
+2. Read exactly 13 payload bytes (loop until full or EOF); a single read() is
+   not sufficient for pipe correctness.
+3. Decode player id/media time without allocating helper objects.
+4. Call RG35XXMediaRegistry.enqueueNativeEvent(playerId,eventType,timeUs).
+5. Return immediately to the stdin parser; do NOT invoke MIDlet listeners from
+   case 14 itself.
+
+CASE 15 DRAIN
+- The existing case 15 frame/update tick is the bounded Java-side cadence.
+- After existing core-update/input-repeat work, call
+  RG35XXMediaRegistry.drainNativeEvents().
+- No Timer, executor, extra event thread or polling worker is introduced.
+- Queue is a fixed 32-event primitive ring; overflow drops oldest stale event
+  rather than blocking the Libretro IO parser.
+
+PLATFORMPLAYER BINDING
+For an RG35XXNativePlayer backend, PlatformPlayer binds one reusable
+RG35XXMediaRegistry.EventListener:
+- EVENT_END_OF_MEDIA:
+    set facade state to Player.PREFETCHED, then call existing
+    notifyListeners(PlayerListener.END_OF_MEDIA, mediaTimeUs).
+- EVENT_LOOPED:
+    keep playback semantic state appropriate to the native loop, then call
+    existing notifyListeners(PlayerListener.LOOPED, mediaTimeUs).
+
+Do not duplicate vendor dispatch. Existing PlatformPlayer.notifyListeners()
+already translates events for MIDP, Siemens, Nokia, KDDI, DoJa and JBlend and
+must remain the only facade notification fan-out.
+
+NATIVE CALLBACK
+- rg35xx_mixer / rg35xx_midi_backend completion must be converted by the
+  consolidated libretro core into case-14 packets on the existing core->Java
+  stdin pipe.
+- Final completion must emit END_OF_MEDIA exactly once.
+- Intermediate native loops should emit LOOPED so KDDI/DoJa/JBlend loop events
+  are not lost. Current native modules do not yet expose a proven intermediate
+  MIDI-loop callback; this remains an explicit RC1 gate and prevents declaring
+  the full media facade STATIC-AUDIT-PASS.
+
+LIFECYCLE
+- RELEASE removes the registry entry/listener; late events for released IDs are
+  ignored.
+- RESET/game unload clears the event ring together with registry entries.
+- No event may survive into the next JAR after RG35XXLifecycle reset.
+
+ROLLBACK
+- Remove case 14 + registry event binding together if the native reverse-event
+  bridge is not consolidated. Never fall back to Java timers for END_OF_MEDIA.
