@@ -4,7 +4,7 @@ package org.recompile.mobile;
  * RG35XX Java Platform target-specific MMAPI capability table.
  *
  * This class deliberately reports only formats that the RG35XX path can
- * actually route to a proven decoder/backend.  Generic FreeJ2ME desktop
+ * actually route to a proven decoder/backend. Generic FreeJ2ME desktop
  * capabilities must not leak into Manager.getSupportedContentTypes().
  *
  * Tasklog: RGJ-B1-008, RGJ-B3-002
@@ -15,8 +15,7 @@ public final class RG35XXMediaProfile
         "audio/midi",
         "audio/x-midi",
         "audio/wav",
-        "audio/x-wav",
-        "audio/x-tone-seq"
+        "audio/x-wav"
     };
 
     private RG35XXMediaProfile() { }
@@ -32,10 +31,9 @@ public final class RG35XXMediaProfile
     {
         /*
          * The current RG35XX target does not expose network capture or
-         * streaming protocols through MMAPI.  Null protocol means all
-         * content types, which is the important path used by audited games.
-         * Resource/file-like streams still terminate in createPlayer(stream,type)
-         * and therefore use the same decoder truth table.
+         * streaming protocols through MMAPI. Null protocol means all content
+         * types. Resource/file-like streams terminate in createPlayer(stream,
+         * type) and therefore use the same decoder truth table.
          */
         return getSupportedTypes();
     }
@@ -49,11 +47,12 @@ public final class RG35XXMediaProfile
         if(t.equals("audio/midi") || t.equals("audio/x-midi"))
             return RG35XXPlatformProfile.AUDIO_MIDI;
 
-        if(t.equals("audio/x-tone-seq"))
-            return RG35XXPlatformProfile.AUDIO_MIDI;
-
         if(t.equals("audio/wav") || t.equals("audio/x-wav"))
             return RG35XXPlatformProfile.AUDIO_PCM;
+
+        /* ToneControl conversion is a separate gate. Do not advertise it until
+         * the JavaSound-free A-BNF/vendor conversion path is source-audited. */
+        if(t.equals("audio/x-tone-seq")) return false;
 
         /* Explicitly false until a target decoder is proven. */
         if(t.indexOf("amr") >= 0)
