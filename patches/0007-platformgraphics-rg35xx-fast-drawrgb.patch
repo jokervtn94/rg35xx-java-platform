@@ -9,13 +9,7 @@ processAlpha is false, and skips fully transparent pixels without allocation.
 
 --- a/src/org/recompile/mobile/PlatformGraphics.java
 +++ b/src/org/recompile/mobile/PlatformGraphics.java
-@@ -537,61 +537,52 @@
- 	public void drawRGB(int[] rgbData, int offset, int scanlength, int x, int y, int width, int height, boolean processAlpha)
- 	{
- 		if (width <= 0 || height <= 0) { return; }
- 		if (rgbData == null) { throw new NullPointerException("RGB Data array is null"); }
- 		if (offset < 0 || offset >= rgbData.length) { throw new ArrayIndexOutOfBoundsException("Invalid offset for RGB Data"); }
- 
+@@ -543,54 +543,45 @@
  		x += translateX;
  		y += translateY;
  
@@ -23,10 +17,17 @@ processAlpha is false, and skips fully transparent pixels without allocation.
 -		final int clipY = Math.max(0, getClipY() + translateY);
 -		final int clipWidth = Math.min(canvasWidth, getClipWidth() + getClipX() + translateX);
 -		final int clipHeight = Math.min(canvasHeight, getClipHeight() + getClipY() + translateY);
--
++		final int clipLeft = Math.max(x, Math.max(0, getClipX() + translateX));
++		final int clipTop = Math.max(y, Math.max(0, getClipY() + translateY));
++		final int clipRight = Math.min(x + width,
++			Math.min(canvasWidth, getClipWidth() + getClipX() + translateX));
++		final int clipBottom = Math.min(y + height,
++			Math.min(canvasHeight, getClipHeight() + getClipY() + translateY));
+ 
 -		if(y + height > clipHeight) { height = clipHeight - y; }
 -		if(x + width > clipWidth)   { width = clipWidth - x; }
--
++		if (clipLeft >= clipRight || clipTop >= clipBottom) { return; }
+ 
 -		/* If width or height ended up as zero, we can exit early */
 -		if (width <= 0 || height <= 0) { return; }
 -
@@ -34,15 +35,6 @@ processAlpha is false, and skips fully transparent pixels without allocation.
 -		final int jcache = (y > clipY) ? 0 : (clipY - y);
 -
 -		int rowOffset, destRow;
-+		final int clipLeft = Math.max(x, Math.max(0, getClipX() + translateX));
-+		final int clipTop = Math.max(y, Math.max(0, getClipY() + translateY));
-+		final int clipRight = Math.min(x + width,
-+			Math.min(canvasWidth, getClipWidth() + getClipX() + translateX));
-+		final int clipBottom = Math.min(y + height,
-+			Math.min(canvasHeight, getClipHeight() + getClipY() + translateY));
-+
-+		if (clipLeft >= clipRight || clipTop >= clipBottom) { return; }
-+
 +		final int srcX0 = clipLeft - x;
 +		final int srcY0 = clipTop - y;
 +		final int copyWidth = clipRight - clipLeft;
@@ -97,4 +89,3 @@ processAlpha is false, and skips fully transparent pixels without allocation.
  				}
  			}
  		}
- 	}
