@@ -50,20 +50,21 @@ cp "$ROOT/native/vendor/TinySoundFont/tml.h" "$NATIVE_DST/vendor/TinySoundFont/t
 cp "$ROOT/native/vendor/TinySoundFont/tsf.h" "$NATIVE_DST/vendor/TinySoundFont/tsf.h"
 
 # Authoritative active source-mutation order.
-# 0004 -> 0016 exact audio process/FD owner.
-# 0005 -> 0010 + RG35XXLifecycle Java bootstrap owner; 0017 final EOF.
-# 0006 -> 0018 exact PlatformPlayer direct MIDI/WAV facade/backend owner.
-# 0009 -> 0021; 0012/0013 -> 0020; 0022 is materialized above.
+# Superseded historical contracts: 0004->0016, 0005->0010/0017,
+# 0006->0018, 0014->0017/0018, 0009->0021, 0012/0013->0020.
+# 0022 is materialized by the Classpath overlay above.
+# 0017 is intentionally applied before 0015: it establishes graceful EOF and
+# event helpers; when 0015 is materialized it owns subsequent mixer/runtime
+# init/reset/close against that already-defined process boundary.
 PATCH_ORDER="
 0003-manager-rg35xx-media-profile.patch
 0007-platformgraphics-rg35xx-fast-drawrgb.patch
 0008-platformgraphics-transform-cache.patch
 0010-libretro-platform-lifecycle.patch
 0011-platformimage-rg35xx-cache.patch
-0014-libretro-native-media-events.patch
-0015-libretro-native-media-runtime.patch
 0016-libretro-java-audio-fd-exact.patch
 0017-libretro-media-process-boundary.patch
+0015-libretro-native-media-runtime.patch
 0018-manager-platformplayer-rg35xx-direct-media.patch
 0019-platformplayer-tonecontrol-rg35xx.patch
 0020-pinned-graphics-input-lifecycle-consolidation.patch
