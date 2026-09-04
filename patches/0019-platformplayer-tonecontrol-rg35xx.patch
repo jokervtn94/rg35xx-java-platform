@@ -88,17 +88,17 @@ RG35XX target-profile selector in Manager.
  			{
 --- a/src/javax/microedition/media/Manager.java
 +++ b/src/javax/microedition/media/Manager.java
-@@ -39,6 +39,9 @@
- import org.recompile.mobile.PlatformPlayer;
- import org.recompile.mobile.JavaxPlatformPlayer;
+@@ -44,6 +44,9 @@
  import org.recompile.mobile.SiemensPlatformPlayer;
+ import org.recompile.mobile.RG35XXMediaProfile;
+ import org.recompile.mobile.RG35XXPlatformProfile;
 +import org.recompile.mobile.RG35XXNativePlayer;
 +import org.recompile.mobile.RG35XXMediaRegistry;
 +import org.recompile.mobile.RG35XXToneSequenceEncoder;
  
  public class Manager
  {
-@@ -61,6 +64,9 @@
+@@ -63,5 +66,8 @@
  	private static MidiChannel toneChannel;
  	private static Thread toneThread;
 +	private static RG35XXNativePlayer rg35xxTonePlayer;
@@ -107,7 +107,7 @@ RG35XX target-profile selector in Manager.
  
  	public static synchronized Player createPlayer(InputStream stream, String type) throws IOException, MediaException
  	{
-@@ -167,6 +173,51 @@
+@@ -169,6 +175,51 @@
  		if (volume < 0) { volume = 0; } 
  		else if (volume > 100) { volume = 100; }
  
