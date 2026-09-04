@@ -1,5 +1,5 @@
 From: RG35XX Java Platform
-Task: RGJ-RC1-011R / 006 / RGJ-RC1-011AG
+Task: RGJ-RC1-011R / 006 / RGJ-RC1-011AG / RGJ-RC1-011AH
 Subject: [PATCH] PlatformImage: materialize immutable byte-array decode cache
 
 This executable diff keeps upstream PlatformImage as the decoder/facade owner.
@@ -31,7 +31,7 @@ all other constructors remain unchanged.
  		InputStream stream = new ByteArrayInputStream(imageData, imageOffset, imageLength);
  
  		BufferedImage image;
-@@ -203,5 +218,11 @@
+@@ -201,5 +216,11 @@
  		}
  
  		dataBuffer = ((DataBufferInt) canvas.getRaster().getDataBuffer()).getData();
