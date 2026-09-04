@@ -1,5 +1,5 @@
 From: RG35XX Java Platform
-Task: RGJ-RC1-011R / 011B
+Task: RGJ-RC1-011R / 011B / RGJ-RC1-011AS
 Subject: [PATCH] pinned MobilePlatform dirty producers and Libretro input engine
 
 This executable diff owns only the pinned dirty-frame producer points and exact
@@ -7,14 +7,20 @@ Libretro joypad/repeat call sites. 0010 remains the lifecycle load-transaction
 owner; 0017 remains native-media event drain + EOF owner. No dirty consumer is
 added to the blocking LibretroIO parser thread.
 
+The final RC1-011AS rebase preserves the payloads and removes only the stale
+context edges that GNU patch previously had to discard with fuzz.
+
 --- a/src/org/recompile/mobile/MobilePlatform.java
 +++ b/src/org/recompile/mobile/MobilePlatform.java
-@@ -156,2 +156,5 @@
+@@ -155,5 +155,8 @@
+ 			com.nttdocomo.ui.Display.getCurrent().platformImage = lcd;
  			com.nttdocomo.ui.Display.getCurrent().graphics = lcd.getDoJaGraphics();
  		}
 +
 +		/* All replacement LCD/display references are committed at this point. */
 +		RG35XXFrameScheduler.markDirty();
+ 
+ 	}
 @@ -891,6 +894,7 @@
  				gcFrontbuffer.flushGraphics(img, x, y, width, height);
  			}
@@ -56,8 +62,7 @@ added to the blocking LibretroIO parser thread.
 +
  	private byte[] frameBuffer = new byte[800*800*3];
  	private final byte[] frameHeader = new byte[]{(byte)0xFE,
-@@ -132,10 +150,12 @@
- 						{
+@@ -133,8 +151,10 @@
  							case 2:	// joypad key up
 -								MobilePlatform.pressedKeys[code] = false;
 -								MobilePlatform.keyReleased(Mobile.getMobileKey(code));
@@ -72,9 +77,7 @@ added to the blocking LibretroIO parser thread.
 +								if(code < 0 || code >= 20) { break; }
 +								MobilePlatform.pressedKeys[code] = true;
 +								RG35XXInputEngine.press(code, System.currentTimeMillis(), RG35XX_INPUT_SINK);
- 							break;
-@@ -369,12 +389,8 @@
- 							case 15: // Libretro core requested a new frame.
+@@ -370,10 +390,6 @@
  								lastCoreUpdateTime = System.currentTimeMillis();
  								org.recompile.mobile.RG35XXMediaRegistry.drainNativeEvents();
 -
@@ -88,4 +91,3 @@ added to the blocking LibretroIO parser thread.
 +								 * upstream fast-forward state and never enters the input engine. */
 +								RG35XXInputEngine.update(lastCoreUpdateTime, RG35XX_INPUT_SINK);
  
- 								int multiplierScaled = (din[1] << 8) | din[2];
