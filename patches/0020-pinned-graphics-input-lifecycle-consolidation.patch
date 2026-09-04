@@ -1,5 +1,5 @@
 From: RG35XX Java Platform
-Task: RGJ-RC1-011R / 011B / RGJ-RC1-011AS
+Task: RGJ-RC1-011R / 011B / RGJ-RC1-011AS / RGJ-RC1-011AT
 Subject: [PATCH] pinned MobilePlatform dirty producers and Libretro input engine
 
 This executable diff owns only the pinned dirty-frame producer points and exact
@@ -7,20 +7,15 @@ Libretro joypad/repeat call sites. 0010 remains the lifecycle load-transaction
 owner; 0017 remains native-media event drain + EOF owner. No dirty consumer is
 added to the blocking LibretroIO parser thread.
 
-The final RC1-011AS rebase preserves the payloads and removes only the stale
-context edges that GNU patch previously had to discard with fuzz.
+RC1-011AT preserves all payloads and converts the last fuzz-dependent regions
+to exact zero-context insertion/replacement hunks against the pre-0020 tree.
 
 --- a/src/org/recompile/mobile/MobilePlatform.java
 +++ b/src/org/recompile/mobile/MobilePlatform.java
-@@ -155,5 +155,8 @@
- 			com.nttdocomo.ui.Display.getCurrent().platformImage = lcd;
- 			com.nttdocomo.ui.Display.getCurrent().graphics = lcd.getDoJaGraphics();
- 		}
+@@ -157,0 +158,3 @@
 +
 +		/* All replacement LCD/display references are committed at this point. */
 +		RG35XXFrameScheduler.markDirty();
- 
- 	}
 @@ -891,6 +894,7 @@
  				gcFrontbuffer.flushGraphics(img, x, y, width, height);
  			}
@@ -62,24 +57,19 @@ context edges that GNU patch previously had to discard with fuzz.
 +
  	private byte[] frameBuffer = new byte[800*800*3];
  	private final byte[] frameHeader = new byte[]{(byte)0xFE,
-@@ -133,8 +151,10 @@
- 							case 2:	// joypad key up
+@@ -142,2 +161,3 @@
 -								MobilePlatform.pressedKeys[code] = false;
 -								MobilePlatform.keyReleased(Mobile.getMobileKey(code));
 +								if(code < 0 || code >= 20) { break; }
 +								MobilePlatform.pressedKeys[code] = false;
 +								RG35XXInputEngine.release(code, RG35XX_INPUT_SINK);
- 							break;
- 
- 							case 3: // joypad key down
+@@ -147,2 +167,3 @@
 -								MobilePlatform.pressedKeys[code] = true;
 -								MobilePlatform.keyPressed(Mobile.getMobileKey(code));
 +								if(code < 0 || code >= 20) { break; }
 +								MobilePlatform.pressedKeys[code] = true;
 +								RG35XXInputEngine.press(code, System.currentTimeMillis(), RG35XX_INPUT_SINK);
-@@ -370,10 +390,6 @@
- 								lastCoreUpdateTime = System.currentTimeMillis();
- 								org.recompile.mobile.RG35XXMediaRegistry.drainNativeEvents();
+@@ -375,7 +396,3 @@
 -
 -								// Fire repeats for any currently held keys on
 -								// every libretro frame tick
@@ -90,4 +80,3 @@ context edges that GNU patch previously had to discard with fuzz.
 +								/* One bounded repeat update per existing frame tick. Slot 20 remains
 +								 * upstream fast-forward state and never enters the input engine. */
 +								RG35XXInputEngine.update(lastCoreUpdateTime, RG35XX_INPUT_SINK);
- 
