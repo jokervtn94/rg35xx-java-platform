@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-# RGJ-RC1-011N/011R/011AC deterministic assembly driver.
+# RGJ-RC1-011N/011R/011AC/011BC deterministic assembly driver.
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 PIN_FREEJ2ME="13ec186903087156c145268f8706eecfaf9f1e50"
 : "${RG35XX_FREEJ2ME_ROOT:?set RG35XX_FREEJ2ME_ROOT to the pinned FreeJ2ME checkout}"
@@ -74,9 +74,6 @@ PATCH_ORDER="
 0020-pinned-graphics-input-lifecycle-consolidation.patch
 "
 
-# The pinned tree contains mixed LF/CRLF text files. Normalize only files named
-# as patch targets, and only in the disposable assembly tree. This preserves the
-# exact pinned checkout while keeping unified-diff matching deterministic.
 normalize_patch_targets()
 {
   patch_file="$1"
@@ -128,10 +125,15 @@ CORE_C="$RG35XX_ASSEMBLY_ROOT/src/libretro/freej2me_libretro.c"
 grep -q '^#define NUM_ARGUMENTS 9$' "$CORE_C" || fail "assembled core missing 0016 NUM_ARGUMENTS 9"
 grep -q -- '-Dfreej2me.rg35xx=true' "$CORE_C" || fail "assembled core missing RG35XX JVM selector"
 grep -q -- '-Dfreej2me.rg35xx.audio.fd=%d' "$CORE_C" || fail "assembled core missing dedicated audio-FD JVM property"
-[ "$(grep -c 'static struct rg35xx_audio_pipe rg35xx_java_audio_pipe;' "$CORE_C")" = 1 ] || fail "assembled core audio-pipe state declaration count is not one"
+[ "$(grep -Fxc 'static struct rg35xx_audio_pipe rg35xx_java_audio_pipe = { -1, -1 };' "$CORE_C")" = 1 ] || fail "assembled core fail-closed audio-pipe declaration count is not one"
 grep -q 'rg35xx_audio_pipe_create(&rg35xx_java_audio_pipe)' "$CORE_C" || fail "assembled core missing dedicated audio pipe creation"
 grep -q 'rg35xx_mixer_init(rg35xx_core_media_event);' "$CORE_C" || fail "assembled core missing native mixer init hook"
-grep -q 'rg35xx_audio_drain_start();' "$CORE_C" || fail "assembled core missing audio drain start hook"
+[ "$(grep -Fxc '			rg35xx_audio_drain_start();' "$CORE_C")" = 1 ] || fail "assembled core audio drain start call count is not one"
+awk '
+  /rg35xx_audio_pipe_parent_after_fork\(&rg35xx_java_audio_pipe\);/ { parent = NR }
+  /rg35xx_audio_drain_start\(\);/ { drain = NR }
+  END { exit !(parent > 0 && drain == parent + 1) }
+' "$CORE_C" || fail "assembled core audio drain start is not immediately after parent audio-pipe handoff"
 grep -q 'rg35xx_native_media_shutdown();' "$CORE_C" || fail "assembled core missing final native media shutdown hook"
 
 cat > "$NATIVE_DST/rc1_sources.mk" <<'EOF'
