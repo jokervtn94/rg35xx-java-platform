@@ -6,6 +6,7 @@ on:
     paths:
       - 'patches/**'
       - 'scripts/rc1_assemble.sh'
+      - 'scripts/rc1_contract_gate.sh'
       - '.github/workflows/rc1-patch-integration-gate.yml'
   workflow_dispatch:
 
@@ -23,30 +24,29 @@ jobs:
           ref: 13ec186903087156c145268f8706eecfaf9f1e50
           path: upstream
 
-      - name: Verify pin
+      - name: Verify gate scripts and exact pin
         shell: bash
         run: |
           set -euo pipefail
+          sh -n scripts/rc1_assemble.sh
+          sh -n scripts/rc1_contract_gate.sh
+          sh scripts/rc1_contract_gate.sh --build-ready
           test "$(git -C upstream rev-parse HEAD)" = "13ec186903087156c145268f8706eecfaf9f1e50"
 
-      - name: Apply active patches sequentially with dry-run first
+      - name: Apply authoritative active patches sequentially with dry-run first
         shell: bash
         run: |
           set -euo pipefail
-          PATCH_ORDER=(
-            0003-manager-rg35xx-media-profile.patch
-            0007-platformgraphics-rg35xx-fast-drawrgb.patch
-            0008-platformgraphics-transform-cache.patch
-            0010-libretro-platform-lifecycle.patch
-            0011-platformimage-rg35xx-cache.patch
-            0016-libretro-java-audio-fd-exact.patch
-            0017-libretro-media-process-boundary.patch
-            0015-libretro-native-media-runtime.patch
-            0018-manager-platformplayer-rg35xx-direct-media.patch
-            0019-platformplayer-tonecontrol-rg35xx.patch
-            0020-pinned-graphics-input-lifecycle-consolidation.patch
-          )
-          for p in "${PATCH_ORDER[@]}"; do
+          PATCH_ORDER=$(awk '
+            /^PATCH_ORDER="/ { in_order=1; next }
+            in_order && /^"$/ { exit }
+            in_order && NF { print }
+          ' scripts/rc1_assemble.sh)
+          test -n "$PATCH_ORDER"
+          echo "Authoritative PATCH_ORDER:"
+          printf '%s\n' "$PATCH_ORDER"
+          for p in $PATCH_ORDER; do
+            test -f "patches/$p"
             echo "=== DRY-RUN $p ==="
             patch -d upstream -p1 --forward --dry-run < "patches/$p"
             echo "=== APPLY $p ==="
