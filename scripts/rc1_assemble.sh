@@ -50,13 +50,12 @@ cp "$ROOT/native/vendor/TinySoundFont/tml.h" "$NATIVE_DST/vendor/TinySoundFont/t
 cp "$ROOT/native/vendor/TinySoundFont/tsf.h" "$NATIVE_DST/vendor/TinySoundFont/tsf.h"
 
 # Authoritative active source-mutation order.
-# 0004 is superseded by 0016 for process/FD ownership.
-# 0005 is superseded by 0010 + RG35XXLifecycle for Java bootstrap ownership;
-# graceful final EOF/platform shutdown remains in 0017.
-# 0009 is superseded by 0021; 0012/0013 by 0020; 0022 is materialized above.
+# 0004 -> 0016 exact audio process/FD owner.
+# 0005 -> 0010 + RG35XXLifecycle Java bootstrap owner; 0017 final EOF.
+# 0006 -> 0018 exact PlatformPlayer direct MIDI/WAV facade/backend owner.
+# 0009 -> 0021; 0012/0013 -> 0020; 0022 is materialized above.
 PATCH_ORDER="
 0003-manager-rg35xx-media-profile.patch
-0006-platformplayer-native-backend.patch
 0007-platformgraphics-rg35xx-fast-drawrgb.patch
 0008-platformgraphics-transform-cache.patch
 0010-libretro-platform-lifecycle.patch
