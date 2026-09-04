@@ -1,58 +1,100 @@
-# RG35XX Java Platform 1.0 Beta 4
-# PlatformGraphics.drawRGB fast-path integration patch
-#
-# Apply this change to the existing PlatformGraphics.drawRGB implementation.
-# It deliberately keeps MIDP drawRGB semantics while removing avoidable work
-# from the ARM926 hot path.
-#
-# Invariants:
-# - translation and clip are resolved before the inner pixel loop
-# - processAlpha=false forces source alpha to 0xFF
-# - processAlpha=true: alpha 0 skips, alpha 255 copies, 1..254 blends
-# - no Graphics2D fallback
-# - no allocation in the inner loop
-# - source scanlength semantics are preserved
-#
-# Reference implementation for the clipped inner body:
-#
-# final int clipLeft = Math.max(x + translateX, clipX);
-# final int clipTop = Math.max(y + translateY, clipY);
-# final int clipRight = Math.min(x + translateX + width, clipX + clipWidth);
-# final int clipBottom = Math.min(y + translateY + height, clipY + clipHeight);
-#
-# if (clipLeft >= clipRight || clipTop >= clipBottom) { return; }
-#
-# final int srcX0 = clipLeft - (x + translateX);
-# final int srcY0 = clipTop - (y + translateY);
-# final int copyWidth = clipRight - clipLeft;
-#
-# for (int dy = clipTop, sy = srcY0; dy < clipBottom; dy++, sy++) {
-#     int src = offset + sy * scanlength + srcX0;
-#     int dst = dy * canvasWidth + clipLeft;
-#     final int end = dst + copyWidth;
-#
-#     if (!processAlpha) {
-#         while (dst < end) {
-#             canvasData[dst++] = rgbData[src++] | 0xFF000000;
-#         }
-#     } else {
-#         while (dst < end) {
-#             final int pixel = rgbData[src++];
-#             final int alpha = pixel >>> 24;
-#             if (alpha == 0) {
-#                 dst++;
-#             } else if (alpha == 255) {
-#                 canvasData[dst++] = pixel;
-#             } else {
-#                 canvasData[dst] = blendPixels(pixel, canvasData[dst]);
-#                 dst++;
-#             }
-#         }
-#     }
-# }
-#
-# Integration note:
-# The actual upstream method may use accessor names for translation/clip rather
-# than fields. During consolidated-tree assembly, bind these expressions to the
-# exact local variables already established by that method; do not duplicate
-# translation or alter exception/bounds behavior outside the pixel loop.
+From: RG35XX Java Platform
+Task: RGJ-RC1-011R / 007
+Subject: [PATCH] PlatformGraphics: materialize clipped drawRGB fast path
+
+This executable diff targets the exact pinned FreeJ2ME PlatformGraphics owner.
+It preserves the existing argument validation and source scanlength arithmetic,
+resolves translation/clipping before the pixel loops, forces opaque output when
+processAlpha is false, and skips fully transparent pixels without allocation.
+
+--- a/src/org/recompile/mobile/PlatformGraphics.java
++++ b/src/org/recompile/mobile/PlatformGraphics.java
+@@ -537,56 +537,55 @@
+ 	public void drawRGB(int[] rgbData, int offset, int scanlength, int x, int y, int width, int height, boolean processAlpha)
+ 	{
+ 		if (width <= 0 || height <= 0) { return; }
+ 		if (rgbData == null) { throw new NullPointerException("RGB Data array is null"); }
+ 		if (offset < 0 || offset >= rgbData.length) { throw new ArrayIndexOutOfBoundsException("Invalid offset for RGB Data"); }
+ 
+ 		x += translateX;
+ 		y += translateY;
+ 
+-		final int clipX = Math.max(0, getClipX() + translateX);
+-		final int clipY = Math.max(0, getClipY() + translateY);
+-		final int clipWidth = Math.min(canvasWidth, getClipWidth() + getClipX() + translateX);
+-		final int clipHeight = Math.min(canvasHeight, getClipHeight() + getClipY() + translateY);
+-
+-		if(y + height > clipHeight) { height = clipHeight - y; }
+-		if(x + width > clipWidth)   { width = clipWidth - x; }
+-
+-		/* If width or height ended up as zero, we can exit early */
+-		if (width <= 0 || height <= 0) { return; }
+-
+-		final int icache = (x > clipX) ? 0 : (clipX - x);
+-		final int jcache = (y > clipY) ? 0 : (clipY - y);
+-
+-		int rowOffset, destRow;
++		final int clipLeft = Math.max(x, Math.max(0, getClipX() + translateX));
++		final int clipTop = Math.max(y, Math.max(0, getClipY() + translateY));
++		final int clipRight = Math.min(x + width,
++			Math.min(canvasWidth, getClipWidth() + getClipX() + translateX));
++		final int clipBottom = Math.min(y + height,
++			Math.min(canvasHeight, getClipHeight() + getClipY() + translateY));
++
++		if (clipLeft >= clipRight || clipTop >= clipBottom) { return; }
++
++		final int srcX0 = clipLeft - x;
++		final int srcY0 = clipTop - y;
++		final int copyWidth = clipRight - clipLeft;
+ 
+ 		// If we don't need to process alpha, copy opaque masked colors directly
+ 		// into the framebuffer. Saves having to do if checks for every pixel.
+ 		if (!processAlpha)
+ 		{
+-			for (int j = jcache; j < height; j++)
++			for (int dy = clipTop, sy = srcY0; dy < clipBottom; dy++, sy++)
+ 			{
+-				rowOffset = offset + (j * scanlength);
+-				destRow = (y + j) * canvasWidth;
+-
+-				int srcIdx = rowOffset + icache;
+-				int destIdx = destRow + x + icache;
+-				int endIdx = rowOffset + width;
+-
+-				for (; srcIdx < endIdx; srcIdx++, destIdx++)
+-					{ canvasData[destIdx] = rgbData[srcIdx] | 0xFF000000; }
++				int src = offset + (sy * scanlength) + srcX0;
++				int dst = (dy * canvasWidth) + clipLeft;
++				final int end = dst + copyWidth;
++				while (dst < end) { canvasData[dst++] = rgbData[src++] | 0xFF000000; }
+ 			}
+ 		}
+ 		else
+ 		{
+-			for (int j = jcache; j < height; j++)
++			for (int dy = clipTop, sy = srcY0; dy < clipBottom; dy++, sy++)
+ 			{
+-				rowOffset = offset + (j * scanlength);
+-				destRow = (y + j) * canvasWidth;
+-
+-				for (int i = icache; i < width; i++)
++				int src = offset + (sy * scanlength) + srcX0;
++				int dst = (dy * canvasWidth) + clipLeft;
++				final int end = dst + copyWidth;
++				while (dst < end)
+ 				{
+-					int srcPixel = rgbData[rowOffset + i];
+-					int destIdx = destRow + x + i;
+-
+-					if ((srcPixel >>> 24) == 255) { canvasData[destIdx] = srcPixel | 0xFF000000; }
+-					else
+-						{ canvasData[destIdx] = blendPixels(srcPixel, canvasData[destIdx]); }
++					final int srcPixel = rgbData[src++];
++					final int alpha = srcPixel >>> 24;
++					if (alpha == 0) { dst++; }
++					else if (alpha == 255) { canvasData[dst++] = srcPixel; }
++					else { canvasData[dst] = blendPixels(srcPixel, canvasData[dst]); dst++; }
+ 				}
+ 			}
+ 		}
+ 	}
