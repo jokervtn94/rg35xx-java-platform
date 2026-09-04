@@ -1,5 +1,5 @@
 From: RG35XX Java Platform
-Task: RGJ-RC1-011R / 010J / 010L
+Task: RGJ-RC1-011R / 010J / 010L / RGJ-RC1-011AK
 Subject: [PATCH] libretro: exact RG35XX JVM selector and dedicated audio FD
 
 This executable diff is the sole native process/JVM-argv owner. It supersedes
@@ -11,7 +11,7 @@ the target selector in Java but must not mutate this argv region again.
 
 --- a/src/libretro/freej2me_libretro.c
 +++ b/src/libretro/freej2me_libretro.c
-@@ -20,6 +20,7 @@
+@@ -20,7 +20,8 @@
  #ifdef __linux__
  #include <stdarg.h>
  #include <unistd.h>
