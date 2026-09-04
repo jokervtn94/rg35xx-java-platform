@@ -1,16 +1,20 @@
 #!/bin/sh
 set -u
 
-# RGJ-RC1-011BG
+# RGJ-RC1-011BG / RGJ-RC1-011BI
 # Read-only evidence collector for real RG35XX validation sessions.
+# Defaults are the exact paths already proven by this device's historical logs.
 # This script never marks DEVICE-TEST-PASS by itself.
 
 MODE=${1:-snapshot}
 OUT=${2:-"./rg35xx-device-evidence-$(date +%Y%m%d-%H%M%S 2>/dev/null || echo unknown)"}
-CORE_PATH=${CORE_PATH:-}
-JAR_PATH=${JAR_PATH:-}
+CORE_PATH=${CORE_PATH:-/mnt/mmc/CFW/retroarch/.retroarch/cores/freej2me_plus_libretro.so}
+JAR_PATH=${JAR_PATH:-/mnt/mmc/BIOS/freej2me-lr.jar}
 FONT_PATH=${FONT_PATH:-/mnt/mmc/Java/runtime/DejaVuSans.ttf}
 SOUNDFONT_PATH=${SOUNDFONT_PATH:-/mnt/mmc/Java/runtime/GeneralUser-GS.sf2}
+JAMVM_PATH=${JAMVM_PATH:-/mnt/mmc/CFW/java/bin/jamvm}
+RETROARCH_PATH=${RETROARCH_PATH:-/mnt/mmc/CFW/retroarch/retroarch}
+GAMES_PATH=${GAMES_PATH:-/mnt/mmc/Roms/JAVA}
 
 mkdir -p "$OUT" || exit 1
 
@@ -25,6 +29,9 @@ have() { command -v "$1" >/dev/null 2>&1; }
   echo "jar_path=$JAR_PATH"
   echo "font_path=$FONT_PATH"
   echo "soundfont_path=$SOUNDFONT_PATH"
+  echo "jamvm_path=$JAMVM_PATH"
+  echo "retroarch_path=$RETROARCH_PATH"
+  echo "games_path=$GAMES_PATH"
   echo "build_commit=086d4987c0d60b5eb9abc3887e73638b24a1b964"
   echo "build_run=33883673553"
   echo "build_artifact=9940954185"
@@ -64,10 +71,12 @@ hash_one()
   hash_one "$JAR_PATH" jar
   hash_one "$FONT_PATH" font
   hash_one "$SOUNDFONT_PATH" soundfont
+  hash_one "$JAMVM_PATH" jamvm
+  hash_one "$RETROARCH_PATH" retroarch
 } > "$OUT/hashes.txt"
 
 {
-  for p in "$CORE_PATH" "$JAR_PATH" "$FONT_PATH" "$SOUNDFONT_PATH"; do
+  for p in "$CORE_PATH" "$JAR_PATH" "$FONT_PATH" "$SOUNDFONT_PATH" "$JAMVM_PATH" "$RETROARCH_PATH"; do
     [ -n "$p" ] || continue
     if [ -e "$p" ]; then
       echo "--- $p"
@@ -75,15 +84,21 @@ hash_one()
       if have file; then file "$p" 2>&1 || true; fi
     fi
   done
+  echo "--- games directory"
+  ls -ld "$GAMES_PATH" 2>&1 || true
 } > "$OUT/files.txt"
 
-if [ -n "$CORE_PATH" ] && [ -f "$CORE_PATH" ]; then
+if [ -f "$CORE_PATH" ]; then
   if have readelf; then
     readelf -h "$CORE_PATH" > "$OUT/core-readelf.txt" 2>&1 || true
   fi
   if have strings; then
     strings "$CORE_PATH" 2>/dev/null | grep -E 'freej2me\.rg35xx|GeneralUser-GS|RG35XX' > "$OUT/core-strings.txt" 2>/dev/null || true
   fi
+fi
+
+if [ -x "$JAMVM_PATH" ]; then
+  "$JAMVM_PATH" -version > "$OUT/jamvm-version.txt" 2>&1 || true
 fi
 
 {
