@@ -1,0 +1,55 @@
+name: RC1 Source-Pinned Toolchain Build
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'scripts/rc1_toolchain_acquire.sh'
+      - '.github/workflows/rc1-toolchain-build.yml'
+  workflow_dispatch:
+
+jobs:
+  build-sdk:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - name: Checkout RG35XX platform repo
+        uses: actions/checkout@v4
+
+      - name: Verify acquisition script syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          sh -n scripts/rc1_toolchain_acquire.sh
+          grep -Fq '8087b52311da5c1e2fa1c50b0b064c07fd174a36' scripts/rc1_toolchain_acquire.sh
+          grep -Fq '58256d3e7afa3f9fa0dbd79b16fd0b21d93b9d7b' scripts/rc1_toolchain_acquire.sh
+
+      - name: Install Buildroot host prerequisites
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential bc bison cpio file flex git libncurses-dev \
+            python3 rsync unzip wget xz-utils
+
+      - name: Build exact source-pinned ARM uClibc SDK
+        shell: bash
+        env:
+          RG35XX_TOOLCHAIN_SOURCE_ROOT: ${{ runner.temp }}/miyoo-buildroot
+          RG35XX_TOOLCHAIN_OUTPUT_DIR: ${{ runner.temp }}/rg35xx-toolchain-out
+          RG35XX_TOOLCHAIN_JOBS: '2'
+        run: |
+          set -euo pipefail
+          sh scripts/rc1_toolchain_acquire.sh
+          cat "$RG35XX_TOOLCHAIN_OUTPUT_DIR/rg35xx_toolchain_source_manifest.txt"
+
+      - name: Upload verified SDK and provenance manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: rg35xx-arm-uclibc-sdk
+          path: |
+            ${{ runner.temp }}/rg35xx-toolchain-out/arm-miyoo-linux-uclibcgnueabi_sdk-buildroot.tar.gz
+            ${{ runner.temp }}/rg35xx-toolchain-out/rg35xx_toolchain_source_manifest.txt
+          if-no-files-found: error
+          retention-days: 30
