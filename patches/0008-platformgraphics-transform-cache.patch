@@ -1,5 +1,5 @@
 From: RG35XX Java Platform
-Task: RGJ-RC1-011R / 008
+Task: RGJ-RC1-011R / 008 / 011AE
 Subject: [PATCH] PlatformGraphics: materialize geometry-only transform cache
 
 The pinned PlatformGraphics normalizes public MIDP/DirectGraphics transforms to
@@ -10,11 +10,7 @@ inside the pixel loop. Mutable image pixels are never cached.
 
 --- a/src/org/recompile/mobile/PlatformGraphics.java
 +++ b/src/org/recompile/mobile/PlatformGraphics.java
-@@ -3085,16 +3085,27 @@
- 			// Some of the following transforms require temp variables
- 			final int origSwidth = swidth;
- 			final int origSheight = sheight;
- 
+@@ -3089,9 +3089,20 @@
 -			if (transform == FLIP_ROTATE_RIGHT ||
 -				transform == FLIP_ROTATE_LEFT ||
 -				transform == FLIP_ROTATE_RIGHT_VERTICAL ||
@@ -42,9 +38,6 @@ inside the pixel loop. Mutable image pixels are never cached.
 +			final int[] sourceMap = transformMap.sourceIndex;
 +			swidth = transformMap.width;
 +			sheight = transformMap.height;
- 
- 			int imgWidth = image.getWidth();
- 			int[] imgData = image.getDataBuffer();
 @@ -3126,43 +3137,3 @@
 -					switch (transform)
 -					{
