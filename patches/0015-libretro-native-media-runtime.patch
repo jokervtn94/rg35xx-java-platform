@@ -1,104 +1,207 @@
-# RGJ-RC1-010I — exact freej2me_libretro.c native-media runtime integration
-#
-# Source basis
-# ------------
-# Exact upstream owner inspected: TASEmulators/freej2me-plus devel
-# src/libretro/freej2me_libretro.c, blob 534b26cc97129c4fe7b04ea9a6b07fb8945d33b0.
-# This is an integration specification/patch contract, not a parallel core.
-#
-# Required includes in the existing core owner
-# --------------------------------------------
-#   #include "rg35xx_media_runtime.h"
-#   #include "rg35xx_mixer.h"
-#   #include "rg35xx_audio_pipe.h"
-#   #include "rg35xx_media_cache.h"
-#
-# Authoritative SoundFont provider boundary
-# -----------------------------------------
-# The core must obtain validated SF2 bytes from an explicit configured/resource
-# owner. Do NOT infer a BIOS path, do NOT silently use TinySoundFont's example
-# SoundFont, and do NOT make the media runtime open files.
-#
-# Once authoritative bytes exist:
-#   if (!rg35xx_media_runtime_init(sf2_data, sf2_size)) {
-#       // MIDI backend remains unavailable/fail-safe; PCM may still operate.
-#   }
-#
-# The SF2 byte buffer must remain alive until rg35xx_media_runtime_shutdown().
-#
-# Exact upstream lifecycle findings
-# ---------------------------------
-# 1. retro_init() currently checks variables/system directory and then calls
-#    javaOpen(). There is no RG35XX media initialization in upstream.
-# 2. javaOpen() owns creation/fork/inheritance of the existing Java stdin/stdout
-#    pipes. Dedicated RG35XX audio-pipe creation must be integrated into this
-#    same process setup before fork, not bolted onto retro_run().
-# 3. retro_load_game() writes save path, ROM path, options, then opcode 13.
-#    Native media runtime is process/platform lifetime and must NOT be recreated
-#    for every JAR load.
-# 4. retro_unload_game() is currently empty upstream.
-# 5. retro_deinit() currently SIGKILLs/waits for Java on Linux. RC1 lifecycle
-#    requires Java shutdown/RMS barrier where protocol permits before hard kill;
-#    native media teardown must occur after Java can no longer enqueue media.
-# 6. retro_reset() calls retro_deinit(), retro_init(), retro_load_game(); therefore
-#    final media teardown/init must be idempotent across this restart path.
-#
-# Required process-lifetime ordering
-# ----------------------------------
-# Startup, before Java can register native media:
-#   a. initialize media cache
-#   b. initialize mixer with the typed RG35XX media-event callback
-#   c. obtain authoritative SF2 bytes and call rg35xx_media_runtime_init()
-#      (MIDI fail-safe unavailable if SF2 is absent; never fabricate an asset)
-#   d. create dedicated audio pipe before fork
-#   e. fork/exec JamVM with -Dfreej2me.rg35xx.audio.fd=<child-write-fd>
-#   f. parent drains audio pipe independently of retro_run()
-#
-# Game reset/unload command ordering:
-#   rg35xx_mixer_reset();
-#   rg35xx_media_cache_reset();
-# The process-lifetime SF2/TSF runtime stays initialized across ordinary game
-# switch. Java RG35XXLifecycle owns the corresponding RESET command boundary.
-#
-# Final retro_deinit ordering:
-#   a. request/observe Java shutdown where the current protocol permits so RMS
-#      force-flush and Java media reset can complete
-#   b. prevent further Java audio writes / stop audio-pipe worker ownership
-#   c. close dedicated audio pipe endpoints
-#   d. rg35xx_mixer_reset()
-#   e. reset/free media cache according to its existing owner API
-#   f. rg35xx_media_runtime_shutdown()
-#      -> worker_shutdown -> soundfont_source_clear
-#   g. only then release the authoritative SF2 byte buffer
-#
-# Native -> Java event return
-# ---------------------------
-# The typed mixer callback emits RG35XX_MEDIA_EVENT_END_OF_MEDIA (1) and
-# RG35XX_MEDIA_EVENT_LOOPED (2), with player id + media time. The consolidated
-# core must encode these as the 13-byte opcode-14 payload already specified by
-# patches/0014-libretro-native-media-events.patch and write them on the existing
-# core->Java stdin/control direction. stdout remains Java->core video IPC only.
-#
-# Non-negotiable invariants
-# -------------------------
-# - no SoundFont filesystem guessing
-# - no second libretro entrypoint/core source
-# - no audio over Java stdout
-# - no media runtime init/shutdown from retro_run()
-# - no malloc/free in mixer/TSF render hot paths
-# - ordinary game switch resets players/cache but does not destroy the shared SF2
-# - final shutdown destroys TSF before releasing SF2 bytes
-#
-# Remaining exact-source blockers before this patch can become BUILD-PASS
-# -----------------------------------------------------------------------
-# - authoritative SF2 asset/provider is still unresolved
-# - pinned tml.h/tsf.h are not yet vendored byte-identically
-# - dedicated audio-pipe/process argument edits must be applied to the assembled
-#   RG35XX core source, including the exact javaOpen() argv/FD inheritance path
-# - opcode-14 event writer must be applied to the assembled core
-# - media cache init/free API names must be checked against the exact native files
-# - Linux Java graceful-shutdown handshake must be reconciled before replacing
-#   upstream's current SIGKILL-only deinit behavior
-#
-# Status: IMPLEMENTED integration contract only. Not STATIC-AUDIT-PASS for the
-# whole media facade, not BUILD-PASS, and not DEVICE-TEST-PASS.
+From: RG35XX Java Platform
+Task: RGJ-RC1-011R / 010I
+Subject: [PATCH] libretro: materialize RG35XX native media runtime ownership
+
+This executable diff owns process-lifetime native media runtime setup/teardown,
+explicit pinned SoundFont loading, and the independent parent audio-pipe drain
+worker. 0016 remains the sole audio-pipe creation/JVM-FD argv owner. 0017 remains
+the sole native->Java event wire and graceful EOF/JamVM shutdown owner.
+
+The SoundFont path is supplied by the release/runtime overlay as the compile-time
+RG35XX_SOUNDFONT_PATH macro. No BIOS/system-directory probing or fallback asset
+selection is permitted. Missing/invalid SF2 leaves MIDI unavailable fail-safe;
+PCM registration/mixing remains available.
+
+--- a/src/libretro/freej2me_libretro.c
++++ b/src/libretro/freej2me_libretro.c
+@@ -16,11 +16,18 @@
+ #include <stdlib.h>
+ #include <string.h>
+ #include <errno.h>
++#include <stdio.h>
+ #ifdef __linux__
+ #include <stdarg.h>
+ #include <unistd.h>
+ #include <sys/wait.h>
++#include <pthread.h>
+ #include "rg35xx_audio_pipe.h"
+ #elif _WIN32
+ #include <windows.h>
+ #include <tlhelp32.h>
+ #include <io.h>
+ #endif
+ #include "freej2me_libretro.h"
++#include "rg35xx/rg35xx_media_runtime.h"
++#include "rg35xx/rg35xx_media_cache.h"
++#include "rg35xx/rg35xx_media_event_queue.h"
++#include "rg35xx/rg35xx_mixer.h"
+ #include "rg35xx/rg35xx_media_events.h"
+-#include "rg35xx/rg35xx_media_event_queue.h"
+-#include "rg35xx/rg35xx_mixer.h"
+ #include <file/file_path.h>
+ #include <retro_miscellaneous.h>
++
++#ifndef RG35XX_SOUNDFONT_PATH
++#define RG35XX_SOUNDFONT_PATH ""
++#endif
+@@ -95,6 +102,16 @@
+ int pRead[2];
+ int pWrite[2];
+ static struct rg35xx_audio_pipe rg35xx_java_audio_pipe;
++static pthread_t rg35xx_audio_drain_thread;
++static volatile int rg35xx_audio_drain_running;
++static int rg35xx_audio_drain_started;
++static uint8_t *rg35xx_soundfont_bytes;
++static size_t rg35xx_soundfont_size;
++
++static void rg35xx_core_media_event(int event_type,
++                                    uint32_t player_id,
++                                    uint64_t media_time_us);
+ 
+ #elif _WIN32
+ BOOL succeeded = FALSE;
+@@ -803,6 +820,104 @@
+ 	write_to_pipe(pWrite[1], event, 5);
+ }
++
++#ifdef __linux__
++static void rg35xx_release_soundfont_bytes(void)
++{
++	if(rg35xx_soundfont_bytes) free(rg35xx_soundfont_bytes);
++	rg35xx_soundfont_bytes = NULL;
++	rg35xx_soundfont_size = 0;
++}
++
++static int rg35xx_load_soundfont_bytes(void)
++{
++	FILE *f;
++	long size;
++	size_t got;
++
++	rg35xx_release_soundfont_bytes();
++	if(RG35XX_SOUNDFONT_PATH[0] == '\0')
++	{
++		log_fn(RETRO_LOG_WARN, "RG35XX SoundFont path is not configured; MIDI disabled.\n");
++		return 0;
++	}
++
++	f = fopen(RG35XX_SOUNDFONT_PATH, "rb");
++	if(!f)
++	{
++		log_fn(RETRO_LOG_WARN, "RG35XX SoundFont unavailable at configured path; MIDI disabled.\n");
++		return 0;
++	}
++	if(fseek(f, 0, SEEK_END) != 0 || (size = ftell(f)) <= 0 ||
++	   fseek(f, 0, SEEK_SET) != 0)
++	{
++		fclose(f);
++		log_fn(RETRO_LOG_WARN, "RG35XX SoundFont could not be sized; MIDI disabled.\n");
++		return 0;
++	}
++
++	rg35xx_soundfont_bytes = (uint8_t *)malloc((size_t)size);
++	if(!rg35xx_soundfont_bytes)
++	{
++		fclose(f);
++		log_fn(RETRO_LOG_WARN, "RG35XX SoundFont allocation failed; MIDI disabled.\n");
++		return 0;
++	}
++	got = fread(rg35xx_soundfont_bytes, 1, (size_t)size, f);
++	fclose(f);
++	if(got != (size_t)size)
++	{
++		rg35xx_release_soundfont_bytes();
++		log_fn(RETRO_LOG_WARN, "RG35XX SoundFont read was incomplete; MIDI disabled.\n");
++		return 0;
++	}
++	rg35xx_soundfont_size = got;
++	return 1;
++}
++
++static void *rg35xx_audio_drain_main(void *unused)
++{
++	(void)unused;
++	while(rg35xx_audio_drain_running)
++	{
++		int n = rg35xx_audio_pipe_drain(&rg35xx_java_audio_pipe);
++		if(n < 0) break;
++		usleep(2000);
++	}
++	rg35xx_audio_drain_running = 0;
++	return NULL;
++}
++
++static void rg35xx_audio_drain_start(void)
++{
++	if(rg35xx_audio_drain_started || rg35xx_java_audio_pipe.read_fd < 0) return;
++	rg35xx_audio_drain_running = 1;
++	if(pthread_create(&rg35xx_audio_drain_thread, NULL,
++	                  rg35xx_audio_drain_main, NULL) == 0)
++		rg35xx_audio_drain_started = 1;
++	else
++		rg35xx_audio_drain_running = 0;
++}
++
++static void rg35xx_audio_drain_stop(void)
++{
++	if(!rg35xx_audio_drain_started) return;
++	rg35xx_audio_drain_running = 0;
++	pthread_join(rg35xx_audio_drain_thread, NULL);
++	rg35xx_audio_drain_started = 0;
++}
++
++static void rg35xx_native_media_shutdown(void)
++{
++	rg35xx_audio_drain_stop();
++	rg35xx_audio_pipe_close(&rg35xx_java_audio_pipe);
++	rg35xx_mixer_reset();
++	rg35xx_media_event_queue_reset();
++	rg35xx_media_cache_reset();
++	rg35xx_media_runtime_shutdown();
++	rg35xx_release_soundfont_bytes();
++}
++#endif
+ 
+ void retro_init(void)
+ {
+@@ -852,6 +967,22 @@
+ 
+ 	free(freej2mePath);
++
++#ifdef __linux__
++	/* Process-lifetime RG35XX media foundation. The mixer/cache remain usable for
++	 * PCM even if the explicitly configured SoundFont cannot initialize MIDI. */
++	rg35xx_media_cache_reset();
++	rg35xx_media_event_queue_reset();
++	rg35xx_mixer_init(rg35xx_core_media_event);
++	if(rg35xx_load_soundfont_bytes())
++	{
++		if(!rg35xx_media_runtime_init(rg35xx_soundfont_bytes,
++		                              rg35xx_soundfont_size))
++		{
++			log_fn(RETRO_LOG_WARN, "RG35XX MIDI runtime initialization failed; PCM remains available.\n");
++			rg35xx_release_soundfont_bytes();
++		}
++	}
++#endif
+ 
+ 	/* Allocate memory for launch arguments */
+ 	params = (char**)malloc(sizeof(char*) * NUM_ARGUMENTS);
+@@ -1532,6 +1663,10 @@
+ #endif
+ 	}
++
++#ifdef __linux__
++	rg35xx_native_media_shutdown();
++#endif
+ }
+ 
+ void retro_reset(void)
+@@ -1654,6 +1789,7 @@
+ 		if(audio_pipe_ready)
+ 		{
+ 			rg35xx_audio_pipe_parent_after_fork(&rg35xx_java_audio_pipe);
++			rg35xx_audio_drain_start();
+ 		}
+ 		close(pRead[1]);
+ 		close(pWrite[0]);
