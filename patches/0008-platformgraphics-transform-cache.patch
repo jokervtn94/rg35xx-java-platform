@@ -10,7 +10,7 @@ inside the pixel loop. Mutable image pixels are never cached.
 
 --- a/src/org/recompile/mobile/PlatformGraphics.java
 +++ b/src/org/recompile/mobile/PlatformGraphics.java
-@@ -3070,20 +3070,31 @@
+@@ -3085,16 +3085,27 @@
  			// Some of the following transforms require temp variables
  			final int origSwidth = swidth;
  			final int origSheight = sheight;
@@ -45,16 +45,7 @@ inside the pixel loop. Mutable image pixels are never cached.
  
  			int imgWidth = image.getWidth();
  			int[] imgData = image.getDataBuffer();
- 
-@@ -3115,49 +3126,11 @@
- 
- 				for (int x = drawX; x < drawWidth; x++)
- 				{
- 					int baseX = (int) ((startX + (long) (x - drawX) * stepX) >> 16);
- 
- 					if (baseX >= swidth) { baseX = swidth - 1; }
- 					if (baseX < 0) { baseX = 0; }
- 
+@@ -3126,43 +3137,3 @@
 -					switch (transform)
 -					{
 -						case FLIP_HORIZONTAL:
@@ -101,7 +92,3 @@ inside the pixel loop. Mutable image pixels are never cached.
 +					final int local = sourceMap[baseY * transformMap.width + baseX];
 +					imgX = sx + (local % origSwidth);
 +					imgY = sy + (local / origSwidth);
- 
- 					canvasData[destRow + x] = blendPixels(imgData[imgY * imgWidth + imgX], canvasData[destRow + x]);
- 				}
- 			}
