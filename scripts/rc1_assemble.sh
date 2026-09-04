@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-# RGJ-RC1-011N/011R/011AC/011BC/011BD/011BR deterministic assembly driver.
+# RGJ-RC1-011N/011R/011AC/011BC/011BD/011BR/011BU deterministic assembly driver.
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 PIN_FREEJ2ME="13ec186903087156c145268f8706eecfaf9f1e50"
 : "${RG35XX_FREEJ2ME_ROOT:?set RG35XX_FREEJ2ME_ROOT to the pinned FreeJ2ME checkout}"
@@ -60,8 +60,9 @@ cp "$ROOT/native/vendor/TinySoundFont/tsf.h" "$NATIVE_DST/vendor/TinySoundFont/t
 # 0017 is intentionally applied before 0015: it establishes graceful EOF and
 # event helpers; 0015 owns subsequent mixer/runtime init/reset/close against that
 # already-defined process boundary.
-# 0023 is applied last because it was generated against the known BUILD-PASS
-# assembled C tree and changes only JamVM process diagnostics/stderr ownership.
+# 0023 is diagnostics-only and persists JamVM stderr before the first frame.
+# 0024 is applied after 0023 and replaces PATH-dependent execvp("java") with the
+# validated absolute RG35XX JamVM executable path.
 PATCH_ORDER="
 0003-manager-rg35xx-media-profile.patch
 0007-platformgraphics-rg35xx-fast-drawrgb.patch
@@ -75,6 +76,7 @@ PATCH_ORDER="
 0019-platformplayer-tonecontrol-rg35xx.patch
 0020-pinned-graphics-input-lifecycle-consolidation.patch
 0023-libretro-persistent-jamvm-stderr.patch
+0024-libretro-absolute-jamvm-launcher.patch
 "
 
 normalize_patch_targets()
@@ -141,7 +143,10 @@ grep -q 'rg35xx_native_media_shutdown();' "$CORE_C" || fail "assembled core miss
 grep -Fq 'fopen("/mnt/mmc/Java/freej2me-java.log", "a")' "$CORE_C" || fail "assembled core missing persistent JamVM diagnostic path"
 grep -Fq 'dup2(rg35xx_java_log_fd, 2)' "$CORE_C" || fail "assembled core missing stderr-only diagnostic redirect"
 if grep -Fq 'dup2(rg35xx_java_log_fd, 1)' "$CORE_C"; then fail "diagnostic log must never replace binary stdout video IPC"; fi
-grep -Fq 'RG35XX execvp failed for %s: errno=%d (%s)' "$CORE_C" || fail "assembled core missing execvp failure diagnostic"
+grep -Fq '"/mnt/mmc/CFW/java/bin/jamvm"' "$CORE_C" || fail "assembled core missing absolute RG35XX JamVM path"
+grep -Fq 'execv(rg35xx_jamvm_path, params);' "$CORE_C" || fail "assembled core missing absolute JamVM execv"
+if grep -Fq 'execvp(cmd, params);' "$CORE_C"; then fail "assembled core still contains PATH-dependent java execvp"; fi
+grep -Fq 'RG35XX execv failed for %s: errno=%d (%s)' "$CORE_C" || fail "assembled core missing JamVM execv failure diagnostic"
 
 cat > "$NATIVE_DST/rc1_sources.mk" <<'EOF'
 RG35XX_NATIVE_SRCS := \
@@ -168,4 +173,5 @@ note "ASSEMBLY PASS: $RG35XX_ASSEMBLY_ROOT"
 note "CLASSPATH FONT OVERLAY PASS: $RG35XX_CLASSPATH_ROOT"
 note "ZERO-FUZZ PATCH/MARKER PASS: all active integration hunks and native lifecycle markers are present"
 note "JAMVM STDERR DIAGNOSTIC PASS: /mnt/mmc/Java/freej2me-java.log is assembled without touching stdout video IPC"
-note "Next: compile the modified GNU Classpath tree, then run rc1_runtime_build_overlay.sh + rc1_compile.sh; no BUILD-PASS claimed."
+note "ABSOLUTE JAMVM LAUNCH PASS: /mnt/mmc/CFW/java/bin/jamvm is used directly; PATH-dependent java execvp removed"
+note "Next: compile the modified GNU Classpath tree, then run rc1_runtime_build_overlay.sh + rc1_compile.sh; no DEVICE-TEST-PASS claimed."
