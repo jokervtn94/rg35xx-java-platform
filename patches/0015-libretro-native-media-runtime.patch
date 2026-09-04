@@ -1,5 +1,5 @@
 From: RG35XX Java Platform
-Task: RGJ-RC1-011R / 010I / 011AA / RGJ-RC1-011AN / RGJ-RC1-011AO / RGJ-RC1-011AU / RGJ-RC1-011AV
+Task: RGJ-RC1-011R / 010I / 011AA / RGJ-RC1-011AN / RGJ-RC1-011AO / RGJ-RC1-011AU / RGJ-RC1-011AV / RGJ-RC1-011AW
 Subject: [PATCH] libretro: materialize RG35XX native media runtime ownership
 
 This executable diff owns process-lifetime native media runtime setup/teardown,
@@ -13,8 +13,8 @@ selection is permitted. Missing/invalid SF2 leaves MIDI unavailable fail-safe;
 PCM registration/mixing remains available.
 
 This revision is rebased for strict sequential application after 0016 and 0017.
-RC1-011AV places final native shutdown inside retro_deinit(), after the complete
-platform-specific Java process teardown and before the function's final brace.
+RC1-011AW anchors final native shutdown after the platform-specific teardown
+inner brace and before retro_deinit()'s final function brace.
 
 --- a/src/libretro/freej2me_libretro.c
 +++ b/src/libretro/freej2me_libretro.c
@@ -158,7 +158,7 @@ platform-specific Java process teardown and before the function's final brace.
 +		}
 +	}
 +#endif
-@@ -1570,0 +1703,4 @@
+@@ -1569,0 +1702,4 @@
 +
 +#ifdef __linux__
 +	rg35xx_native_media_shutdown();
