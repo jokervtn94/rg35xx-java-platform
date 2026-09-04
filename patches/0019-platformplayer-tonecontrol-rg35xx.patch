@@ -1,5 +1,5 @@
 From: RG35XX Java Platform
-Task: RGJ-RC1-011R / 010M / RGJ-RC1-011AP
+Task: RGJ-RC1-011R / 010M / RGJ-RC1-011AP / RGJ-RC1-011AQ
 Subject: [PATCH] media: materialize JavaSound-free RG35XX ToneControl and playTone
 
 This executable diff applies after 0018. It preserves the desktop JavaSound
@@ -8,8 +8,9 @@ RG35XXNativePlayer, and keeps device://midi unadvertised/safe on RG35XX because
 live short-message transport is not implemented. 0003 already owns/imports the
 RG35XX target-profile selector in Manager.
 
-The remaining ToneControl/playTone edits use minimal exact anchors so strict
-`--fuzz=0` assembly does not depend on stale surrounding whitespace/context.
+The remaining ToneControl/playTone edits use exact zero-context insertion
+coordinates so strict `--fuzz=0` assembly does not depend on stale surrounding
+whitespace/context.
 
 --- a/src/org/recompile/mobile/PlatformPlayer.java
 +++ b/src/org/recompile/mobile/PlatformPlayer.java
@@ -64,8 +65,7 @@ The remaining ToneControl/playTone edits use minimal exact anchors so strict
  
  		/*
  		 * As far as i can tell, Nokia's OTT/OTA Tones don't use this, which would leave only jars that directly use J2ME's Augmented BNF format, if there are any.
-@@ -2238,1 +2271,13 @@
- 			if(getState() == Player.PREFETCHED || getState() == Player.STARTED) { throw new IllegalStateException("Cannot call setSequence(), as the player is either PREFETCHED or STARTED."); }
+@@ -2264,0 +2298,12 @@
 +
 +			if(player instanceof rg35xxAudioPlayer)
 +			{
@@ -78,10 +78,10 @@ The remaining ToneControl/playTone edits use minimal exact anchors so strict
 +				rg35xxPlayer.setMidi(midi);
 +				return;
 +			}
-@@ -2241,1 +2286,1 @@
+@@ -2265,1 +2310,1 @@
 -			if(sequence[0] == 'M' && sequence[1] == 'T' && sequence[2] == 'h' && sequence[3] == 'd')
 +			if(sequence.length >= 4 && sequence[0] == 'M' && sequence[1] == 'T' && sequence[2] == 'h' && sequence[3] == 'd')
-@@ -2243,1 +2288,1 @@
+@@ -2267,1 +2312,1 @@
 -				player.setSequence(new ByteArrayInputStream(sequence));
 +				((midiPlayer)player).setSequence(new ByteArrayInputStream(sequence));
 --- a/src/javax/microedition/media/Manager.java
@@ -105,8 +105,7 @@ The remaining ToneControl/playTone edits use minimal exact anchors so strict
  
  	public static synchronized Player createPlayer(InputStream stream, String type) throws IOException, MediaException
  	{
-@@ -172,1 +178,46 @@
- 		else if (volume > 100) { volume = 100; }
+@@ -173,0 +180,45 @@
 +
 +		if(RG35XXPlatformProfile.isActive())
 +		{
