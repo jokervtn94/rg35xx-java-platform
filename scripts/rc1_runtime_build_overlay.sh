@@ -44,12 +44,21 @@ RG35XX_CLASSPATH_ROOT="$RG35XX_RUNTIME_ASSEMBLY_ROOT" \
 RG35XX_FONT_FILE="$RG35XX_FONT_FILE" \
 RG35XX_FONT_RUNTIME_PATH="$RG35XX_FONT_RUNTIME_PATH" \
   sh "$ROOT/runtime/classpath/apply_rg35xx_font_overlay.sh"
+
+# Historical RG35XX/JamVM evidence shows GNU Classpath 0.99 can overflow the
+# fixed Zone point array while expanding compound TrueType glyphs. Apply the
+# narrow, guarded capacity correction in the same disposable runtime tree.
+RG35XX_CLASSPATH_ROOT="$RG35XX_RUNTIME_ASSEMBLY_ROOT" \
+  sh "$ROOT/runtime/classpath/apply_rg35xx_compound_glyph_fix.sh"
+
 PEER="$RG35XX_RUNTIME_ASSEMBLY_ROOT/gnu/java/awt/peer/headless/HeadlessToolkit.java"
 OT="$RG35XX_RUNTIME_ASSEMBLY_ROOT/gnu/java/awt/font/OpenTypeFontPeer.java"
+ZONE="$RG35XX_RUNTIME_ASSEMBLY_ROOT/gnu/java/awt/font/opentype/truetype/Zone.java"
 FONT_STAGE="$RG35XX_RUNTIME_ASSEMBLY_ROOT/resource/rg35xx/DejaVuSans.ttf"
 grep -q 'new OpenTypeFontPeer(logical, attrKey)' "$PEER" || fail "concrete HeadlessToolkit FontPeer overlay missing"
 grep -q 'private synchronized ClasspathFontPeer rg35xxFontPeer' "$PEER" || fail "font peer cache synchronization missing"
 grep -q 'RG35XX: unable to initialize OpenType font peer' "$OT" || fail "OpenTypeFontPeer is not fail-closed"
+grep -q 'int required = offset + count;' "$ZONE" || fail "compound-glyph capacity correction missing"
 [ -s "$FONT_STAGE" ] || fail "staged DejaVu runtime payload missing"
 
 cat > "$MAKE_OVERLAY" <<'EOF'
@@ -100,6 +109,6 @@ SRC_COUNT=$(grep -c '^  rg35xx/rg35xx_.*\.c' "$SOURCES_OVERLAY" | tr -d ' ')
 note "RUNTIME/FONT/NATIVE MAKE OVERLAY STRUCTURE PASS"
 note "Pinned Makefile.common now includes the RG35XX overlay exactly once in the disposable source tree."
 note "RG35XX native include flags use upstream INCLUDES; pthread is wired to compile and link phases."
-note "Font runtime mapping is deployment-safe: no disposable host path is embedded."
+note "Font runtime mapping is deployment-safe and compound-glyph Zone growth is guarded."
 note "Deployment manifest: $RG35XX_ASSEMBLY_ROOT/rg35xx_runtime_files.list"
-note "No BUILD-PASS: Classpath/JamVM compilation, glyph smoke probes and ARMv5TE/uClibc compile/link remain required."
+note "No BUILD-PASS: Classpath/JamVM compilation, Vietnamese/compound glyph smoke probes and ARMv5TE/uClibc compile/link remain required."
