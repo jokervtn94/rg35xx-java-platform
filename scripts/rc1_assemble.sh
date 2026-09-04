@@ -73,8 +73,24 @@ PATCH_ORDER="
 0019-platformplayer-tonecontrol-rg35xx.patch
 0020-pinned-graphics-input-lifecycle-consolidation.patch
 "
+
+# The pinned tree contains mixed LF/CRLF text files. Normalize only files named
+# as patch targets, and only in the disposable assembly tree. This preserves the
+# exact pinned checkout while keeping unified-diff matching deterministic.
+normalize_patch_targets()
+{
+  patch_file="$1"
+  awk '/^--- a\// { sub(/^--- a\//, ""); print }' "$patch_file" | while IFS= read -r rel; do
+    [ -n "$rel" ] || continue
+    target="$RG35XX_ASSEMBLY_ROOT/$rel"
+    [ -f "$target" ] || fail "patch target missing before normalization: $rel"
+    sed -i 's/\r$//' "$target"
+  done
+}
+
 for p in $PATCH_ORDER; do
  [ -f "$ROOT/patches/$p" ] || fail "missing integration contract: $p"
+ normalize_patch_targets "$ROOT/patches/$p"
  if patch -d "$RG35XX_ASSEMBLY_ROOT" -p1 --forward --dry-run < "$ROOT/patches/$p" >/dev/null 2>&1; then
    patch -d "$RG35XX_ASSEMBLY_ROOT" -p1 --forward < "$ROOT/patches/$p" >/dev/null
  else
