@@ -1,0 +1,21 @@
+# RGJ-RC1-011BM — Unified platform + direct-device-test package
+
+- Action: MODIFY / ADD PACKAGING
+- Status: IMPLEMENTED
+- Scope: unify the accepted RC1 platform payload with the direct MIDlet device-test JARs in one RG35XX install/test package.
+- Runtime owner remains unchanged: JamVM is the existing `/mnt/mmc/CFW/java/bin/jamvm`; this task does not replace or rebuild JamVM.
+- Exact platform destinations remain:
+  - core -> `/mnt/mmc/CFW/retroarch/.retroarch/cores/freej2me_plus_libretro.so`
+  - runtime JAR -> `/mnt/mmc/BIOS/freej2me-lr.jar`
+  - font -> `/mnt/mmc/Java/runtime/DejaVuSans.ttf`
+  - SoundFont -> `/mnt/mmc/Java/runtime/GeneralUser-GS.sf2`
+- Direct-test destinations:
+  - `/mnt/mmc/Roms/JAVA/RG35XX_RC1_Device_Test.jar`
+  - `/mnt/mmc/Roms/JAVA/RG35XX_RC1_Switch_Probe.jar`
+- Installer policy:
+  - accepted core/runtime-JAR hashes are mandatory;
+  - direct-test JAR hashes are mandatory;
+  - font/SoundFont may be supplied in the package or reused in-place only when their pinned SHA-256 matches exactly;
+  - existing platform payloads are backed up once before replacement;
+  - installing test JARs does not imply DEVICE-TEST-PASS.
+- No runtime/media/input/graphics/RMS implementation code is changed by this task.
