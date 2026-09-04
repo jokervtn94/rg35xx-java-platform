@@ -8,6 +8,7 @@ on:
       - 'scripts/rc1_assemble.sh'
       - 'scripts/rc1_contract_gate.sh'
       - 'scripts/rc1_toolchain_acquire.sh'
+      - 'scripts/rc1_toolchain_materialize.sh'
       - '.github/workflows/rc1-patch-integration-gate.yml'
   workflow_dispatch:
 
@@ -32,8 +33,12 @@ jobs:
           sh -n scripts/rc1_assemble.sh
           sh -n scripts/rc1_contract_gate.sh
           sh -n scripts/rc1_toolchain_acquire.sh
+          sh -n scripts/rc1_toolchain_materialize.sh
           grep -q 'PIN_COMMIT="8087b52311da5c1e2fa1c50b0b064c07fd174a36"' scripts/rc1_toolchain_acquire.sh
           grep -q 'PIN_DEFCONFIG_BLOB="58256d3e7afa3f9fa0dbd79b16fd0b21d93b9d7b"' scripts/rc1_toolchain_acquire.sh
+          grep -q 'PIN_COMMIT="8087b52311da5c1e2fa1c50b0b064c07fd174a36"' scripts/rc1_toolchain_materialize.sh
+          grep -q 'PIN_DEFCONFIG_BLOB="58256d3e7afa3f9fa0dbd79b16fd0b21d93b9d7b"' scripts/rc1_toolchain_materialize.sh
+          grep -q 'TRIPLE="arm-miyoo-linux-uclibcgnueabi"' scripts/rc1_toolchain_materialize.sh
           sh scripts/rc1_contract_gate.sh --build-ready
           test "$(git -C upstream rev-parse HEAD)" = "13ec186903087156c145268f8706eecfaf9f1e50"
 
