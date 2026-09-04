@@ -1,76 +1,45 @@
-# RC1 exact-source integration patch/spec: PlatformImage + RG35XXImageCache
-# Upstream owner remains org.recompile.mobile.PlatformImage.
-# Do NOT create a replacement PlatformImage or a second image cache.
-# Task: RGJ-RC1-006
+From: RG35XX Java Platform
+Task: RGJ-RC1-011R / 006
+Subject: [PATCH] PlatformImage: materialize immutable byte-array decode cache
 
-Target: src/org/recompile/mobile/PlatformImage.java (TASEmulators/freej2me-plus devel)
-Helper: src/org/recompile/mobile/RG35XXImageCache.java
+This executable diff keeps upstream PlatformImage as the decoder/facade owner.
+Only immutable byte-array images are cache eligible. Cache hits reconstruct a
+fresh TYPE_INT_ARGB image from defensive pixel copies; mutable DoJa images and
+all other constructors remain unchanged.
 
-## Byte-array constructor integration
-
-In PlatformImage(byte[] imageData, int imageOffset, int imageLength, boolean mutable):
-
-1. Preserve upstream argument/decode behavior. Only immutable images (`mutable == false`) are cache eligible.
-2. Compute `rgCacheKey = RG35XXImageCache.keyForBytes(imageData, imageOffset, imageLength)`.
-3. Query `RG35XXImageCache.CachedImage rgCached = RG35XXImageCache.get(rgCacheKey)`.
-4. On hit, create a fresh `BufferedImage(rgCached.width, rgCached.height, BufferedImage.TYPE_INT_ARGB)`, obtain its `DataBufferInt`, copy `rgCached.pixels` into it, set `isMutable = false`, and return. The cache backing array is never exposed/shared.
-5. On miss, preserve existing ImageIO decode and type normalization exactly.
-6. PNG indexed transparency/tRNS compatibility repair, when present in the consolidated RG35XX PlatformImage path, MUST execute before cache insertion.
-7. Insert final normalized/repaired pixels with `RG35XXImageCache.put(rgCacheKey, canvas.getWidth(), canvas.getHeight(), dataBuffer)` only for immutable images.
-8. Preserve `isMutable = mutable` on the normal path.
-
-Exact integration shape:
-
-@@ PlatformImage(byte[] imageData, int imageOffset, int imageLength, boolean mutable)
-+ String rgCacheKey = null;
-+ if(!mutable)
-+ {
-+     rgCacheKey = RG35XXImageCache.keyForBytes(imageData, imageOffset, imageLength);
-+     RG35XXImageCache.CachedImage rgCached = RG35XXImageCache.get(rgCacheKey);
-+     if(rgCached != null)
-+     {
-+         canvas = new BufferedImage(rgCached.width, rgCached.height, BufferedImage.TYPE_INT_ARGB);
-+         dataBuffer = ((DataBufferInt)canvas.getRaster().getDataBuffer()).getData();
-+         System.arraycopy(rgCached.pixels, 0, dataBuffer, 0, rgCached.pixels.length);
-+         isMutable = false;
-+         return;
-+     }
-+ }
-  // existing ImageIO decode/type normalization remains authoritative
-  ...
-  // existing/final RG35XX PNG/tRNS compatibility repair, if applicable
-+ if(!mutable && rgCacheKey != null)
-+     RG35XXImageCache.put(rgCacheKey, canvas.getWidth(), canvas.getHeight(), dataBuffer);
-  isMutable = mutable;
-
-## Cache API contract
-
-`RG35XXImageCache` now owns dimensions with each immutable decoded entry:
-- `CachedImage get(String key)` returns width, height and a defensive pixel copy.
-- `put(String key, int width, int height, int[] pixels)` validates `width*height == pixels.length`, copies pixels and enforces the bounded LRU.
-- byte-cost arithmetic uses long before narrowing, avoiding integer overflow.
-- byte-slice validation uses `offset > data.length - length`, avoiding `offset + length` overflow.
-
-This is a MODIFY of the existing registered class. No new RG35XX image/cache package or class is introduced.
-
-## Mutable/immutable invariants
-
-- PlatformImage(int Width, int Height) and color-backed blank images remain mutable and are never cached.
-- PlatformImage(Image source) remains a deep copy via System.arraycopy; no cache sharing.
-- PlatformImage(com.nttdocomo.ui.Image source) remains a deep copy; DoJa semantics are preserved.
-- DoJa byte-array calls with mutable=true bypass cache completely.
-- getMIDPGraphics()/getDoJaGraphics() immutable checks remain unchanged.
-- Resource-name/InputStream constructors remain uncached in RC1 because they do not yet have a defined stable byte-identity key.
-- Cached hit always reconstructs a new TYPE_INT_ARGB backing image.
-
-## PNG/tRNS rule
-
-Cache storage is downstream of the final RG35XX PNG/tRNS repair. A cache hit therefore represents the already-corrected ARGB result. The cache must never store a pre-repair indexed PNG decode.
-
-## Duplicate-prevention result
-
-Authoritative owner pair remains:
-- PlatformImage: upstream facade/decoder and MIDP/DoJa semantics.
-- RG35XXImageCache: only RG35XX immutable decoded-image cache.
-
-Do not add RG35XXImageDecoder, RG35XXPngCache, RG35XXCachedImage or another image-cache owner.
+--- a/src/org/recompile/mobile/PlatformImage.java
++++ b/src/org/recompile/mobile/PlatformImage.java
+@@ -203,8 +203,24 @@
+ 	public PlatformImage(byte[] imageData, int imageOffset, int imageLength, boolean mutable) // DoJa also uses this one, creates mutable images like DirectGraphics
+ 	{
+ 		// Create Image from Byte Array Range (Data is PNG, JPG, etc.)
++		String rgCacheKey = null;
++		if(!mutable)
++		{
++			rgCacheKey = RG35XXImageCache.keyForBytes(imageData, imageOffset, imageLength);
++			RG35XXImageCache.CachedImage rgCached = RG35XXImageCache.get(rgCacheKey);
++			if(rgCached != null)
++			{
++				canvas = new BufferedImage(rgCached.width, rgCached.height, BufferedImage.TYPE_INT_ARGB);
++				dataBuffer = ((DataBufferInt) canvas.getRaster().getDataBuffer()).getData();
++				System.arraycopy(rgCached.pixels, 0, dataBuffer, 0, rgCached.pixels.length);
++				isMutable = false;
++				return;
++			}
++		}
++
+ 		InputStream stream = new ByteArrayInputStream(imageData, imageOffset, imageLength);
+ 
+ 		BufferedImage image;
+ 		
+@@ -221,6 +237,10 @@
+ 		}
+ 
+ 		dataBuffer = ((DataBufferInt) canvas.getRaster().getDataBuffer()).getData();
++
++		/* Store only the final normalized immutable ARGB/RGB result. Any target
++		 * compatibility repair added before this point is therefore cached after repair. */
++		if(!mutable && rgCacheKey != null)
++			RG35XXImageCache.put(rgCacheKey, canvas.getWidth(), canvas.getHeight(), dataBuffer);
+ 		isMutable = mutable;
+ 	}
