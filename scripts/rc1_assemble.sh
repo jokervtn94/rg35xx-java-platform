@@ -8,7 +8,9 @@ PIN_FREEJ2ME="13ec186903087156c145268f8706eecfaf9f1e50"
 : "${RG35XX_ASSEMBLY_ROOT:?set RG35XX_ASSEMBLY_ROOT to a disposable output directory}"
 : "${RG35XX_CLASSPATH_ROOT:?set RG35XX_CLASSPATH_ROOT to a disposable GNU Classpath 0.99 source tree}"
 : "${RG35XX_FONT_FILE:?set RG35XX_FONT_FILE to materialized DejaVuSans.ttf}"
+: "${RG35XX_FONT_SHA256:?set RG35XX_FONT_SHA256 to the recorded SHA-256 for the exact DejaVuSans.ttf input}"
 : "${RG35XX_FONT_RUNTIME_PATH:?set RG35XX_FONT_RUNTIME_PATH to the absolute target-device DejaVuSans.ttf path}"
+: "${RG35XX_SOUNDFONT_FILE:?set RG35XX_SOUNDFONT_FILE to the pinned GeneralUser-GS.sf2 input}"
 fail() { echo "RC1 ASSEMBLY: FAIL: $*" >&2; exit 1; }
 note() { echo "RC1 ASSEMBLY: $*"; }
 
