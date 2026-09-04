@@ -10,8 +10,10 @@ on:
 
 jobs:
   build-sdk:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
     timeout-minutes: 180
+    env:
+      FORCE_UNSAFE_CONFIGURE: '1'
     steps:
       - name: Checkout RG35XX platform repo
         uses: actions/checkout@v4
@@ -30,7 +32,7 @@ jobs:
           set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            build-essential bc bison cpio file flex git libncurses-dev \
+            build-essential bc bison cpio file flex git gsfonts libncurses-dev \
             python3 rsync subversion unzip wget xz-utils
 
       - name: Build exact source-pinned ARM uClibc SDK
