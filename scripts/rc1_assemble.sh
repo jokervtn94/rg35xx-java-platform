@@ -51,11 +51,13 @@ cp "$ROOT/native/vendor/TinySoundFont/tsf.h" "$NATIVE_DST/vendor/TinySoundFont/t
 
 # Authoritative active source-mutation order.
 # Superseded historical contracts: 0004->0016, 0005->0010/0017,
-# 0006->0018, 0014->0017/0018, 0009->0021, 0012/0013->0020.
+# 0006->0018, 0014->0017/0018, 0009->0021 policy baseline, 0012/0013->0020.
+# 0021 is intentionally NOT applied: it verifies that pinned upstream synchronous
+# multi-file RecordStore remains authoritative and requires no source mutation.
 # 0022 is materialized by the Classpath overlay above.
 # 0017 is intentionally applied before 0015: it establishes graceful EOF and
-# event helpers; when 0015 is materialized it owns subsequent mixer/runtime
-# init/reset/close against that already-defined process boundary.
+# event helpers; 0015 owns subsequent mixer/runtime init/reset/close against that
+# already-defined process boundary.
 PATCH_ORDER="
 0003-manager-rg35xx-media-profile.patch
 0007-platformgraphics-rg35xx-fast-drawrgb.patch
@@ -68,7 +70,6 @@ PATCH_ORDER="
 0018-manager-platformplayer-rg35xx-direct-media.patch
 0019-platformplayer-tonecontrol-rg35xx.patch
 0020-pinned-graphics-input-lifecycle-consolidation.patch
-0021-pinned-rms-safe-baseline.patch
 "
 for p in $PATCH_ORDER; do
  [ -f "$ROOT/patches/$p" ] || fail "missing integration contract: $p"
@@ -78,6 +79,7 @@ for p in $PATCH_ORDER; do
    fail "integration contract does not apply cleanly at pinned source: $p"
  fi
 done
+[ -f "$ROOT/patches/0021-pinned-rms-safe-baseline.patch" ] || fail "missing verified pinned RMS policy baseline 0021"
 [ -f "$ROOT/patches/0022-pinned-headless-font-peer-consolidation.patch" ] || fail "missing GNU Classpath font contract 0022"
 
 cat > "$NATIVE_DST/rc1_sources.mk" <<'EOF'
