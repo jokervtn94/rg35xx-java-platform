@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-# RGJ-RC1-011BI / RGJ-RC1-011BM
+# RGJ-RC1-011BI / RGJ-RC1-011BM / RGJ-RC1-011BP
 # Unified device-side installer for the exact RG35XX layout proven by prior device logs.
 # Installs the accepted platform payload and direct-device test MIDlets.
 # JamVM remains the existing runtime at /mnt/mmc/CFW/java/bin/jamvm.
@@ -28,7 +28,7 @@ CORE_SHA256=3e416345711891f7edeb4fe04bba82acc674b3c27f50863255376053a3974d58
 JAR_SHA256=f9b96e4490a154b3d58632bf482e0ad9d324a264bd82c8c5bf3a81186a2cfe4b
 FONT_SHA256=7da195a74c55bef988d0d48f9508bd5d849425c1770dba5d7bfc6ce9ed848954
 SOUNDFONT_SHA256=9575028c7a1f589f5770fccc8cff2734566af40cd26ed836944e9a5152688cfe
-TEST_MAIN_SHA256=0ec90c9cba4343789ee9bb1a034ef4b3061230a6c1047129162628ebbe31ee9e
+TEST_MAIN_SHA256=ea21560ff6360709759194b6d2493c7d67267fc46e50a95684add50eaef7d4df
 TEST_SWITCH_SHA256=c1a9bd2fbb6cbb5ec90cbf5da31702f58c2421fd4dcf4e97ac6ab99ad0690aa3
 
 fail() { echo "RC1 INSTALL: ERROR: $*" >&2; exit 1; }
