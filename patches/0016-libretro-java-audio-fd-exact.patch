@@ -37,7 +37,7 @@ the target selector in Java but must not mutate this argv region again.
  
  #elif _WIN32
  BOOL succeeded = FALSE;
-@@ -838,15 +840,27 @@
+@@ -838,16 +840,26 @@
  	/* Allocate memory for launch arguments */
  	params = (char**)malloc(sizeof(char*) * NUM_ARGUMENTS);
  #ifdef __linux__
