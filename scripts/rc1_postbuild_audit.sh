@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-# RGJ-RC1-011P — post-compile artifact acceptance gate.
+# RGJ-RC1-011P/011R — post-compile artifact acceptance gate.
 # This is a build artifact audit, not a device-test gate.
 : "${RG35XX_ASSEMBLY_ROOT:?set RG35XX_ASSEMBLY_ROOT to the assembled FreeJ2ME tree}"
 : "${RG35XX_CC:?set RG35XX_CC to the ARMv5TE uClibc gcc executable}"
@@ -59,6 +59,15 @@ for cls in \
   org/recompile/mobile/RG35XXInputEngine.class \
   org/recompile/mobile/RG35XXWavDecoder.class \
   org/recompile/mobile/RG35XXMediaProfile.class \
+  org/recompile/mobile/RG35XXMediaRegistry.class \
+  org/recompile/mobile/RG35XXAudioProtocol.class \
+  org/recompile/mobile/RG35XXAudioTransport.class \
+  org/recompile/mobile/RG35XXAudioBootstrap.class \
+  org/recompile/mobile/RG35XXNativePlayer.class \
+  org/recompile/mobile/RG35XXToneSequenceEncoder.class \
+  org/recompile/mobile/RG35XXTransformCache.class \
+  org/recompile/mobile/RG35XXRmsCoordinator.class \
+  org/recompile/mobile/RG35XXLifecycle.class \
   org/recompile/mobile/RG35XXRuntimeStats.class; do
   printf '%s\n' "$JAR_LIST" | grep -Fxq "$cls" || fail "missing Java owner in jar: $cls"
 done
@@ -68,14 +77,19 @@ if printf '%s\n' "$JAR_LIST" | grep -q 'RG35XXFontEngine\.class$'; then
   fail "superseded RG35XXFontEngine was reintroduced"
 fi
 
-# Deployment manifest must have one deterministic font entry and no host assembly leak.
+# Deployment manifest must contain one deterministic font and one deterministic
+# SoundFont entry. Both target paths must be absolute, and the SF2 provenance
+# must retain the exact source Git blob recorded by the RC1 registry.
 [ "$(grep -c '^TYPE=font$' "$MANIFEST")" = 1 ] || fail "runtime manifest must contain exactly one font entry"
-grep -q '^TARGET=/' "$MANIFEST" || fail "runtime font target must be absolute"
-grep -Eq '^SHA256=[0-9a-fA-F]{64}$' "$MANIFEST" || fail "runtime font SHA256 missing/invalid"
+[ "$(grep -c '^TYPE=soundfont$' "$MANIFEST")" = 1 ] || fail "runtime manifest must contain exactly one SoundFont entry"
+[ "$(grep -c '^TARGET=/' "$MANIFEST")" = 2 ] || fail "font and SoundFont runtime targets must both be absolute"
+[ "$(grep -Ec '^SHA256=[0-9a-fA-F]{64}$' "$MANIFEST")" = 2 ] || fail "font/SoundFont SHA256 entries missing or invalid"
+grep -Fxq 'GIT_BLOB=298b552d2e9d1307e03e5c5c99d2c046aaed9ec3' "$MANIFEST" || fail "SoundFont Git blob provenance missing/mismatched"
 
 note "POSTBUILD ARTIFACT AUDIT PASS"
 note "Java artifact=$JAR"
 note "Native artifact=$SO"
 note "No unresolved rg35xx_* symbols, no hard-float VFP ABI, no glibc dependency, required Java owners present."
+note "Runtime manifest contains exactly one font and one pinned SoundFont deployment entry."
 note "This is BUILD-PASS evidence only when rc1_compile.sh completed successfully in the same assembled tree."
 note "DEVICE-TEST-PASS still requires RG35XX hardware execution."
