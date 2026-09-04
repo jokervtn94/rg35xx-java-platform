@@ -7,7 +7,7 @@ Only explicit RG35XX launches use the conservative target capability table.
 
 --- a/src/javax/microedition/media/Manager.java
 +++ b/src/javax/microedition/media/Manager.java
-@@ -41,5 +41,7 @@
+@@ -41,6 +41,8 @@
  import org.recompile.mobile.Mobile;
  import org.recompile.mobile.PlatformPlayer;
  import org.recompile.mobile.JavaxPlatformPlayer;
@@ -15,6 +15,7 @@ Only explicit RG35XX launches use the conservative target capability table.
 +import org.recompile.mobile.RG35XXMediaProfile;
 +import org.recompile.mobile.RG35XXPlatformProfile;
  
+ public class Manager
 @@ -145,6 +147,8 @@
  	public static String[] getSupportedContentTypes(String protocol)
  	{
