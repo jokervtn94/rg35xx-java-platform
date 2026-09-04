@@ -1,0 +1,94 @@
+From: RG35XX Java Platform
+Task: RGJ-RC1-011BR
+Subject: [PATCH] libretro: persist JamVM stderr before first video frame
+
+This patch is intentionally applied after the previously BUILD-PASS RC1 patch
+stack. It changes diagnostics only: stdout stays dedicated to binary video IPC.
+The log is opened before fork so fork/exec/JamVM bootstrap failures can leave
+persistent evidence at /mnt/mmc/Java/freej2me-java.log.
+
+--- a/src/libretro/freej2me_libretro.c
++++ b/src/libretro/freej2me_libretro.c
+@@ -1749,6 +1749,8 @@
+ 	int fd_stdout = 1;
+ 	int audio_pipe_ready = 0;
+ 	char audio_fd_property[64];
++	FILE *rg35xx_java_log = NULL;
++	int rg35xx_java_log_fd = -1;
+ 
+ 	/*
+ 	 * parent <-- 0 --  pRead  <-- 1 --  child
+@@ -1758,6 +1760,20 @@
+ 	pipe(pRead); /* 0: pRead, 1: pWrite */
+ 	pipe(pWrite);
+ 
++	/* Persistent diagnostics are opened before fork so a failed fork/exec or
++	 * JamVM bootstrap can still leave evidence. stdout remains binary video IPC. */
++	rg35xx_java_log = fopen("/mnt/mmc/Java/freej2me-java.log", "a");
++	if(rg35xx_java_log != NULL)
++	{
++		rg35xx_java_log_fd = fileno(rg35xx_java_log);
++		fprintf(rg35xx_java_log, "\n=== RG35XX javaOpen pre-fork cmd=%s ===\n", cmd);
++		fflush(rg35xx_java_log);
++	}
++	else
++	{
++		log_fn(RETRO_LOG_ERROR, "RG35XX: cannot open /mnt/mmc/Java/freej2me-java.log: %s\n", strerror(errno));
++	}
++
+ 	/* Dedicated RG35XX audio must never share stdin/stdout/stderr. The target
+ 	 * selector is already params[1]; insert the optional audio property at [2]. */
+ 	rg35xx_audio_pipe_init(&rg35xx_java_audio_pipe);
+@@ -1790,6 +1806,17 @@
+ 
+ 	if(pid==0) /* child */
+ 	{
++		if(rg35xx_java_log != NULL && rg35xx_java_log_fd >= 0)
++		{
++			fflush(rg35xx_java_log);
++			if(rg35xx_java_log_fd != 2 && dup2(rg35xx_java_log_fd, 2) >= 0)
++			{
++				fclose(rg35xx_java_log);
++				rg35xx_java_log = NULL;
++			}
++			fprintf(stderr, "RG35XX JamVM child pid=%ld before execvp\n", (long)getpid());
++			fflush(stderr);
++		}
+ 		if(audio_pipe_ready)
+ 		{
+ 			rg35xx_audio_pipe_child_after_fork(&rg35xx_java_audio_pipe);
+@@ -1806,11 +1833,20 @@
+ 		execvp(cmd, params);
+ 
+ 		/* execvp failure! */
++		fprintf(stderr, "RG35XX execvp failed for %s: errno=%d (%s)\n", cmd, errno, strerror(errno));
++		fflush(stderr);
+ 		retro_deinit();
+ 	}
+ 
+ 	if(pid>0) /* parent */
+ 	{
++		if(rg35xx_java_log != NULL)
++		{
++			fprintf(rg35xx_java_log, "RG35XX parent forked JamVM pid=%d\n", pid);
++			fflush(rg35xx_java_log);
++			fclose(rg35xx_java_log);
++			rg35xx_java_log = NULL;
++		}
+ 		if(audio_pipe_ready)
+ 		{
+ 			rg35xx_audio_pipe_parent_after_fork(&rg35xx_java_audio_pipe);
+@@ -1822,6 +1858,13 @@
+ 
+ 	if(pid<0) /* error */
+ 	{
++		if(rg35xx_java_log != NULL)
++		{
++			fprintf(rg35xx_java_log, "RG35XX fork failed: errno=%d (%s)\n", errno, strerror(errno));
++			fflush(rg35xx_java_log);
++			fclose(rg35xx_java_log);
++			rg35xx_java_log = NULL;
++		}
+ 		if(audio_pipe_ready)
+ 		{
+ 			rg35xx_audio_pipe_close(&rg35xx_java_audio_pipe);
