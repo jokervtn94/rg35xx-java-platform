@@ -10,7 +10,7 @@ RG35XX target-profile selector in Manager.
 
 --- a/src/org/recompile/mobile/PlatformPlayer.java
 +++ b/src/org/recompile/mobile/PlatformPlayer.java
-@@ -342,6 +342,40 @@
+@@ -342,5 +342,38 @@
  	public PlatformPlayer(String locator)
  	{
 +		if(RG35XXPlatformProfile.isActive())
@@ -61,7 +61,7 @@ RG35XX target-profile selector in Manager.
  
  		/*
  		 * As far as i can tell, Nokia's OTT/OTA Tones don't use this, which would leave only jars that directly use J2ME's Augmented BNF format, if there are any.
-@@ -2235,10 +2268,23 @@
+@@ -2235,9 +2268,21 @@
  
  			if(getState() == Player.PREFETCHED || getState() == Player.STARTED) { throw new IllegalStateException("Cannot call setSequence(), as the player is either PREFETCHED or STARTED."); }
  
@@ -107,7 +107,7 @@ RG35XX target-profile selector in Manager.
  
  	public static synchronized Player createPlayer(InputStream stream, String type) throws IOException, MediaException
  	{
-@@ -167,6 +173,52 @@
+@@ -167,6 +173,51 @@
  		if (volume < 0) { volume = 0; } 
  		else if (volume > 100) { volume = 100; }
  
