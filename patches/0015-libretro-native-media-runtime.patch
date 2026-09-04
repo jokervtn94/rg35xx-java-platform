@@ -1,5 +1,5 @@
 From: RG35XX Java Platform
-Task: RGJ-RC1-011R / 010I / 011AA / RGJ-RC1-011AN
+Task: RGJ-RC1-011R / 010I / 011AA / RGJ-RC1-011AN / RGJ-RC1-011AO
 Subject: [PATCH] libretro: materialize RG35XX native media runtime ownership
 
 This executable diff owns process-lifetime native media runtime setup/teardown,
@@ -16,24 +16,19 @@ This revision is rebased for strict sequential application after 0016 and 0017.
 
 --- a/src/libretro/freej2me_libretro.c
 +++ b/src/libretro/freej2me_libretro.c
-@@ -19,1 +19,2 @@
- #include <errno.h>
+@@ -19,0 +20,1 @@
 +#include <stdio.h>
-@@ -23,1 +24,2 @@
- #include <sys/wait.h>
+@@ -23,0 +25,1 @@
 +#include <pthread.h>
-@@ -30,1 +32,3 @@
- #include "freej2me_libretro.h"
+@@ -30,0 +33,2 @@
 +#include "rg35xx/rg35xx_media_runtime.h"
 +#include "rg35xx/rg35xx_media_cache.h"
-@@ -35,1 +39,5 @@
- #include <retro_miscellaneous.h>
+@@ -35,0 +40,4 @@
 +
 +#ifndef RG35XX_SOUNDFONT_PATH
 +#define RG35XX_SOUNDFONT_PATH ""
 +#endif
-@@ -109,1 +117,10 @@
- static struct rg35xx_audio_pipe rg35xx_java_audio_pipe;
+@@ -109,0 +118,9 @@
 +static pthread_t rg35xx_audio_drain_thread;
 +static volatile int rg35xx_audio_drain_running;
 +static int rg35xx_audio_drain_started;
@@ -143,8 +138,7 @@ This revision is rebased for strict sequential application after 0016 and 0017.
 +#endif
 +
  void retro_init(void)
-@@ -852,1 +968,18 @@
- 	free(freej2mePath);
+@@ -855,0 +971,17 @@
 +
 +#ifdef __linux__
 +	/* Process-lifetime RG35XX media foundation. The mixer/cache remain usable for
@@ -162,13 +156,10 @@ This revision is rebased for strict sequential application after 0016 and 0017.
 +		}
 +	}
 +#endif
-@@ -1530,2 +1663,6 @@
- #endif
- 	}
+@@ -1534,0 +1667,4 @@
 +
 +#ifdef __linux__
 +	rg35xx_native_media_shutdown();
 +#endif
-@@ -1654,1 +1791,2 @@
- 			rg35xx_audio_pipe_parent_after_fork(&rg35xx_java_audio_pipe);
+@@ -1657,0 +1794,1 @@
 +			rg35xx_audio_drain_start();
