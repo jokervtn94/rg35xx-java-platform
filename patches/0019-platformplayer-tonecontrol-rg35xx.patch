@@ -5,7 +5,8 @@ Subject: [PATCH] media: materialize JavaSound-free RG35XX ToneControl and playTo
 This executable diff applies after 0018. It preserves the desktop JavaSound
 path, routes device://tone and ToneControl through RG35XXToneSequenceEncoder +
 RG35XXNativePlayer, and keeps device://midi unadvertised/safe on RG35XX because
-live short-message transport is not implemented.
+live short-message transport is not implemented. 0003 already owns/imports the
+RG35XX target-profile selector in Manager.
 
 --- a/src/org/recompile/mobile/PlatformPlayer.java
 +++ b/src/org/recompile/mobile/PlatformPlayer.java
@@ -87,18 +88,17 @@ live short-message transport is not implemented.
  			{
 --- a/src/javax/microedition/media/Manager.java
 +++ b/src/javax/microedition/media/Manager.java
-@@ -39,6 +39,10 @@
+@@ -39,6 +39,9 @@
  import org.recompile.mobile.PlatformPlayer;
  import org.recompile.mobile.JavaxPlatformPlayer;
  import org.recompile.mobile.SiemensPlatformPlayer;
 +import org.recompile.mobile.RG35XXNativePlayer;
-+import org.recompile.mobile.RG35XXPlatformProfile;
 +import org.recompile.mobile.RG35XXMediaRegistry;
 +import org.recompile.mobile.RG35XXToneSequenceEncoder;
  
  public class Manager
  {
-@@ -61,6 +65,9 @@
+@@ -61,6 +64,9 @@
  	private static MidiChannel toneChannel;
  	private static Thread toneThread;
 +	private static RG35XXNativePlayer rg35xxTonePlayer;
@@ -107,7 +107,7 @@ live short-message transport is not implemented.
  
  	public static synchronized Player createPlayer(InputStream stream, String type) throws IOException, MediaException
  	{
-@@ -167,6 +174,49 @@
+@@ -167,6 +173,49 @@
  		if (volume < 0) { volume = 0; } 
  		else if (volume > 100) { volume = 100; }
  
