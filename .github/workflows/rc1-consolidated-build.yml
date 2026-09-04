@@ -9,6 +9,8 @@ on:
       - 'tasklog/RC1-011X-TASKLOG.md'
       - 'tasklog/RC1-011Y-TASKLOG.md'
       - 'tasklog/RC1-011Z-TASKLOG.md'
+      - 'tasklog/RC1-011AA-TASKLOG.md'
+      - 'tasklog/RC1-011AB-TASKLOG.md'
       - 'scripts/rc1_assemble.sh'
       - 'scripts/rc1_runtime_build_overlay.sh'
       - 'scripts/rc1_compile.sh'
@@ -145,6 +147,9 @@ jobs:
           fi
           if [ -n "${RG35XX_ASSEMBLY_ROOT:-}" ] && [ -f "$RG35XX_ASSEMBLY_ROOT/rg35xx_runtime_files.list" ]; then
             cp "$RG35XX_ASSEMBLY_ROOT/rg35xx_runtime_files.list" "$out/"
+          fi
+          if [ -n "${RG35XX_ASSEMBLY_ROOT:-}" ] && [ -f "$RG35XX_ASSEMBLY_ROOT/src/libretro/freej2me_libretro.c" ]; then
+            cp "$RG35XX_ASSEMBLY_ROOT/src/libretro/freej2me_libretro.c" "$out/assembled-freej2me_libretro.c"
           fi
           if [ -n "${RG35XX_ASSEMBLY_ROOT:-}" ] && [ -s "$RG35XX_ASSEMBLY_ROOT/build/freej2me_plus-lr.jar" ]; then
             cp "$RG35XX_ASSEMBLY_ROOT/build/freej2me_plus-lr.jar" "$out/"
