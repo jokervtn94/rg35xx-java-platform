@@ -25,6 +25,7 @@ require_file docs/PLATFORM-SOURCE-REGISTRY.md
 require_file docs/RC1-INTEGRATION-MANIFEST.md
 require_file docs/RC1-EXTERNAL-RUNTIME-ASSEMBLY.md
 require_file docs/RC1-FONT-RESOURCE-ASSEMBLY.md
+require_file scripts/rc1_contract_gate.sh
 
 for f in \
   RG35XXPlatformProfile RG35XXFrameScheduler RG35XXImageCache RG35XXInputEngine \
@@ -60,6 +61,16 @@ for p in 0020-pinned-graphics-input-lifecycle-consolidation.patch 0021-pinned-rm
 done
 require_file native/verify_tinysoundfont_vendor.sh
 require_file native/vendor_tinysoundfont.sh
+
+# 011Q: a .patch filename is not proof of an executable patch. Historical RC1
+# files intentionally include integration specifications. Static audit inventories
+# them; BUILD-READY requires every active FreeJ2ME integration to be a real unified
+# diff/source overlay before any disposable assembly may start.
+if [ "$MODE" = "--build-ready" ]; then
+  sh "$ROOT/scripts/rc1_contract_gate.sh" --build-ready || fail "active FreeJ2ME integration set is not executable"
+else
+  sh "$ROOT/scripts/rc1_contract_gate.sh" --project-static || fail "integration contract inventory failed"
+fi
 
 if [ -f "$ROOT/native/vendor/TinySoundFont/tml.h" ] || [ -f "$ROOT/native/vendor/TinySoundFont/tsf.h" ]; then
   sh "$ROOT/native/verify_tinysoundfont_vendor.sh" || fail "vendored TinySoundFont identity check failed"
@@ -97,5 +108,5 @@ if [ "$MODE" = "--build-ready" ]; then
 
   note "BUILD-INPUT PRECHECK PASS — this authorizes source assembly/build attempts, not BUILD-PASS"
 else
-  note "PROJECT STATIC PASS — external build inputs may still be blocked"
+  note "PROJECT STATIC PASS — external build inputs and/or executable integration overlays may still be blocked"
 fi
