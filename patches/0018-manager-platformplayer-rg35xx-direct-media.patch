@@ -97,7 +97,7 @@ Desktop/AWT construction remains unchanged when RG35XXPlatformProfile is false.
  	public PlatformPlayer(String locator)
  	{
  		if(locator.equals(Manager.TONE_DEVICE_LOCATOR) || locator.equals(Manager.MIDI_DEVICE_LOCATOR))
-@@ -672,6 +738,48 @@
+@@ -672,6 +738,49 @@
  		public Sequence getSequence() { return null; }
  	}
  
@@ -147,7 +147,7 @@ Desktop/AWT construction remains unchanged when RG35XXPlatformProfile is false.
  	private class midiPlayer extends audioplayer implements MetaEventListener
  	{
  		private Sequencer midi;
-@@ -1949,6 +2057,10 @@
+@@ -1949,6 +2058,10 @@
  
  			try
  			{
@@ -158,7 +158,7 @@ Desktop/AWT construction remains unchanged when RG35XXPlatformProfile is false.
  				if (player instanceof midiPlayer)
  				{
  					if(((midiPlayer)player).synthesizer == null) { return getLevel(); } // Only make changes if the midi subsystem for this player is available
-@@ -2012,6 +2124,10 @@
+@@ -2012,6 +2125,10 @@
  			{
  				muted = mute;
  
