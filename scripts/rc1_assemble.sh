@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-# RGJ-RC1-011N/011R/011AC/011BC/011BD deterministic assembly driver.
+# RGJ-RC1-011N/011R/011AC/011BC/011BD/011BR deterministic assembly driver.
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 PIN_FREEJ2ME="13ec186903087156c145268f8706eecfaf9f1e50"
 : "${RG35XX_FREEJ2ME_ROOT:?set RG35XX_FREEJ2ME_ROOT to the pinned FreeJ2ME checkout}"
@@ -60,6 +60,8 @@ cp "$ROOT/native/vendor/TinySoundFont/tsf.h" "$NATIVE_DST/vendor/TinySoundFont/t
 # 0017 is intentionally applied before 0015: it establishes graceful EOF and
 # event helpers; 0015 owns subsequent mixer/runtime init/reset/close against that
 # already-defined process boundary.
+# 0023 is applied last because it was generated against the known BUILD-PASS
+# assembled C tree and changes only JamVM process diagnostics/stderr ownership.
 PATCH_ORDER="
 0003-manager-rg35xx-media-profile.patch
 0007-platformgraphics-rg35xx-fast-drawrgb.patch
@@ -72,6 +74,7 @@ PATCH_ORDER="
 0018-manager-platformplayer-rg35xx-direct-media.patch
 0019-platformplayer-tonecontrol-rg35xx.patch
 0020-pinned-graphics-input-lifecycle-consolidation.patch
+0023-libretro-persistent-jamvm-stderr.patch
 "
 
 normalize_patch_targets()
@@ -135,6 +138,10 @@ awk '
   END { exit !(parent > 0 && drain == parent + 1) }
 ' "$CORE_C" || fail "assembled core audio drain start is not immediately after parent audio-pipe handoff"
 grep -q 'rg35xx_native_media_shutdown();' "$CORE_C" || fail "assembled core missing final native media shutdown hook"
+grep -Fq 'fopen("/mnt/mmc/Java/freej2me-java.log", "a")' "$CORE_C" || fail "assembled core missing persistent JamVM diagnostic path"
+grep -Fq 'dup2(rg35xx_java_log_fd, 2)' "$CORE_C" || fail "assembled core missing stderr-only diagnostic redirect"
+if grep -Fq 'dup2(rg35xx_java_log_fd, 1)' "$CORE_C"; then fail "diagnostic log must never replace binary stdout video IPC"; fi
+grep -Fq 'RG35XX execvp failed for %s: errno=%d (%s)' "$CORE_C" || fail "assembled core missing execvp failure diagnostic"
 
 cat > "$NATIVE_DST/rc1_sources.mk" <<'EOF'
 RG35XX_NATIVE_SRCS := \
@@ -160,4 +167,5 @@ TML_COUNT=$(grep -l '^[[:space:]]*#define[[:space:]][[:space:]]*TML_IMPLEMENTATI
 note "ASSEMBLY PASS: $RG35XX_ASSEMBLY_ROOT"
 note "CLASSPATH FONT OVERLAY PASS: $RG35XX_CLASSPATH_ROOT"
 note "ZERO-FUZZ PATCH/MARKER PASS: all active integration hunks and native lifecycle markers are present"
+note "JAMVM STDERR DIAGNOSTIC PASS: /mnt/mmc/Java/freej2me-java.log is assembled without touching stdout video IPC"
 note "Next: compile the modified GNU Classpath tree, then run rc1_runtime_build_overlay.sh + rc1_compile.sh; no BUILD-PASS claimed."
