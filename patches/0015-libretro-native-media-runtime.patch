@@ -12,39 +12,35 @@ RG35XX_SOUNDFONT_PATH macro. No BIOS/system-directory probing or fallback asset
 selection is permitted. Missing/invalid SF2 leaves MIDI unavailable fail-safe;
 PCM registration/mixing remains available.
 
+This revision is rebased for sequential application after 0016 and 0017.
+
 --- a/src/libretro/freej2me_libretro.c
 +++ b/src/libretro/freej2me_libretro.c
-@@ -16,11 +16,18 @@
- #include <stdlib.h>
+@@ -17,3 +17,4 @@
  #include <string.h>
  #include <errno.h>
 +#include <stdio.h>
  #ifdef __linux__
- #include <stdarg.h>
+@@ -21,4 +22,5 @@
  #include <unistd.h>
  #include <sys/wait.h>
 +#include <pthread.h>
  #include "rg35xx_audio_pipe.h"
  #elif _WIN32
- #include <windows.h>
- #include <tlhelp32.h>
- #include <io.h>
- #endif
+@@ -29,6 +31,12 @@
  #include "freej2me_libretro.h"
 +#include "rg35xx/rg35xx_media_runtime.h"
 +#include "rg35xx/rg35xx_media_cache.h"
-+#include "rg35xx/rg35xx_media_event_queue.h"
-+#include "rg35xx/rg35xx_mixer.h"
  #include "rg35xx/rg35xx_media_events.h"
--#include "rg35xx/rg35xx_media_event_queue.h"
--#include "rg35xx/rg35xx_mixer.h"
+ #include "rg35xx/rg35xx_media_event_queue.h"
+ #include "rg35xx/rg35xx_mixer.h"
  #include <file/file_path.h>
  #include <retro_miscellaneous.h>
 +
 +#ifndef RG35XX_SOUNDFONT_PATH
 +#define RG35XX_SOUNDFONT_PATH ""
 +#endif
-@@ -95,6 +102,16 @@
+@@ -95,5 +103,14 @@
  int pRead[2];
  int pWrite[2];
  static struct rg35xx_audio_pipe rg35xx_java_audio_pipe;
@@ -59,11 +55,10 @@ PCM registration/mixing remains available.
 +                                    uint64_t media_time_us);
  
  #elif _WIN32
- BOOL succeeded = FALSE;
-@@ -803,6 +820,104 @@
+@@ -803,4 +820,102 @@
  	write_to_pipe(pWrite[1], event, 5);
  }
-+
+ 
 +#ifdef __linux__
 +static void rg35xx_release_soundfont_bytes(void)
 +{
@@ -161,13 +156,12 @@ PCM registration/mixing remains available.
 +	rg35xx_release_soundfont_bytes();
 +}
 +#endif
- 
++
  void retro_init(void)
  {
-@@ -852,6 +967,22 @@
- 
+@@ -852,3 +967,20 @@
  	free(freej2mePath);
-+
+ 
 +#ifdef __linux__
 +	/* Process-lifetime RG35XX media foundation. The mixer/cache remain usable for
 +	 * PCM even if the explicitly configured SoundFont cannot initialize MIDI. */
@@ -184,10 +178,10 @@ PCM registration/mixing remains available.
 +		}
 +	}
 +#endif
- 
++
  	/* Allocate memory for launch arguments */
- 	params = (char**)malloc(sizeof(char*) * NUM_ARGUMENTS);
-@@ -1532,6 +1663,10 @@
+@@ -1530,6 +1662,10 @@
+ 		CloseHandle(hProcessSnap);
  #endif
  	}
 +
@@ -197,11 +191,10 @@ PCM registration/mixing remains available.
  }
  
  void retro_reset(void)
-@@ -1654,6 +1789,7 @@
+@@ -1654,5 +1790,6 @@
  		if(audio_pipe_ready)
  		{
  			rg35xx_audio_pipe_parent_after_fork(&rg35xx_java_audio_pipe);
 +			rg35xx_audio_drain_start();
  		}
  		close(pRead[1]);
- 		close(pWrite[0]);
