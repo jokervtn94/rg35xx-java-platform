@@ -48,5 +48,5 @@ TSF_LOCAL_SHA=$(git hash-object "$DEST/tsf.h.tmp")
 mv -f "$DEST/tml.h.tmp" "$DEST/tml.h"
 mv -f "$DEST/tsf.h.tmp" "$DEST/tsf.h"
 
-"$ROOT/native/verify_tinysoundfont_vendor.sh"
+sh "$ROOT/native/verify_tinysoundfont_vendor.sh"
 echo "RC1 TinySoundFont acquisition: PASS ($PIN)"
