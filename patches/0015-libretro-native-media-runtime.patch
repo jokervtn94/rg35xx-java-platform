@@ -1,5 +1,5 @@
 From: RG35XX Java Platform
-Task: RGJ-RC1-011R / 010I / 011AA
+Task: RGJ-RC1-011R / 010I / 011AA / RGJ-RC1-011AN
 Subject: [PATCH] libretro: materialize RG35XX native media runtime ownership
 
 This executable diff owns process-lifetime native media runtime setup/teardown,
@@ -12,35 +12,27 @@ RG35XX_SOUNDFONT_PATH macro. No BIOS/system-directory probing or fallback asset
 selection is permitted. Missing/invalid SF2 leaves MIDI unavailable fail-safe;
 PCM registration/mixing remains available.
 
-This revision is rebased for sequential application after 0016 and 0017.
+This revision is rebased for strict sequential application after 0016 and 0017.
 
 --- a/src/libretro/freej2me_libretro.c
 +++ b/src/libretro/freej2me_libretro.c
-@@ -17,3 +17,4 @@
- #include <string.h>
+@@ -19,1 +19,2 @@
  #include <errno.h>
 +#include <stdio.h>
- #ifdef __linux__
-@@ -21,4 +22,5 @@
- #include <unistd.h>
+@@ -23,1 +24,2 @@
  #include <sys/wait.h>
 +#include <pthread.h>
- #include "rg35xx_audio_pipe.h"
- #elif _WIN32
-@@ -29,6 +31,12 @@
+@@ -30,1 +32,3 @@
  #include "freej2me_libretro.h"
 +#include "rg35xx/rg35xx_media_runtime.h"
 +#include "rg35xx/rg35xx_media_cache.h"
- #include "rg35xx/rg35xx_media_events.h"
- #include "rg35xx/rg35xx_media_event_queue.h"
- #include "rg35xx/rg35xx_mixer.h"
- #include <file/file_path.h>
+@@ -35,1 +39,5 @@
  #include <retro_miscellaneous.h>
 +
 +#ifndef RG35XX_SOUNDFONT_PATH
 +#define RG35XX_SOUNDFONT_PATH ""
 +#endif
-@@ -98,1 +106,10 @@
+@@ -109,1 +117,10 @@
  static struct rg35xx_audio_pipe rg35xx_java_audio_pipe;
 +static pthread_t rg35xx_audio_drain_thread;
 +static volatile int rg35xx_audio_drain_running;
@@ -51,10 +43,7 @@ This revision is rebased for sequential application after 0016 and 0017.
 +static void rg35xx_core_media_event(int event_type,
 +                                    uint32_t player_id,
 +                                    uint64_t media_time_us);
-@@ -803,4 +820,102 @@
- 	write_to_pipe(pWrite[1], event, 5);
- }
- 
+@@ -820,1 +837,99 @@
 +#ifdef __linux__
 +static void rg35xx_release_soundfont_bytes(void)
 +{
@@ -154,10 +143,9 @@ This revision is rebased for sequential application after 0016 and 0017.
 +#endif
 +
  void retro_init(void)
- {
-@@ -852,3 +967,20 @@
+@@ -852,1 +968,18 @@
  	free(freej2mePath);
- 
++
 +#ifdef __linux__
 +	/* Process-lifetime RG35XX media foundation. The mixer/cache remain usable for
 +	 * PCM even if the explicitly configured SoundFont cannot initialize MIDI. */
@@ -174,23 +162,13 @@ This revision is rebased for sequential application after 0016 and 0017.
 +		}
 +	}
 +#endif
-+
- 	/* Allocate memory for launch arguments */
-@@ -1530,6 +1662,10 @@
- 		CloseHandle(hProcessSnap);
+@@ -1530,2 +1663,6 @@
  #endif
  	}
 +
 +#ifdef __linux__
 +	rg35xx_native_media_shutdown();
 +#endif
- }
- 
- void retro_reset(void)
-@@ -1654,5 +1790,6 @@
- 		if(audio_pipe_ready)
- 		{
+@@ -1654,1 +1791,2 @@
  			rg35xx_audio_pipe_parent_after_fork(&rg35xx_java_audio_pipe);
 +			rg35xx_audio_drain_start();
- 		}
- 		close(pRead[1]);
