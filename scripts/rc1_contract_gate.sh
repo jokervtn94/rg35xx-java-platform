@@ -2,10 +2,9 @@
 set -eu
 
 # RGJ-RC1-011Q/011R — integration-contract executability gate.
-# The historical `patches/*.patch` directory contains a mix of executable
-# unified diffs and design/specification documents. Build-ready must never feed
-# a specification document or placeholder hunk to `patch(1)` and pretend the
-# source was assembled.
+# Historical `patches/*.patch` contains both executable diffs and specifications.
+# The active set contains only authoritative source-mutation owners; superseded
+# design contracts stay in history but must not be double-applied.
 
 MODE="${1:---project-static}"
 case "$MODE" in
@@ -17,9 +16,11 @@ ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 fail() { echo "RC1 CONTRACT GATE: FAIL: $*" >&2; exit 1; }
 note() { echo "RC1 CONTRACT GATE: $*"; }
 
+# 0004 is retained as the historical audio-pipe design contract but is no longer
+# an active source-mutation owner. 0016 now owns exact pipe creation, argv/FD
+# inheritance and fork endpoint ownership; 0015 owns drain and 0017 teardown.
 ACTIVE_CONTRACTS="
 0003-manager-rg35xx-media-profile.patch
-0004-libretro-dedicated-audio-pipe.patch
 0005-libretro-java-audio-bootstrap.patch
 0006-platformplayer-native-backend.patch
 0007-platformgraphics-rg35xx-fast-drawrgb.patch
@@ -44,9 +45,6 @@ for p in $ACTIVE_CONTRACTS; do
   [ -f "$f" ] || fail "missing active integration contract: $p"
   TOTAL=$((TOTAL + 1))
 
-  # A build-ready patch must contain real git/unified-diff file headers and at
-  # least one hunk with numeric old/new ranges. Historical contracts often use
-  # a bare '@@' as a prose placeholder; patch(1) cannot apply that safely.
   if grep -q '^--- a/' "$f" \
      && grep -q '^+++ b/' "$f" \
      && grep -Eq '^@@ -[0-9]+(,[0-9]+)? \+[0-9]+(,[0-9]+)? @@' "$f"; then
