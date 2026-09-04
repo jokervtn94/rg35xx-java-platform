@@ -17,6 +17,7 @@ note() { echo "RC1 COMPILE: $*"; }
 [ -f "$RG35XX_ASSEMBLY_ROOT/build.xml" ] || fail "assembled FreeJ2ME build.xml missing"
 [ -f "$RG35XX_ASSEMBLY_ROOT/src/libretro/Makefile" ] || fail "assembled libretro Makefile missing"
 [ -f "$RG35XX_ASSEMBLY_ROOT/src/libretro/rg35xx/rc1_make_overlay.mk" ] || fail "RG35XX Make overlay missing"
+[ -f "$RG35XX_ASSEMBLY_ROOT/rg35xx_runtime_files.list" ] || fail "runtime deployment manifest missing; run rc1_runtime_build_overlay.sh first"
 [ "$(grep -c '^include rg35xx/rc1_make_overlay\.mk$' "$RG35XX_ASSEMBLY_ROOT/src/libretro/Makefile.common")" = 1 ] || fail "Makefile.common must include RG35XX overlay exactly once"
 
 CC_MACHINE=$($RG35XX_CC -dumpmachine 2>/dev/null || true)
@@ -35,7 +36,8 @@ note "Java compile: clean Ant build against consolidated source"
   rm -rf build
   ant
 )
-[ -s "$RG35XX_ASSEMBLY_ROOT/build/freej2me-lr.jar" ] || fail "Ant completed but build/freej2me-lr.jar is missing"
+JAVA_JAR="$RG35XX_ASSEMBLY_ROOT/build/freej2me_plus-lr.jar"
+[ -s "$JAVA_JAR" ] || fail "Ant completed but build/freej2me_plus-lr.jar is missing"
 
 note "Native compile: ARMv5TE/uClibc, soft-float, no host-architecture fallback"
 (
@@ -47,13 +49,27 @@ note "Native compile: ARMv5TE/uClibc, soft-float, no host-architecture fallback"
     CFLAGS="$TARGET_FLAGS" \
     CXXFLAGS="$TARGET_FLAGS"
 )
-[ -s "$RG35XX_ASSEMBLY_ROOT/src/libretro/freej2me_plus_libretro.so" ] || fail "native build completed but libretro core is missing"
+CORE_SO="$RG35XX_ASSEMBLY_ROOT/src/libretro/freej2me_plus_libretro.so"
+[ -s "$CORE_SO" ] || fail "native build completed but libretro core is missing"
 
 # Static artifact checks only. Device validation remains separate.
 if command -v file >/dev/null 2>&1; then
-  file "$RG35XX_ASSEMBLY_ROOT/src/libretro/freej2me_plus_libretro.so" | grep -qi 'ARM' || fail "built core is not identified as ARM"
+  file "$CORE_SO" | grep -qi 'ARM' || fail "built core is not identified as ARM"
+fi
+
+NM="${RG35XX_NM:-${RG35XX_CC%gcc}nm}"
+if [ -x "$NM" ]; then
+  if "$NM" -u "$CORE_SO" 2>/dev/null | grep -q 'rg35xx_'; then
+    "$NM" -u "$CORE_SO" 2>/dev/null | grep 'rg35xx_' >&2 || true
+    fail "built core still has unresolved RG35XX symbols"
+  fi
+  note "RG35XX undefined-symbol scan passed using $NM"
+else
+  fail "target nm is required for unresolved RG35XX symbol audit; set RG35XX_NM"
 fi
 
 note "COMPILE PASS CANDIDATE: Java JAR and ARM core were produced."
-note "Do not mark BUILD-PASS until compiler/link output has been reviewed for warnings/errors and unresolved RG35XX symbols."
+note "Java artifact: $JAVA_JAR"
+note "Native artifact: $CORE_SO"
+note "Do not mark BUILD-PASS until compiler/link output has been reviewed for warnings/errors."
 note "Do not mark DEVICE-TEST-PASS until the artifacts have been exercised on the RG35XX."
