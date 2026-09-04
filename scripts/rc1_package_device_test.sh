@@ -1,9 +1,10 @@
 #!/bin/sh
 set -eu
 
-# RGJ-RC1-011BH
+# RGJ-RC1-011BH / RGJ-RC1-011BI
 # Host-side deterministic staging for real RG35XX validation.
-# This script does not install to firmware paths and never marks DEVICE-TEST-PASS.
+# Exact core/JAR/device paths are locked from prior real-device logs.
+# This script never marks DEVICE-TEST-PASS.
 
 CORE_FILE=${CORE_FILE:-}
 JAR_FILE=${JAR_FILE:-}
@@ -44,6 +45,7 @@ need_file "$JAR_FILE" JAR_FILE
 need_file "$FONT_FILE" FONT_FILE
 need_file "$SOUNDFONT_FILE" SOUNDFONT_FILE
 need_file "scripts/rc1_device_evidence.sh" device-evidence-script
+need_file "scripts/rc1_install_device.sh" device-installer-script
 need_file "docs/RC1-DEVICE-VALIDATION.md" device-validation-doc
 have_sha256
 
@@ -60,8 +62,9 @@ cp "$JAR_FILE" "$OUT/java/freej2me_plus-lr.jar"
 cp "$FONT_FILE" "$OUT/Java/runtime/DejaVuSans.ttf"
 cp "$SOUNDFONT_FILE" "$OUT/Java/runtime/GeneralUser-GS.sf2"
 cp scripts/rc1_device_evidence.sh "$OUT/tools/rc1_device_evidence.sh"
+cp scripts/rc1_install_device.sh "$OUT/tools/rc1_install_device.sh"
 cp docs/RC1-DEVICE-VALIDATION.md "$OUT/docs/RC1-DEVICE-VALIDATION.md"
-chmod +x "$OUT/tools/rc1_device_evidence.sh" 2>/dev/null || true
+chmod +x "$OUT/tools/rc1_device_evidence.sh" "$OUT/tools/rc1_install_device.sh" 2>/dev/null || true
 
 cat > "$OUT/BUILD-IDENTITY.txt" <<EOF
 RG35XX Java Platform RC1 device-validation package
@@ -76,15 +79,21 @@ soundfont_sha256=$SOUNDFONT_SHA256
 EOF
 
 cat > "$OUT/INSTALL-MAP.txt" <<'EOF'
-Runtime assets have fixed target paths:
-  Java/runtime/DejaVuSans.ttf        -> /mnt/mmc/Java/runtime/DejaVuSans.ttf
-  Java/runtime/GeneralUser-GS.sf2    -> /mnt/mmc/Java/runtime/GeneralUser-GS.sf2
+Exact paths proven by prior real-device logs for this RG35XX installation:
+  core/freej2me_plus_libretro.so      -> /mnt/mmc/CFW/retroarch/.retroarch/cores/freej2me_plus_libretro.so
+  java/freej2me_plus-lr.jar           -> /mnt/mmc/BIOS/freej2me-lr.jar
+  Java/runtime/DejaVuSans.ttf         -> /mnt/mmc/Java/runtime/DejaVuSans.ttf
+  Java/runtime/GeneralUser-GS.sf2     -> /mnt/mmc/Java/runtime/GeneralUser-GS.sf2
 
-Core/JAR placement is frontend/firmware specific and is intentionally NOT guessed here:
-  core/freej2me_plus_libretro.so
-  java/freej2me_plus-lr.jar
+Existing runtime/frontend paths confirmed by the same device logs:
+  RetroArch                           = /mnt/mmc/CFW/retroarch/retroarch
+  JamVM                               = /mnt/mmc/CFW/java/bin/jamvm
+  Java games                          = /mnt/mmc/Roms/JAVA
 
-Do not overwrite firmware files blindly. Install the core/JAR into the locations already used by the RG35XX frontend/runtime being tested, then run tools/rc1_device_evidence.sh before and after the manual validation session.
+Device install command from the package root:
+  sh tools/rc1_install_device.sh
+
+The installer verifies all four accepted payload SHA256 values, preserves one `.pre-rc1` backup for each existing deployed payload, stages through `.rc1-new`, verifies again, and replaces only these four files. It does not alter RetroArch configuration, firmware, launcher files, or game JARs.
 EOF
 
 (
@@ -103,4 +112,5 @@ if [ "$MAKE_ZIP" = "1" ]; then
 fi
 
 echo "RC1 PACKAGE: PASS: $OUT"
+echo "RC1 PACKAGE: exact RG35XX install map included"
 echo "RC1 PACKAGE: this package is for manual real-device validation only; DEVICE-TEST-PASS is not implied."
