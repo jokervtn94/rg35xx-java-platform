@@ -1,12 +1,17 @@
 #!/bin/sh
 set -eu
 
-# RGJ-RC1-011J deterministic assembly driver.
-# Assemble into a disposable tree; never mutate the pinned upstream checkout.
+# RGJ-RC1-011N deterministic assembly driver.
+# Assemble FreeJ2ME into a disposable tree and apply the verified GNU Classpath
+# font overlay to a separate disposable Classpath 0.99 source tree. Never mutate
+# either pinned upstream checkout in place.
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 PIN_FREEJ2ME="13ec186903087156c145268f8706eecfaf9f1e50"
 : "${RG35XX_FREEJ2ME_ROOT:?set RG35XX_FREEJ2ME_ROOT to the pinned FreeJ2ME checkout}"
 : "${RG35XX_ASSEMBLY_ROOT:?set RG35XX_ASSEMBLY_ROOT to a disposable output directory}"
+: "${RG35XX_CLASSPATH_ROOT:?set RG35XX_CLASSPATH_ROOT to a disposable GNU Classpath 0.99 source tree}"
+: "${RG35XX_FONT_FILE:?set RG35XX_FONT_FILE to materialized DejaVuSans.ttf}"
+: "${RG35XX_FONT_RUNTIME_PATH:?set RG35XX_FONT_RUNTIME_PATH to the absolute target-device DejaVuSans.ttf path}"
 fail() { echo "RC1 ASSEMBLY: FAIL: $*" >&2; exit 1; }
 note() { echo "RC1 ASSEMBLY: $*"; }
 
@@ -14,7 +19,23 @@ note() { echo "RC1 ASSEMBLY: $*"; }
 HEAD=$(git -C "$RG35XX_FREEJ2ME_ROOT" rev-parse HEAD)
 [ "$HEAD" = "$PIN_FREEJ2ME" ] || fail "FreeJ2ME HEAD $HEAD != pinned $PIN_FREEJ2ME"
 [ "$RG35XX_ASSEMBLY_ROOT" != "$RG35XX_FREEJ2ME_ROOT" ] || fail "assembly root must not be the upstream checkout"
+[ "$RG35XX_CLASSPATH_ROOT" != "$RG35XX_FREEJ2ME_ROOT" ] || fail "Classpath tree must be separate from FreeJ2ME"
+[ "$RG35XX_CLASSPATH_ROOT" != "$RG35XX_ASSEMBLY_ROOT" ] || fail "Classpath tree must be separate from FreeJ2ME assembly output"
 sh "$ROOT/scripts/rc1_prebuild_gate.sh" --build-ready
+
+# GNU Classpath 0.99 font path: prove the exact baseline first, then apply the
+# fail-closed OpenTypeFontPeer overlay. The overlay itself verifies the two
+# public constructors, fonts.properties owner and both null-returning
+# HeadlessToolkit entry points before writing anything.
+sh "$ROOT/scripts/rc1_classpath_preflight.sh"
+sh "$ROOT/runtime/classpath/apply_rg35xx_font_overlay.sh"
+
+grep -q 'new OpenTypeFontPeer(logical, attrKey)' \
+  "$RG35XX_CLASSPATH_ROOT/gnu/java/awt/peer/headless/HeadlessToolkit.java" \
+  || fail "GNU Classpath font overlay was not materialized"
+grep -q 'throw new RuntimeException("RG35XX: unable to initialize OpenType font peer", ex);' \
+  "$RG35XX_CLASSPATH_ROOT/gnu/java/awt/font/OpenTypeFontPeer.java" \
+  || fail "GNU Classpath OpenType constructor is not fail-closed"
 
 rm -rf "$RG35XX_ASSEMBLY_ROOT" && mkdir -p "$RG35XX_ASSEMBLY_ROOT"
 ( cd "$RG35XX_FREEJ2ME_ROOT" && tar --exclude=.git -cf - . ) | ( cd "$RG35XX_ASSEMBLY_ROOT" && tar -xf - )
@@ -37,6 +58,8 @@ cp "$ROOT/native/vendor/TinySoundFont/tsf.h" "$NATIVE_DST/vendor/TinySoundFont/t
 
 # Apply only the authoritative active contracts. 0009 is superseded by 0021;
 # 0012/0013 are superseded by the consolidated 0020 and must not be double-applied.
+# 0022 remains the design/specification contract; executable GNU Classpath
+# materialization is owned by runtime/classpath/apply_rg35xx_font_overlay.sh above.
 PATCH_ORDER="
 0003-manager-rg35xx-media-profile.patch
 0004-libretro-dedicated-audio-pipe.patch
@@ -87,4 +110,5 @@ TML_COUNT=$(grep -l '^[[:space:]]*#define[[:space:]][[:space:]]*TML_IMPLEMENTATI
 [ "$TSF_COUNT" = 1 ] || fail "assembled TSF implementation owner count is $TSF_COUNT"
 [ "$TML_COUNT" = 1 ] || fail "assembled TML implementation owner count is $TML_COUNT"
 note "ASSEMBLY PASS: $RG35XX_ASSEMBLY_ROOT"
-note "Next: apply GNU Classpath 0022 and integrate rc1_sources.mk into the pinned native Makefile; no BUILD-PASS claimed."
+note "CLASSPATH FONT OVERLAY PASS: $RG35XX_CLASSPATH_ROOT"
+note "Next: compile the modified GNU Classpath tree, then run rc1_runtime_build_overlay.sh + rc1_compile.sh; no BUILD-PASS claimed."
