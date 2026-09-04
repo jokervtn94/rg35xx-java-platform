@@ -16,7 +16,7 @@ Desktop/AWT construction remains unchanged when RG35XXPlatformProfile is false.
  
  	private int state = Player.UNREALIZED;
  
-@@ -123,6 +124,15 @@
+@@ -123,6 +124,17 @@
  
  		contentType = type;
  
