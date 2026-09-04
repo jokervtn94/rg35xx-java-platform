@@ -11,17 +11,12 @@ remain owned by 0017 so the same parser tail is not patched twice.
 @@ -21,1 +21,2 @@
  import org.recompile.mobile.MobilePlatform;
 +import org.recompile.mobile.RG35XXLifecycle;
-@@ -83,6 +84,9 @@
- 		{
- 			public void run() { updatePauseTimer(); }
+@@ -86,1 +87,4 @@
  		});
 +
 +		/* Process-lifetime target services attach after MobilePlatform exists. */
 +		RG35XXLifecycle.platformStart();
- 
- 		lio = new LibretroIO();
- 
-@@ -162,11 +166,17 @@
+@@ -162,5 +166,9 @@
  
  								path = new String(buffer, 0, bytesRead);
  
@@ -31,14 +26,8 @@ remain owned by 0017 so the same parser tail is not patched twice.
  								if(Mobile.getPlatform().load(getFormattedLocation(URLDecoder.decode(path, Mobile.textEncoding))))
  								{
 +									RG35XXLifecycle.afterGameLoad();
- 									if(Mobile.libretroRestartRequested == 1)
- 									{
- 										frameHeader[14] = Mobile.libretroRestartRequested;
-@@ -181,6 +191,7 @@
- 								}
+@@ -181,3 +189,4 @@
  								else
  								{
 +									RG35XXLifecycle.gameLoadFailed();
  									Mobile.log(Mobile.LOG_ERROR, Libretro.class.getPackage().getName() + "." + Libretro.class.getSimpleName() + ": " + "Couldn't load jar...");
- 									System.exit(0);
- 								}
