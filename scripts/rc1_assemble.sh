@@ -1,10 +1,7 @@
 #!/bin/sh
 set -eu
 
-# RGJ-RC1-011N deterministic assembly driver.
-# Assemble FreeJ2ME into a disposable tree and apply the verified GNU Classpath
-# font overlay to a separate disposable Classpath 0.99 source tree. Never mutate
-# either pinned upstream checkout in place.
+# RGJ-RC1-011N/011R deterministic assembly driver.
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 PIN_FREEJ2ME="13ec186903087156c145268f8706eecfaf9f1e50"
 : "${RG35XX_FREEJ2ME_ROOT:?set RG35XX_FREEJ2ME_ROOT to the pinned FreeJ2ME checkout}"
@@ -23,10 +20,6 @@ HEAD=$(git -C "$RG35XX_FREEJ2ME_ROOT" rev-parse HEAD)
 [ "$RG35XX_CLASSPATH_ROOT" != "$RG35XX_ASSEMBLY_ROOT" ] || fail "Classpath tree must be separate from FreeJ2ME assembly output"
 sh "$ROOT/scripts/rc1_prebuild_gate.sh" --build-ready
 
-# GNU Classpath 0.99 font path: prove the exact baseline first, then apply the
-# fail-closed OpenTypeFontPeer overlay. The overlay itself verifies the two
-# public constructors, fonts.properties owner and both null-returning
-# HeadlessToolkit entry points before writing anything.
 sh "$ROOT/scripts/rc1_classpath_preflight.sh"
 sh "$ROOT/runtime/classpath/apply_rg35xx_font_overlay.sh"
 
@@ -56,13 +49,12 @@ do cp "$ROOT/native/$f" "$NATIVE_DST/$f"; done
 cp "$ROOT/native/vendor/TinySoundFont/tml.h" "$NATIVE_DST/vendor/TinySoundFont/tml.h"
 cp "$ROOT/native/vendor/TinySoundFont/tsf.h" "$NATIVE_DST/vendor/TinySoundFont/tsf.h"
 
-# Apply only the authoritative active contracts. 0009 is superseded by 0021;
-# 0012/0013 are superseded by the consolidated 0020 and must not be double-applied.
-# 0022 remains the design/specification contract; executable GNU Classpath
-# materialization is owned by runtime/classpath/apply_rg35xx_font_overlay.sh above.
+# Authoritative active source-mutation order. 0004 is retained as historical
+# design documentation only; exact audio process/FD ownership is consolidated
+# in 0016, worker drain in 0015 and teardown/process-boundary behavior in 0017.
+# 0009 is superseded by 0021; 0012/0013 by 0020; 0022 is materialized above.
 PATCH_ORDER="
 0003-manager-rg35xx-media-profile.patch
-0004-libretro-dedicated-audio-pipe.patch
 0005-libretro-java-audio-bootstrap.patch
 0006-platformplayer-native-backend.patch
 0007-platformgraphics-rg35xx-fast-drawrgb.patch
