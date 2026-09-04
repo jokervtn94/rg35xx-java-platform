@@ -1,5 +1,5 @@
 From: RG35XX Java Platform
-Task: RGJ-RC1-011R / 010M / RGJ-RC1-011AP / RGJ-RC1-011AQ
+Task: RGJ-RC1-011R / 010M / RGJ-RC1-011AP / RGJ-RC1-011AQ / RGJ-RC1-011AR
 Subject: [PATCH] media: materialize JavaSound-free RG35XX ToneControl and playTone
 
 This executable diff applies after 0018. It preserves the desktop JavaSound
@@ -8,9 +8,8 @@ RG35XXNativePlayer, and keeps device://midi unadvertised/safe on RG35XX because
 live short-message transport is not implemented. 0003 already owns/imports the
 RG35XX target-profile selector in Manager.
 
-The remaining ToneControl/playTone edits use exact zero-context insertion
-coordinates so strict `--fuzz=0` assembly does not depend on stale surrounding
-whitespace/context.
+The final ToneControl edit is one ordered minimal hunk so strict `--fuzz=0`
+assembly does not depend on post-insertion coordinates for follow-on edits.
 
 --- a/src/org/recompile/mobile/PlatformPlayer.java
 +++ b/src/org/recompile/mobile/PlatformPlayer.java
@@ -65,8 +64,8 @@ whitespace/context.
  
  		/*
  		 * As far as i can tell, Nokia's OTT/OTA Tones don't use this, which would leave only jars that directly use J2ME's Augmented BNF format, if there are any.
-@@ -2264,0 +2298,12 @@
-+
+@@ -2265,3 +2298,15 @@
+-			if(sequence[0] == 'M' && sequence[1] == 'T' && sequence[2] == 'h' && sequence[3] == 'd')
 +			if(player instanceof rg35xxAudioPlayer)
 +			{
 +				byte[] midi;
@@ -78,10 +77,9 @@ whitespace/context.
 +				rg35xxPlayer.setMidi(midi);
 +				return;
 +			}
-@@ -2265,1 +2310,1 @@
--			if(sequence[0] == 'M' && sequence[1] == 'T' && sequence[2] == 'h' && sequence[3] == 'd')
++
 +			if(sequence.length >= 4 && sequence[0] == 'M' && sequence[1] == 'T' && sequence[2] == 'h' && sequence[3] == 'd')
-@@ -2267,1 +2312,1 @@
+ 			{
 -				player.setSequence(new ByteArrayInputStream(sequence));
 +				((midiPlayer)player).setSequence(new ByteArrayInputStream(sequence));
 --- a/src/javax/microedition/media/Manager.java
