@@ -9,7 +9,7 @@ added to the blocking LibretroIO parser thread.
 
 --- a/src/org/recompile/mobile/MobilePlatform.java
 +++ b/src/org/recompile/mobile/MobilePlatform.java
-@@ -132,6 +132,9 @@
+@@ -153,7 +153,10 @@
  		else if(Mobile.isDoJa && com.nttdocomo.ui.Display.getCurrent() != null) // Doja's current Frames (Displayables) are static
  		{
  			com.nttdocomo.ui.Display.getCurrent().platformImage = lcd;
@@ -38,7 +38,7 @@ added to the blocking LibretroIO parser thread.
  import org.recompile.mobile.RG35XXLifecycle;
  
  import java.io.File;
-@@ -41,6 +42,21 @@
+@@ -41,4 +42,22 @@
  	private static volatile long lastCoreUpdateTime = System.currentTimeMillis(); // Tracks last core update for pause checks
  
 +	/* Slots 0..19 are the RG35XX joypad domain. Mobile.getMobileKey remains the
@@ -61,7 +61,7 @@ added to the blocking LibretroIO parser thread.
 +
  	private byte[] frameBuffer = new byte[800*800*3];
  	private final byte[] frameHeader = new byte[]{(byte)0xFE,
-@@ -132,12 +148,16 @@
+@@ -132,10 +150,12 @@
  						{
  							case 2:	// joypad key up
 -								MobilePlatform.pressedKeys[code] = false;
@@ -78,7 +78,7 @@ added to the blocking LibretroIO parser thread.
 +								MobilePlatform.pressedKeys[code] = true;
 +								RG35XXInputEngine.press(code, System.currentTimeMillis(), RG35XX_INPUT_SINK);
  							break;
-@@ -369,13 +389,9 @@
+@@ -369,12 +389,8 @@
  							case 15: // Libretro core requested a new frame.
  								lastCoreUpdateTime = System.currentTimeMillis();
  								org.recompile.mobile.RG35XXMediaRegistry.drainNativeEvents();
