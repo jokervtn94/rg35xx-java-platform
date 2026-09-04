@@ -9,6 +9,9 @@ OT="$RG35XX_CLASSPATH_ROOT/gnu/java/awt/font/OpenTypeFontPeer.java"
 [ -f "$HT" ] || fail "missing HeadlessToolkit.java"
 [ -f "$OT" ] || fail "missing OpenTypeFontPeer.java"
 [ -s "$RG35XX_FONT_FILE" ] || fail "missing DejaVuSans.ttf"
+
+# Guard against source drift. GNU Classpath 0.99 has both public constructors and a
+# fonts.properties-backed filesystem mapping in OpenTypeFontPeer.
 grep -q 'public OpenTypeFontPeer(String name, int style, int size)' "$OT" || fail "unexpected OpenTypeFontPeer int constructor"
 grep -q 'public OpenTypeFontPeer(String name, Map atts)' "$OT" || fail "unexpected OpenTypeFontPeer Map constructor"
 grep -q 'mapFontToFilename' "$OT" || fail "OpenTypeFontPeer mapping owner missing"
@@ -16,8 +19,9 @@ grep -q 'getResourceAsStream("fonts.properties")' "$OT" || fail "fonts.propertie
 FONT_PROPS=$(find "$RG35XX_CLASSPATH_ROOT" -type f -path '*/gnu/java/awt/font/fonts.properties' -print)
 COUNT=$(printf '%s\n' "$FONT_PROPS" | sed '/^$/d' | wc -l | tr -d ' ')
 [ "$COUNT" = 1 ] || fail "expected exactly one gnu/java/awt/font/fonts.properties, found $COUNT"
-# OpenTypeFontPeer opens the mapped value with new File(filename); use an absolute deterministic
-# assembly path, not a classpath-resource-looking relative path.
+
+# OpenTypeFontPeer opens the mapped value using java.io.File. Materialize one deterministic
+# assembly path and map all RC1 logical families/styles to the same pinned DejaVu Sans file.
 FONT_DST="$RG35XX_CLASSPATH_ROOT/resource/rg35xx/DejaVuSans.ttf"
 mkdir -p "$(dirname "$FONT_DST")"
 cp "$RG35XX_FONT_FILE" "$FONT_DST"
@@ -35,11 +39,19 @@ Monospaced/b=$FONT_DST
 Monospaced/i=$FONT_DST
 Monospaced/bi=$FONT_DST
 EOF
-python3 - "$HT" <<'PY'
+
+python3 - "$HT" "$OT" <<'PY'
 from pathlib import Path
 import re, sys
-p=Path(sys.argv[1]); s=p.read_text()
-# Add only imports absent from the upstream file. Do not duplicate ClasspathFontPeer/Font/FontPeer/Map.
+ht=Path(sys.argv[1]); ot=Path(sys.argv[2])
+s=ht.read_text()
+
+# Exact 0.99 baseline guard: both headless font entry points are stubs returning null.
+if not re.search(r'protected\s+FontPeer\s+getFontPeer\s*\(\s*String\s+name\s*,\s*int\s+style\s*\).*?return\s+null\s*;', s, re.S):
+    raise SystemExit('unexpected getFontPeer baseline; refuse unreviewed rewrite')
+if not re.search(r'public\s+ClasspathFontPeer\s+getClasspathFontPeer\s*\(\s*String\s+name\s*,\s*Map\s+attrs\s*\).*?return\s+null\s*;', s, re.S):
+    raise SystemExit('unexpected getClasspathFontPeer baseline; refuse unreviewed rewrite')
+
 anchor='import gnu.java.awt.EmbeddedWindow;\n'
 if 'import gnu.java.awt.font.OpenTypeFontPeer;' not in s:
     if anchor not in s: raise SystemExit('import anchor missing')
@@ -48,12 +60,15 @@ if 'import java.util.HashMap;' not in s:
     map_anchor='import java.util.Map;\n'
     if map_anchor not in s: raise SystemExit('Map import anchor missing')
     s=s.replace(map_anchor, 'import java.util.HashMap;\n'+map_anchor, 1)
+
 pos=s.find('public class HeadlessToolkit')
 if pos < 0: raise SystemExit('HeadlessToolkit class anchor missing')
 brace=s.find('{', pos)
 if brace < 0: raise SystemExit('HeadlessToolkit class body missing')
-fields='''\n  private final Map rg35xxFontPeers = new HashMap();\n\n  private ClasspathFontPeer rg35xxFontPeer(String name, Map attrs)\n  {\n    String logical = (name == null || name.length() == 0) ? "SansSerif" : name;\n    if (!(logical.equals("SansSerif") || logical.equals("Dialog") || logical.equals("Monospaced"))) logical = "SansSerif";\n    String key = logical + "|" + String.valueOf(attrs);\n    ClasspathFontPeer peer = (ClasspathFontPeer) rg35xxFontPeers.get(key);\n    if (peer != null) return peer;\n    peer = new OpenTypeFontPeer(logical, attrs);\n    rg35xxFontPeers.put(key, peer);\n    return peer;\n  }\n'''
-if 'rg35xxFontPeers' not in s: s=s[:brace+1]+fields+s[brace+1:]
+fields='''\n  /* RG35XX RC1: cache by logical family then by a defensive attribute-map copy.\n     Map.equals() gives semantic attribute identity and avoids String-form ordering keys. */\n  private final Map rg35xxFontPeers = new HashMap();\n\n  private ClasspathFontPeer rg35xxFontPeer(String name, Map attrs)\n  {\n    String logical = (name == null || name.length() == 0) ? "SansSerif" : name;\n    if (!(logical.equals("SansSerif") || logical.equals("Dialog") || logical.equals("Monospaced")))\n      logical = "SansSerif";\n\n    Map byAttrs = (Map) rg35xxFontPeers.get(logical);\n    if (byAttrs == null)\n      {\n        byAttrs = new HashMap();\n        rg35xxFontPeers.put(logical, byAttrs);\n      }\n    Map attrKey = new HashMap();\n    if (attrs != null) attrKey.putAll(attrs);\n    ClasspathFontPeer peer = (ClasspathFontPeer) byAttrs.get(attrKey);\n    if (peer == null)\n      {\n        peer = new OpenTypeFontPeer(logical, attrKey);\n        byAttrs.put(attrKey, peer);\n      }\n    return peer;\n  }\n'''
+if 'rg35xxFontPeers' not in s:
+    s=s[:brace+1]+fields+s[brace+1:]
+
 pat1=re.compile(r'(protected\s+FontPeer\s+getFontPeer\s*\(\s*String\s+name\s*,\s*int\s+style\s*\)\s*\{)(?:\s*//[^\n]*\n)?\s*return\s+null\s*;\s*\}', re.S)
 rep1=r'''\1\n    Map attrs = new HashMap();\n    attrs.put(java.awt.font.TextAttribute.WEIGHT, (style & Font.BOLD) != 0 ? java.awt.font.TextAttribute.WEIGHT_BOLD : java.awt.font.TextAttribute.WEIGHT_REGULAR);\n    attrs.put(java.awt.font.TextAttribute.POSTURE, (style & Font.ITALIC) != 0 ? java.awt.font.TextAttribute.POSTURE_OBLIQUE : java.awt.font.TextAttribute.POSTURE_REGULAR);\n    return rg35xxFontPeer(name, attrs);\n  }'''
 s,n1=pat1.subn(rep1,s,count=1)
@@ -61,15 +76,30 @@ if n1 != 1: raise SystemExit('guarded getFontPeer rewrite failed')
 pat2=re.compile(r'(public\s+ClasspathFontPeer\s+getClasspathFontPeer\s*\(\s*String\s+name\s*,\s*Map\s+attrs\s*\)\s*\{)(?:\s*//[^\n]*\n)?\s*return\s+null\s*;\s*\}', re.S)
 s,n2=pat2.subn(r'''\1\n    return rg35xxFontPeer(name, attrs);\n  }''',s,count=1)
 if n2 != 1: raise SystemExit('guarded getClasspathFontPeer rewrite failed')
-p.write_text(s)
+ht.write_text(s)
+
+# GNU Classpath 0.99 catches all OpenType construction failures and merely prints them,
+# leaving fontDelegate null. That reproduces the historical delayed NPE. Convert both
+# constructor failure paths to fail immediately during peer creation.
+o=ot.read_text()
+needle='''    catch (Exception ex)\n      {\n        ex.printStackTrace();\n      }'''
+count=o.count(needle)
+if count != 2:
+    raise SystemExit('unexpected OpenTypeFontPeer constructor failure paths: %d' % count)
+replacement='''    catch (Exception ex)\n      {\n        throw new RuntimeException("RG35XX: unable to initialize OpenType font peer", ex);\n      }'''
+o=o.replace(needle,replacement)
+ot.write_text(o)
 PY
-grep -q 'new OpenTypeFontPeer(logical, attrs)' "$HT" || fail "correct constructor integration missing"
+
+# Post-overlay structural verification.
+grep -q 'new OpenTypeFontPeer(logical, attrKey)' "$HT" || fail "Map-constructor integration missing"
+grep -q 'throw new RuntimeException("RG35XX: unable to initialize OpenType font peer", ex);' "$OT" || fail "fail-closed OpenType constructor policy missing"
 [ "$(grep -c '^import gnu.java.awt.peer.ClasspathFontPeer;' "$HT")" = 1 ] || fail "ClasspathFontPeer import duplication"
 [ "$(grep -c '^import java.awt.Font;' "$HT")" = 1 ] || fail "Font import duplication"
 [ "$(grep -c '^import java.awt.peer.FontPeer;' "$HT")" = 1 ] || fail "FontPeer import duplication"
 [ "$(grep -c '^import java.util.Map;' "$HT")" = 1 ] || fail "Map import duplication"
 grep -q "^SansSerif/p=$FONT_DST$" "$FONT_PROPS" || fail "SansSerif mapping missing"
 grep -q "^Monospaced/p=$FONT_DST$" "$FONT_PROPS" || fail "Monospaced mapping missing"
-note "font overlay applied against verified OpenTypeFontPeer(name, Map) API"
-note "OpenTypeFontPeer uses filesystem mapping; fonts.properties points to materialized absolute TTF"
-note "compile + JamVM glyph smoke test remain mandatory"
+note "font overlay applied against verified GNU Classpath 0.99 OpenTypeFontPeer API"
+note "logical-family/attribute peer cache enabled; constructor failures now fail closed"
+note "compile + JamVM Font.hashCode/createGlyphVector/metrics smoke tests remain mandatory"
