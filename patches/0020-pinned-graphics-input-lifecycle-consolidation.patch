@@ -9,17 +9,12 @@ added to the blocking LibretroIO parser thread.
 
 --- a/src/org/recompile/mobile/MobilePlatform.java
 +++ b/src/org/recompile/mobile/MobilePlatform.java
-@@ -153,7 +153,10 @@
- 		else if(Mobile.isDoJa && com.nttdocomo.ui.Display.getCurrent() != null) // Doja's current Frames (Displayables) are static
- 		{
- 			com.nttdocomo.ui.Display.getCurrent().platformImage = lcd;
+@@ -156,2 +156,5 @@
  			com.nttdocomo.ui.Display.getCurrent().graphics = lcd.getDoJaGraphics();
  		}
 +
 +		/* All replacement LCD/display references are committed at this point. */
 +		RG35XXFrameScheduler.markDirty();
- 
- 	}
 @@ -891,6 +894,7 @@
  				gcFrontbuffer.flushGraphics(img, x, y, width, height);
  			}
