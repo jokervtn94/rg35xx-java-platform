@@ -1,126 +1,161 @@
-# RGJ-RC1-010M — JavaSound-free ToneControl / Manager.playTone stage
-#
-# Scope
-# -----
-# Complete MIDP tone playback on RG35XX without javax.sound.midi. This stage uses
-# the existing PlatformPlayer/ToneControl facade and the new pure-java
-# RG35XXToneSequenceEncoder, then delegates the generated Standard MIDI File to
-# RG35XXNativePlayer -> native TML/TSF.
-#
-# Source basis
-# ------------
-# - MIDP 2.0 ToneControl sequence grammar / parameter ranges (JSR-118)
-# - upstream ToneControl constants in javax.microedition.media.control.ToneControl
-# - exact upstream PlatformPlayer toneControl nested control and locator constructor
-# - exact upstream Manager.playTone() JavaSound implementation
-#
-# PART A — encoder owner
-# ----------------------
-# `RG35XXToneSequenceEncoder` is the single RG35XX A-BNF tone-sequence -> SMF
-# conversion owner. Do not create another tone synth or use javax.sound.midi.
-#
-# Supported MIDP grammar:
-# - VERSION 1 (mandatory first attribute)
-# - optional TEMPO modifier, valid 5..127, default 30 => 120 BPM
-# - optional RESOLUTION, valid 1..127, default 64
-# - BLOCK_START/BLOCK_END definitions 0..127
-# - PLAY_BLOCK referencing only a previously defined block
-# - SET_VOLUME 0..100
-# - REPEAT multiplier 2..127 followed by exactly one tone event
-# - note 0..127 or SILENCE, duration 1..127
-#
-# Block definitions are validated first and are not played by definition; only
-# main sequence events and PLAY_BLOCK expansion produce MIDI events. Because a
-# block may reference only an earlier block, expansion is acyclic. A fixed event
-# expansion limit protects malformed/adversarial sequences.
-#
-# Timing identity:
-#   MIDI PPQ = ToneControl resolution
-#   MIDI ticks per tone duration unit = 4
-#   tempo = tempoModifier * 4 BPM
-# Therefore MIDI duration is exactly:
-#   duration * 60 * 4 / (resolution * tempo) seconds
-# which is the MIDP ToneControl formula.
-#
-# Output is SMF format 0, one track, channel 0, NOTE_ON/NOTE_OFF, CC7 volume and
-# tempo meta. No JavaSound object is constructed.
-#
-# PART B — PlatformPlayer device://tone constructor
-# ------------------------------------------------
-# Existing upstream PlatformPlayer(String locator) creates a desktop midiPlayer
-# for both device://tone and device://midi. On RG35XX, intercept TONE locator
-# before that construction:
-#
-#   contentType = "audio/x-tone-seq";
-#   rg35xxPlayer = new RG35XXNativePlayer(
-#       new ByteArrayInputStream(new byte[0]), contentType);
-#   controls[0] = existing facade volumeControl adapted to native backend;
-#   controls[3] = existing toneControl adapted to native backend;
-#
-# `device://midi` live-message control is NOT claimed by this stage because the
-# current native protocol registers complete MIDI blobs and has no live MIDI
-# short-message opcode. It must not fall through to JavaSound on RG35XX.
-#
-# PART C — existing ToneControl facade
-# ------------------------------------
-# Keep PlatformPlayer's existing nested `toneControl` as the public Control owner.
-# Add an RG35XX branch; do not create a parallel javax ToneControl class.
-#
-# setSequence(byte[] sequence) on RG35XX:
-# 1. if sequence == null -> IllegalArgumentException
-# 2. if facade state is PREFETCHED or STARTED -> IllegalStateException, per MIDP
-# 3. if sequence begins MThd, copy/use it as an already-converted SMF
-# 4. otherwise call RG35XXToneSequenceEncoder.encode(sequence)
-# 5. call rg35xxPlayer.setMidi(midiBytes)
-#
-# Invalid A-BNF input propagates IllegalArgumentException from the encoder.
-# No javax.sound.midi Sequence/Track/ShortMessage objects are used on RG35XX.
-#
-# PART D — Manager.playTone()
-# ---------------------------
-# At the top of existing Manager.playTone(note,duration,volume):
-# - preserve argument validation (note 0..127, duration >0, volume clamp 0..100)
-# - preserve upstream compatibility policy that durations below 50 ms use an
-#   effective duration of 50 ms (several games rely on very short audible cues)
-# - if RG35XXPlatformProfile.isActive(), bypass toneChannel/toneThread entirely
-# - generate SMF from that same effective duration with
-#     RG35XXToneSequenceEncoder.encodeSingleTone(note,effectiveDuration,volume)
-# - keep one Manager-owned transient RG35XXNativePlayer for playTone; close the
-#   previous transient before replacing it so repeated calls do not leak players
-# - bind one reusable event listener; on native END_OF_MEDIA close/release the
-#   transient player if its id is still the active one
-# - realize/prefetch/start and return immediately (non-blocking)
-#
-# This preserves the single-current-tone behavior and duration compatibility of
-# upstream's interrupted toneThread without creating a Java sleep thread on RG35XX.
-#
-# PART E — capability promotion
-# -----------------------------
-# After this stage, RG35XXMediaProfile may advertise `audio/x-tone-seq` because:
-# - the public ToneControl grammar has a JavaSound-free converter;
-# - `device://tone` is routed before desktop midiPlayer creation;
-# - converted bytes are registered through the already-proven native MIDI path;
-# - Manager.playTone has a nonblocking native route.
-#
-# This promotion does not imply device://midi live MIDI control support.
-#
-# PART F — lifecycle and event ownership
-# --------------------------------------
-# Tone players use the same RG35XXMediaRegistry/event return channel as MIDI/WAV.
-# LOOPED remains STARTED; END_OF_MEDIA moves PREFETCHED and releases transient
-# Manager.playTone players. Game unload RESET clears the registry/native media.
-#
-# PlatformPlayer.notifyListeners remains the sole MIDP/vendor fanout. Tone encoder
-# never invokes listeners.
-#
-# PART G — compatibility / performance invariants
-# -----------------------------------------------
-# - no javax.sound.midi on RG35XX tone path
-# - no toneThread / sleep timer on RG35XX
-# - no extra synth or native ring
-# - encoder allocations occur only during setSequence/playTone setup
-# - no heap allocation in native render callback
-# - desktop Manager/PlatformPlayer tone path remains unchanged when target false
-# - device://midi is not falsely promoted by this stage
-#
-# BUILD-PASS remains pending exact source application and Ant/native build.
+From: RG35XX Java Platform
+Task: RGJ-RC1-011R / 010M
+Subject: [PATCH] media: materialize JavaSound-free RG35XX ToneControl and playTone
+
+This executable diff applies after 0018. It preserves the desktop JavaSound
+path, routes device://tone and ToneControl through RG35XXToneSequenceEncoder +
+RG35XXNativePlayer, and keeps device://midi unadvertised/safe on RG35XX because
+live short-message transport is not implemented.
+
+--- a/src/org/recompile/mobile/PlatformPlayer.java
++++ b/src/org/recompile/mobile/PlatformPlayer.java
+@@ -342,6 +342,33 @@
+ 	public PlatformPlayer(String locator)
+ 	{
++		if(RG35XXPlatformProfile.isActive())
++		{
++			listeners = new Vector<PlayerListener>();
++			siemensListeners = new Vector<com.siemens.mp.media.PlayerListener>();
++			kddiListeners = new Vector<com.kddi.media.MediaEventListener>();
++			controls = new Control[NUM_CONTROLS];
++
++			if(locator.equals(Manager.TONE_DEVICE_LOCATOR))
++			{
++				try
++				{
++					contentType = "audio/x-tone-seq";
++					rg35xxPlayer = new RG35XXNativePlayer(new ByteArrayInputStream(new byte[0]), contentType);
++					bindRG35XXEvents();
++					player = new rg35xxAudioPlayer();
++					controls[0] = new volumeControl(player);
++					controls[3] = new toneControl(player);
++				}
++				catch(Exception e)
++				{
++					player = new audioplayer();
++					disableControls = true;
++				}
++				return;
++			}
++
++			/* Complete-blob native transport has no live device://midi messages. */
++			contentType = "audio/midi (stub)";
++			player = new audioplayer();
++			disableControls = true;
++			return;
++		}
++
+ 		if(locator.equals(Manager.TONE_DEVICE_LOCATOR) || locator.equals(Manager.MIDI_DEVICE_LOCATOR))
+ 		{
+ 			Mobile.log(Mobile.LOG_WARNING, PlatformPlayer.class.getPackage().getName() + "." + PlatformPlayer.class.getSimpleName() + ": " + " Creating MIDI Player for locator: "+locator);
+@@ -2221,9 +2248,9 @@
+ 	/* ToneControl is also almost entirely untested right now, couldn't find a jar that uses setSequence() */
+ 	public class toneControl implements com.siemens.mp.media.control.ToneControl // Siemens already extends javax here too
+ 	{
+-		private midiPlayer player;
++		private audioplayer player;
+ 
+-		public toneControl(midiPlayer player) { Mobile.log(Mobile.LOG_DEBUG, PlatformPlayer.class.getPackage().getName() + "." + PlatformPlayer.class.getSimpleName() + ": " + "Tone Control"); this.player = player; }
++		public toneControl(audioplayer player) { Mobile.log(Mobile.LOG_DEBUG, PlatformPlayer.class.getPackage().getName() + "." + PlatformPlayer.class.getSimpleName() + ": " + "Tone Control"); this.player = player; }
+ 
+ 		/*
+ 		 * As far as i can tell, Nokia's OTT/OTA Tones don't use this, which would leave only jars that directly use J2ME's Augmented BNF format, if there are any.
+@@ -2235,10 +2262,25 @@
+ 
+ 			if(getState() == Player.PREFETCHED || getState() == Player.STARTED) { throw new IllegalStateException("Cannot call setSequence(), as the player is either PREFETCHED or STARTED."); }
+ 
++			if(player instanceof rg35xxAudioPlayer)
++			{
++				byte[] midi;
++				if(sequence.length >= 4 && sequence[0] == 'M' && sequence[1] == 'T' &&
++				   sequence[2] == 'h' && sequence[3] == 'd')
++					midi = sequence;
++				else
++					midi = RG35XXToneSequenceEncoder.encode(sequence);
++				rg35xxPlayer.setMidi(midi);
++				return;
++			}
++
+ 			// If what we received is a tone sequence from nokia, siemens, sprint, etc. which is converted to midi beforehand, just send it to the player right away.
+-			if(sequence[0] == 'M' && sequence[1] == 'T' && sequence[2] == 'h' && sequence[3] == 'd')
++			if(sequence.length >= 4 && sequence[0] == 'M' && sequence[1] == 'T' && sequence[2] == 'h' && sequence[3] == 'd')
+ 			{
+-				player.setSequence(new ByteArrayInputStream(sequence));
++				((midiPlayer)player).setSequence(new ByteArrayInputStream(sequence));
+ 			}
+ 			else // TODO: For J2ME's ToneControl Augmented BNF tone format, if anything out there even uses it.
+ 			{
+--- a/src/javax/microedition/media/Manager.java
++++ b/src/javax/microedition/media/Manager.java
+@@ -39,6 +39,10 @@
+ import org.recompile.mobile.PlatformPlayer;
+ import org.recompile.mobile.JavaxPlatformPlayer;
+ import org.recompile.mobile.SiemensPlatformPlayer;
++import org.recompile.mobile.RG35XXNativePlayer;
++import org.recompile.mobile.RG35XXPlatformProfile;
++import org.recompile.mobile.RG35XXMediaRegistry;
++import org.recompile.mobile.RG35XXToneSequenceEncoder;
+ 
+ public class Manager
+ {
+@@ -61,6 +65,9 @@
+ 	private static MidiChannel toneChannel;
+ 	private static Thread toneThread;
++	private static RG35XXNativePlayer rg35xxTonePlayer;
++	private static int rg35xxTonePlayerId;
++
+ 
+ 	public static synchronized Player createPlayer(InputStream stream, String type) throws IOException, MediaException
+ 	{
+@@ -167,6 +174,49 @@
+ 		if (volume < 0) { volume = 0; } 
+ 		else if (volume > 100) { volume = 100; }
+ 
++		if(RG35XXPlatformProfile.isActive())
++		{
++			final int effectiveDuration = duration < 50 ? 50 : duration;
++			try
++			{
++				final RG35XXNativePlayer next = new RG35XXNativePlayer(
++					new ByteArrayInputStream(new byte[0]), "audio/x-tone-seq");
++				next.setMidi(RG35XXToneSequenceEncoder.encodeSingleTone(note, effectiveDuration, volume));
++				final int nextId = next.getPlayerId();
++				next.setEventListener(new RG35XXMediaRegistry.EventListener()
++				{
++					public void onNativeMediaEvent(int playerId, int eventType, long mediaTimeUs)
++					{
++						if(eventType != RG35XXMediaRegistry.EVENT_END_OF_MEDIA) return;
++						synchronized(Manager.class)
++						{
++							if(rg35xxTonePlayerId == playerId && rg35xxTonePlayer == next)
++							{
++								rg35xxTonePlayer.close();
++								rg35xxTonePlayer = null;
++								rg35xxTonePlayerId = 0;
++							}
++						}
++					}
++				});
++
++				if(rg35xxTonePlayer != null) rg35xxTonePlayer.close();
++				rg35xxTonePlayer = next;
++				rg35xxTonePlayerId = nextId;
++				next.realize();
++				if(!next.prefetch() || !next.start())
++				{
++					next.close();
++					rg35xxTonePlayer = null;
++					rg35xxTonePlayerId = 0;
++					throw new MediaException("RG35XX tone transport unavailable");
++				}
++				return;
++			}
++			catch(IOException e)
++			{
++				throw new MediaException("RG35XX tone setup failed: " + e.getMessage());
++			}
++		}
++
+ 		final int restoreBankMSB = toneChannel.getController(0);    // Bank MSB
+         final int restoreBankLSB = toneChannel.getController(32);   // Bank LSB
+         final int restoreInstrument = toneChannel.getProgram();     // Current instrument
