@@ -17,12 +17,11 @@ fail() { echo "RC1 CONTRACT GATE: FAIL: $*" >&2; exit 1; }
 note() { echo "RC1 CONTRACT GATE: $*"; }
 
 # Superseded mutation owners retained as design/history only:
-# - 0004 -> 0016 owns exact audio-pipe argv/FD/fork integration.
-# - 0005 -> 0010 owns Java platform lifecycle; RG35XXLifecycle itself owns
-#   RG35XXAudioBootstrap initialize/shutdown, while 0017 owns graceful EOF exit.
+# - 0004 -> 0016 exact audio-pipe argv/FD/fork integration.
+# - 0005 -> 0010 + RG35XXLifecycle Java bootstrap ownership; 0017 final EOF.
+# - 0006 -> 0018 exact PlatformPlayer direct MIDI/WAV facade/backend integration.
 ACTIVE_CONTRACTS="
 0003-manager-rg35xx-media-profile.patch
-0006-platformplayer-native-backend.patch
 0007-platformgraphics-rg35xx-fast-drawrgb.patch
 0008-platformgraphics-transform-cache.patch
 0010-libretro-platform-lifecycle.patch
