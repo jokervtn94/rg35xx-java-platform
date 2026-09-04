@@ -31,7 +31,7 @@ all other constructors remain unchanged.
  		InputStream stream = new ByteArrayInputStream(imageData, imageOffset, imageLength);
  
  		BufferedImage image;
-@@ -203,6 +219,12 @@
+@@ -203,5 +219,11 @@
  		}
  
  		dataBuffer = ((DataBufferInt) canvas.getRaster().getDataBuffer()).getData();
