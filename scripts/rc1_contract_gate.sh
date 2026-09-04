@@ -16,12 +16,12 @@ ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 fail() { echo "RC1 CONTRACT GATE: FAIL: $*" >&2; exit 1; }
 note() { echo "RC1 CONTRACT GATE: $*"; }
 
-# 0004 is retained as the historical audio-pipe design contract but is no longer
-# an active source-mutation owner. 0016 now owns exact pipe creation, argv/FD
-# inheritance and fork endpoint ownership; 0015 owns drain and 0017 teardown.
+# Superseded mutation owners retained as design/history only:
+# - 0004 -> 0016 owns exact audio-pipe argv/FD/fork integration.
+# - 0005 -> 0010 owns Java platform lifecycle; RG35XXLifecycle itself owns
+#   RG35XXAudioBootstrap initialize/shutdown, while 0017 owns graceful EOF exit.
 ACTIVE_CONTRACTS="
 0003-manager-rg35xx-media-profile.patch
-0005-libretro-java-audio-bootstrap.patch
 0006-platformplayer-native-backend.patch
 0007-platformgraphics-rg35xx-fast-drawrgb.patch
 0008-platformgraphics-transform-cache.patch
