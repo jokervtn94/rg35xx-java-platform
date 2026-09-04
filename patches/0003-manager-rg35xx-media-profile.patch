@@ -1,22 +1,26 @@
 From: RG35XX Java Platform
 Task: RGJ-B3-002 / RGJ-RC1-011R
-Subject: [PATCH] MMAPI Manager: use truthful RG35XX media capabilities
+Subject: [PATCH] MMAPI Manager: gate truthful capabilities by RG35XX target
+
+The shared Manager facade must preserve upstream desktop/AWT capability reporting.
+Only explicit RG35XX launches use the conservative target capability table.
 
 --- a/src/javax/microedition/media/Manager.java
 +++ b/src/javax/microedition/media/Manager.java
-@@ -41,5 +41,6 @@
+@@ -41,5 +41,7 @@
  import org.recompile.mobile.Mobile;
  import org.recompile.mobile.PlatformPlayer;
  import org.recompile.mobile.JavaxPlatformPlayer;
  import org.recompile.mobile.SiemensPlatformPlayer;
 +import org.recompile.mobile.RG35XXMediaProfile;
++import org.recompile.mobile.RG35XXPlatformProfile;
  
-@@ -145,7 +146,5 @@
+@@ -145,6 +147,8 @@
  	public static String[] getSupportedContentTypes(String protocol)
  	{
  		Mobile.log(Mobile.LOG_DEBUG, Manager.class.getPackage().getName() + "." + Manager.class.getSimpleName() + ": " + "Get Supported Media Content Types");
--		return new String[]{"audio/midi", "audio/x-wav", "audio/x-mld",
--			"audio/amr", "audio/mpeg", "audio/x-tone-seq", "audio/mmf",
--			"audio/x-imy", "audio/basic" };
-+		return RG35XXMediaProfile.getSupportedTypes(protocol);
- 	}
++		if(RG35XXPlatformProfile.isActive())
++			return RG35XXMediaProfile.getSupportedTypes(protocol);
+ 		return new String[]{"audio/midi", "audio/x-wav", "audio/x-mld",
+ 			"audio/amr", "audio/mpeg", "audio/x-tone-seq", "audio/mmf",
+ 			"audio/x-imy", "audio/basic" };
