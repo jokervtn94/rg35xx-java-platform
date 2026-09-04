@@ -45,8 +45,19 @@ jobs:
           test -n "$PATCH_ORDER"
           echo "Authoritative PATCH_ORDER:"
           printf '%s\n' "$PATCH_ORDER"
+
+          normalize_patch_targets() {
+            local patch_file="$1"
+            while IFS= read -r rel; do
+              test -n "$rel" || continue
+              test -f "upstream/$rel"
+              sed -i 's/\r$//' "upstream/$rel"
+            done < <(awk '/^--- a\// { sub(/^--- a\//, ""); print }' "$patch_file")
+          }
+
           for p in $PATCH_ORDER; do
             test -f "patches/$p"
+            normalize_patch_targets "patches/$p"
             echo "=== DRY-RUN $p ==="
             patch -d upstream -p1 --forward --dry-run < "patches/$p"
             echo "=== APPLY $p ==="
