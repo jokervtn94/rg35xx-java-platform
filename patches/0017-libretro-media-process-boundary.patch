@@ -115,7 +115,7 @@ native resource teardown. 0016 remains the owner of dedicated audio FD/argv.
  							break;
  
 +							case 14: // RG35XX native LOOPED / END_OF_MEDIA event
-+								if(code != 13) { break; }
++								if(code != 13) { throw new IOException("Invalid RG35XX media event length: " + code); }
 +								bytesRead = 0;
 +								while(bytesRead < rg35xxMediaEvent.length)
 +								{
