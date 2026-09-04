@@ -1,5 +1,5 @@
 From: RG35XX Java Platform
-Task: RGJ-RC1-011R / 010K
+Task: RGJ-RC1-011R / 010K / RGJ-RC1-011AM
 Subject: [PATCH] libretro: materialize native media event boundary and graceful EOF
 
 This executable diff owns only the cross-process event return and graceful EOF
@@ -68,9 +68,7 @@ IOException explicitly for the fail-closed Java event parser.
 +		rg35xx_drain_media_events_to_java();
  
  		/* request frame */
-@@ -1455,5 +1499,25 @@
- 	{
- #ifdef __linux__
+@@ -1457,2 +1501,22 @@
 -		kill(javaProcess, SIGKILL);
 -		wait(NULL);
 +		/* Closing only parent->Java stdin delivers EOF. Keep Java stdout/video
@@ -95,22 +93,16 @@ IOException explicitly for the fail-closed Java event parser.
 +			kill(javaProcess, SIGKILL);
 +			waitpid(javaProcess, NULL, 0);
 +		}
- #elif _WIN32
- 		HANDLE hProcessSnap;
 --- a/src/org/recompile/freej2me/Libretro.java
 +++ b/src/org/recompile/freej2me/Libretro.java
 @@ -21,2 +21,3 @@
  import java.io.File;
 +import java.io.IOException;
  import java.net.URLDecoder;
-@@ -111,3 +112,4 @@
- 			int code;
+@@ -114 +115,2 @@
  			byte[] buffer;
 +			final byte[] rg35xxMediaEvent = new byte[13];
- 			int bytesRead = 0;
-@@ -329,4 +331,30 @@
- 							break;
- 
+@@ -334 +336,26 @@
 +							case 14: // RG35XX native LOOPED / END_OF_MEDIA event
 +								if(code != 13) { throw new IOException("Invalid RG35XX media event length: " + code); }
 +								bytesRead = 0;
@@ -137,11 +129,10 @@ IOException explicitly for the fail-closed Java event parser.
 +							break;
 +
  							case 15: // Libretro core requested a new frame.
+@@ -335 +362,2 @@
  								lastCoreUpdateTime = System.currentTimeMillis();
 +								org.recompile.mobile.RG35XXMediaRegistry.drainNativeEvents();
-@@ -417,3 +445,13 @@
- 				}
- 			}
+@@ -436 +464,11 @@
 -			catch (Exception e) { System.exit(0); }
 +			catch (Exception e)
 +			{
@@ -154,4 +145,3 @@ IOException explicitly for the fail-closed Java event parser.
 +				catch (Exception e) { System.err.println("RG35XX lifecycle shutdown failed: " + e.getMessage()); }
 +				System.exit(0);
 +			}
- 		} // run()
