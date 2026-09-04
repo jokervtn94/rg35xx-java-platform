@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-# RGJ-RC1-011BN / RGJ-RC1-011BP / RGJ-RC1-011BQ
+# RGJ-RC1-011BN / 011BP / 011BQ / 011BT
 # Build an SD-card-root overlay for direct RG35XX installation by file copy/merge.
 # This is packaging only and never marks DEVICE-TEST-PASS.
 
@@ -9,15 +9,18 @@ CORE_FILE=${CORE_FILE:-}
 RUNTIME_JAR_FILE=${RUNTIME_JAR_FILE:-}
 DEVICE_TEST_JAR=${DEVICE_TEST_JAR:-}
 SWITCH_PROBE_JAR=${SWITCH_PROBE_JAR:-}
+BOOT_PROBE_JAR=${BOOT_PROBE_JAR:-}
 FONT_FILE=${FONT_FILE:-}
 SOUNDFONT_FILE=${SOUNDFONT_FILE:-}
 OUT=${OUT:-./RG35XX_Java_RC1_SD_Overlay}
 MAKE_ZIP=${MAKE_ZIP:-0}
 
-CORE_SHA256=3e416345711891f7edeb4fe04bba82acc674b3c27f50863255376053a3974d58
-RUNTIME_JAR_SHA256=f9b96e4490a154b3d58632bf482e0ad9d324a264bd82c8c5bf3a81186a2cfe4b
+# Accepted 011BR diagnostic consolidated build (run 33904619868).
+CORE_SHA256=a506e202e3586293fb7e1a2fbc0c291af8611dc8def282813eff21fccd683929
+RUNTIME_JAR_SHA256=ea145eb7e1f891a08624f45f4cd06e402bd4683cdf47a2b2cc0a39390a39f8a2
 DEVICE_TEST_SHA256=dc99dd5a777dc68d45f3aef543b211d9dc6bddc6ddfa79f5cd30a0ea1859e773
 SWITCH_PROBE_SHA256=c1a9bd2fbb6cbb5ec90cbf5da31702f58c2421fd4dcf4e97ac6ab99ad0690aa3
+BOOT_PROBE_SHA256=7a93146eae3f60305cfce65f9a24ade6877f11ddd5dd3e76974fd6aae30cae3c
 FONT_SHA256=7da195a74c55bef988d0d48f9508bd5d849425c1770dba5d7bfc6ce9ed848954
 SOUNDFONT_SHA256=9575028c7a1f589f5770fccc8cff2734566af40cd26ed836944e9a5152688cfe
 
@@ -37,11 +40,25 @@ verify "$DEVICE_TEST_JAR" "$DEVICE_TEST_SHA256" device-test
 verify "$SWITCH_PROBE_JAR" "$SWITCH_PROBE_SHA256" switch-probe
 
 rm -rf "$OUT"
-mkdir -p "$OUT/CFW/retroarch/.retroarch/cores" "$OUT/BIOS" "$OUT/Java/runtime" "$OUT/Roms/JAVA"
+mkdir -p "$OUT/CFW/retroarch/.retroarch/cores" "$OUT/BIOS" "$OUT/Java/runtime" "$OUT/Java/test-evidence" "$OUT/Roms/JAVA"
+
+# 011BT: deploy both core basenames. Historical RG35XX installs used the _plus
+# basename, while some menu/playlist variants may still reference the old name.
 cp "$CORE_FILE" "$OUT/CFW/retroarch/.retroarch/cores/freej2me_plus_libretro.so"
+cp "$CORE_FILE" "$OUT/CFW/retroarch/.retroarch/cores/freej2me_libretro.so"
+
+# 011BT: the accepted core binary literally requests freej2me_plus-lr.jar.
+# Keep freej2me-lr.jar only as a compatibility alias for older cores/scripts.
+cp "$RUNTIME_JAR_FILE" "$OUT/BIOS/freej2me_plus-lr.jar"
 cp "$RUNTIME_JAR_FILE" "$OUT/BIOS/freej2me-lr.jar"
+
 cp "$DEVICE_TEST_JAR" "$OUT/Roms/JAVA/RG35XX_RC1_Device_Test.jar"
 cp "$SWITCH_PROBE_JAR" "$OUT/Roms/JAVA/RG35XX_RC1_Switch_Probe.jar"
+if [ -n "$BOOT_PROBE_JAR" ]; then
+  need_file "$BOOT_PROBE_JAR" BOOT_PROBE_JAR
+  verify "$BOOT_PROBE_JAR" "$BOOT_PROBE_SHA256" boot-probe
+  cp "$BOOT_PROBE_JAR" "$OUT/Roms/JAVA/RG35XX_RC1_Boot_Probe.jar"
+fi
 
 font_state=MISSING
 if [ -n "$FONT_FILE" ]; then
@@ -60,21 +77,24 @@ if [ -n "$SOUNDFONT_FILE" ]; then
 fi
 
 cat > "$OUT/README-CHEP-VAO-THE-NHO.txt" <<EOF
-RG35XX Java RC1 — SD-card overlay
+RG35XX Java RC1 — SD-card overlay 011BT
 
 Cach cai khong can terminal:
 1. Tat RG35XX va thao the nho.
 2. Mo file ZIP tren may tinh.
 3. Chep/merge TOAN BO cac thu muc CFW, BIOS, Java, Roms vao GOC cua the nho.
 4. Chap nhan ghi de core/runtime JAR khi he dieu hanh hoi.
-5. Lap the vao RG35XX, vao muc Java va chay RG35XX RC1 Device Test.
+5. Lap the vao RG35XX, vao muc Java va chay RG35XX RC1 Boot Probe truoc.
 
-JamVM khong nam trong goi nay; giu nguyen runtime hien co tai /mnt/mmc/CFW/java/bin/jamvm.
+Runtime authoritative: /mnt/mmc/BIOS/freej2me_plus-lr.jar
+Compatibility alias: /mnt/mmc/BIOS/freej2me-lr.jar
+Core aliases are both installed in CFW/retroarch/.retroarch/cores/.
+JamVM giu nguyen tai /mnt/mmc/CFW/java/bin/jamvm.
 Font state: $font_state
 SoundFont state: $soundfont_state
-Diagnostic log after running test: /mnt/mmc/Java/test-evidence/rg35xx-device-test.log
+Process log: /mnt/mmc/Java/freej2me-java.log
+Boot Probe log: /mnt/mmc/Java/test-evidence/rg35xx-boot-probe.log
 
-Neu Font/SoundFont ghi MISSING, goi nay khong thay the bang asset khac. Can co dung file pinned o /mnt/mmc/Java/runtime truoc khi kiem media/font day du.
 DEVICE-TEST-PASS chi duoc ghi nhan sau khi test tren may that.
 EOF
 
