@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-# RGJ-RC1-011BN / RGJ-RC1-011BP
+# RGJ-RC1-011BN / RGJ-RC1-011BP / RGJ-RC1-011BQ
 # Build an SD-card-root overlay for direct RG35XX installation by file copy/merge.
 # This is packaging only and never marks DEVICE-TEST-PASS.
 
@@ -16,7 +16,7 @@ MAKE_ZIP=${MAKE_ZIP:-0}
 
 CORE_SHA256=3e416345711891f7edeb4fe04bba82acc674b3c27f50863255376053a3974d58
 RUNTIME_JAR_SHA256=f9b96e4490a154b3d58632bf482e0ad9d324a264bd82c8c5bf3a81186a2cfe4b
-DEVICE_TEST_SHA256=ea21560ff6360709759194b6d2493c7d67267fc46e50a95684add50eaef7d4df
+DEVICE_TEST_SHA256=dc99dd5a777dc68d45f3aef543b211d9dc6bddc6ddfa79f5cd30a0ea1859e773
 SWITCH_PROBE_SHA256=c1a9bd2fbb6cbb5ec90cbf5da31702f58c2421fd4dcf4e97ac6ab99ad0690aa3
 FONT_SHA256=7da195a74c55bef988d0d48f9508bd5d849425c1770dba5d7bfc6ce9ed848954
 SOUNDFONT_SHA256=9575028c7a1f589f5770fccc8cff2734566af40cd26ed836944e9a5152688cfe
@@ -72,6 +72,7 @@ Cach cai khong can terminal:
 JamVM khong nam trong goi nay; giu nguyen runtime hien co tai /mnt/mmc/CFW/java/bin/jamvm.
 Font state: $font_state
 SoundFont state: $soundfont_state
+Diagnostic log after running test: /mnt/mmc/Java/test-evidence/rg35xx-device-test.log
 
 Neu Font/SoundFont ghi MISSING, goi nay khong thay the bang asset khac. Can co dung file pinned o /mnt/mmc/Java/runtime truoc khi kiem media/font day du.
 DEVICE-TEST-PASS chi duoc ghi nhan sau khi test tren may that.
