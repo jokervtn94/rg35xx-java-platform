@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-# RGJ-RC1-011N/011R deterministic assembly driver.
+# RGJ-RC1-011N/011R/011AC deterministic assembly driver.
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 PIN_FREEJ2ME="13ec186903087156c145268f8706eecfaf9f1e50"
 : "${RG35XX_FREEJ2ME_ROOT:?set RG35XX_FREEJ2ME_ROOT to the pinned FreeJ2ME checkout}"
@@ -88,17 +88,51 @@ normalize_patch_targets()
   done
 }
 
+apply_patch_strict()
+{
+  patch_file="$1"
+  patch_name="$2"
+  dry_log="$RG35XX_ASSEMBLY_ROOT/.rc1-${patch_name}.dry.log"
+  apply_log="$RG35XX_ASSEMBLY_ROOT/.rc1-${patch_name}.apply.log"
+
+  if ! patch -d "$RG35XX_ASSEMBLY_ROOT" -p1 --batch --forward --fuzz=0 --dry-run \
+      < "$patch_file" >"$dry_log" 2>&1; then
+    cat "$dry_log" >&2
+    fail "zero-fuzz dry-run failed: $patch_name"
+  fi
+  if grep -Eiq 'reversed|previously applied|skipping patch|ignored|FAILED|reject' "$dry_log"; then
+    cat "$dry_log" >&2
+    fail "zero-fuzz dry-run reported skipped/reversed/rejected hunk: $patch_name"
+  fi
+
+  if ! patch -d "$RG35XX_ASSEMBLY_ROOT" -p1 --batch --forward --fuzz=0 \
+      < "$patch_file" >"$apply_log" 2>&1; then
+    cat "$apply_log" >&2
+    fail "zero-fuzz apply failed: $patch_name"
+  fi
+  if grep -Eiq 'reversed|previously applied|skipping patch|ignored|FAILED|reject' "$apply_log"; then
+    cat "$apply_log" >&2
+    fail "zero-fuzz apply reported skipped/reversed/rejected hunk: $patch_name"
+  fi
+}
+
 for p in $PATCH_ORDER; do
  [ -f "$ROOT/patches/$p" ] || fail "missing integration contract: $p"
  normalize_patch_targets "$ROOT/patches/$p"
- if patch -d "$RG35XX_ASSEMBLY_ROOT" -p1 --forward --dry-run < "$ROOT/patches/$p" >/dev/null 2>&1; then
-   patch -d "$RG35XX_ASSEMBLY_ROOT" -p1 --forward < "$ROOT/patches/$p" >/dev/null
- else
-   fail "integration contract does not apply cleanly at pinned source: $p"
- fi
+ apply_patch_strict "$ROOT/patches/$p" "$p"
 done
 [ -f "$ROOT/patches/0021-pinned-rms-safe-baseline.patch" ] || fail "missing verified pinned RMS policy baseline 0021"
 [ -f "$ROOT/patches/0022-pinned-headless-font-peer-consolidation.patch" ] || fail "missing GNU Classpath font contract 0022"
+
+CORE_C="$RG35XX_ASSEMBLY_ROOT/src/libretro/freej2me_libretro.c"
+grep -q '^#define NUM_ARGUMENTS 9$' "$CORE_C" || fail "assembled core missing 0016 NUM_ARGUMENTS 9"
+grep -q -- '-Dfreej2me.rg35xx=true' "$CORE_C" || fail "assembled core missing RG35XX JVM selector"
+grep -q -- '-Dfreej2me.rg35xx.audio.fd=%d' "$CORE_C" || fail "assembled core missing dedicated audio-FD JVM property"
+[ "$(grep -c 'static struct rg35xx_audio_pipe rg35xx_java_audio_pipe;' "$CORE_C")" = 1 ] || fail "assembled core audio-pipe state declaration count is not one"
+grep -q 'rg35xx_audio_pipe_create(&rg35xx_java_audio_pipe)' "$CORE_C" || fail "assembled core missing dedicated audio pipe creation"
+grep -q 'rg35xx_mixer_init(rg35xx_core_media_event);' "$CORE_C" || fail "assembled core missing native mixer init hook"
+grep -q 'rg35xx_audio_drain_start();' "$CORE_C" || fail "assembled core missing audio drain start hook"
+grep -q 'rg35xx_native_media_shutdown();' "$CORE_C" || fail "assembled core missing final native media shutdown hook"
 
 cat > "$NATIVE_DST/rc1_sources.mk" <<'EOF'
 RG35XX_NATIVE_SRCS := \
@@ -123,4 +157,5 @@ TML_COUNT=$(grep -l '^[[:space:]]*#define[[:space:]][[:space:]]*TML_IMPLEMENTATI
 [ "$TML_COUNT" = 1 ] || fail "assembled TML implementation owner count is $TML_COUNT"
 note "ASSEMBLY PASS: $RG35XX_ASSEMBLY_ROOT"
 note "CLASSPATH FONT OVERLAY PASS: $RG35XX_CLASSPATH_ROOT"
+note "ZERO-FUZZ PATCH/MARKER PASS: all active integration hunks and native lifecycle markers are present"
 note "Next: compile the modified GNU Classpath tree, then run rc1_runtime_build_overlay.sh + rc1_compile.sh; no BUILD-PASS claimed."
