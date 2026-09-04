@@ -1,5 +1,5 @@
 From: RG35XX Java Platform
-Task: RGJ-RC1-011R / 010I / 011AA / RGJ-RC1-011AN / RGJ-RC1-011AO / RGJ-RC1-011AU / RGJ-RC1-011AV / RGJ-RC1-011AW / RGJ-RC1-011AX / RGJ-RC1-011AY / RGJ-RC1-011AZ
+Task: RGJ-RC1-011R / 010I / 011AA / RGJ-RC1-011AN / RGJ-RC1-011AO / RGJ-RC1-011AU / RGJ-RC1-011AV / RGJ-RC1-011AW / RGJ-RC1-011AX / RGJ-RC1-011AY / RGJ-RC1-011AZ / RGJ-RC1-011BA
 Subject: [PATCH] libretro: materialize RG35XX native media runtime ownership
 
 This executable diff owns process-lifetime native media runtime setup/teardown,
@@ -16,8 +16,8 @@ This revision is rebased for strict sequential application after 0016 and 0017.
 RC1-011AY removes the stale outer #endif context from the final shutdown hunk;
 the inner Java-process teardown brace and retro_deinit() final brace now form
 the exact zero-fuzz anchor around native shutdown. RC1-011AZ moves the drain
-thread start into the successful parent handoff path, immediately after parent
-FD ownership is established; the child never starts the native drain worker.
+thread start into the successful parent handoff path. RC1-011BA narrows that
+placement to the exact unique parent_after_fork call in the pre-0015 tree.
 
 --- a/src/libretro/freej2me_libretro.c
 +++ b/src/libretro/freej2me_libretro.c
@@ -168,12 +168,6 @@ FD ownership is established; the child never starts the native drain worker.
 +	rg35xx_native_media_shutdown();
 +#endif
  }
-@@ -1674,7 +1811,8 @@
- 	if(pid>0) /* parent */
- 	{
- 		if(audio_pipe_ready)
- 		{
+@@ -1680,1 +1817,2 @@
  			rg35xx_audio_pipe_parent_after_fork(&rg35xx_java_audio_pipe);
 +			rg35xx_audio_drain_start();
- 		}
- 		close(pRead[1]);
