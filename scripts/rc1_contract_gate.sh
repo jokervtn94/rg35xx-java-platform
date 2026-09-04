@@ -4,7 +4,8 @@ set -eu
 # RGJ-RC1-011Q/011R — integration-contract executability gate.
 # Historical `patches/*.patch` contains both executable diffs and specifications.
 # The active set contains only authoritative source-mutation owners; superseded
-# design contracts stay in history but must not be double-applied.
+# design contracts and verified no-mutation policies stay in history but must
+# not be double-applied or forced into fake patch form.
 
 MODE="${1:---project-static}"
 case "$MODE" in
@@ -16,13 +17,16 @@ ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 fail() { echo "RC1 CONTRACT GATE: FAIL: $*" >&2; exit 1; }
 note() { echo "RC1 CONTRACT GATE: $*"; }
 
-# Superseded mutation owners retained as design/history only:
+# Superseded / non-mutation owners retained as design/history only:
 # - 0004 -> 0016 owns exact audio-pipe argv/FD/fork integration.
 # - 0005 -> 0010 owns Java platform lifecycle; RG35XXLifecycle itself owns
 #   RG35XXAudioBootstrap initialize/shutdown, while 0017 owns graceful EOF exit.
 # - 0006 -> 0018 owns RG35XX PlatformPlayer direct MIDI/WAV integration.
 # - 0014 -> 0017 owns native event queue/wire + Libretro case14/case15; 0018 owns
 #   PlatformPlayer registry/listener binding.
+# - 0021 is a verified pinned RMS no-mutation policy: upstream synchronous
+#   multi-file RecordStore stays authoritative; coordinator barriers are inert
+#   until a future explicit multi-file commit protocol activates them.
 ACTIVE_CONTRACTS="
 0003-manager-rg35xx-media-profile.patch
 0007-platformgraphics-rg35xx-fast-drawrgb.patch
@@ -35,7 +39,6 @@ ACTIVE_CONTRACTS="
 0018-manager-platformplayer-rg35xx-direct-media.patch
 0019-platformplayer-tonecontrol-rg35xx.patch
 0020-pinned-graphics-input-lifecycle-consolidation.patch
-0021-pinned-rms-safe-baseline.patch
 "
 
 TOTAL=0
