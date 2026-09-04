@@ -40,9 +40,7 @@ This revision is rebased for sequential application after 0016 and 0017.
 +#ifndef RG35XX_SOUNDFONT_PATH
 +#define RG35XX_SOUNDFONT_PATH ""
 +#endif
-@@ -95,5 +103,14 @@
- int pRead[2];
- int pWrite[2];
+@@ -98,1 +106,10 @@
  static struct rg35xx_audio_pipe rg35xx_java_audio_pipe;
 +static pthread_t rg35xx_audio_drain_thread;
 +static volatile int rg35xx_audio_drain_running;
@@ -53,8 +51,6 @@ This revision is rebased for sequential application after 0016 and 0017.
 +static void rg35xx_core_media_event(int event_type,
 +                                    uint32_t player_id,
 +                                    uint64_t media_time_us);
- 
- #elif _WIN32
 @@ -803,4 +820,102 @@
  	write_to_pipe(pWrite[1], event, 5);
  }
