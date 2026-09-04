@@ -1,9 +1,11 @@
 #!/bin/sh
 set -eu
 
-# RGJ-RC1-011O — deterministic first-build harness.
-# This script does not assemble source; run rc1_assemble.sh and rc1_runtime_build_overlay.sh first.
-# It performs the first Java/native compilation only when every explicit input has been provided.
+# RGJ-RC1-011O/011P — deterministic first-build harness.
+# This script does not assemble source; run rc1_assemble.sh and
+# rc1_runtime_build_overlay.sh first. It preserves the pinned upstream
+# Makefile's own CFLAGS/CXXFLAGS/INCLUDES/fPIC definitions instead of
+# replacing them from the command line.
 
 : "${RG35XX_ASSEMBLY_ROOT:?set RG35XX_ASSEMBLY_ROOT to the disposable assembled FreeJ2ME tree}"
 : "${RG35XX_CC:?set RG35XX_CC to the ARMv5TE uClibc gcc executable}"
@@ -26,9 +28,23 @@ case "$CC_MACHINE" in arm*-uclibc*|arm*-linux-uclibc*) ;; *) fail "unexpected C 
 case "$CXX_MACHINE" in arm*-uclibc*|arm*-linux-uclibc*) ;; *) fail "unexpected C++ compiler target: $CXX_MACHINE" ;; esac
 
 TARGET_FLAGS="-marm -march=armv5te -mtune=arm926ej-s -mfloat-abi=soft"
+CC_CMD="$RG35XX_CC $TARGET_FLAGS"
+CXX_CMD="$RG35XX_CXX $TARGET_FLAGS"
 
 command -v ant >/dev/null 2>&1 || fail "ant not found"
 command -v make >/dev/null 2>&1 || fail "make not found"
+
+# The pinned Makefile appends -O3, -Wall, -D__LIBRETRO__, INCLUDES and -fPIC.
+# Never pass CFLAGS/CXXFLAGS on the make command line: GNU make command-line
+# variables can override normal makefile assignments and silently remove those
+# required flags. CPU/ABI flags are carried by the compiler command itself,
+# matching the known-good RG35XX cross-compile invocation used during device work.
+MAKEFILE="$RG35XX_ASSEMBLY_ROOT/src/libretro/Makefile"
+grep -q 'CFLAGS[[:space:]]*+=[[:space:]]*-Wall' "$MAKEFILE" || fail "pinned Makefile CFLAGS baseline changed"
+grep -q 'CXXFLAGS[[:space:]]*+=[[:space:]]*-Wall' "$MAKEFILE" || fail "pinned Makefile CXXFLAGS baseline changed"
+grep -q 'D__LIBRETRO__' "$MAKEFILE" || fail "pinned Makefile libretro define missing"
+grep -q '$(INCLUDES)' "$MAKEFILE" || fail "pinned Makefile include expansion missing"
+grep -q '$(fpic)' "$MAKEFILE" || fail "pinned Makefile fPIC expansion missing"
 
 note "Java compile: clean Ant build against consolidated source"
 (
@@ -39,15 +55,16 @@ note "Java compile: clean Ant build against consolidated source"
 JAVA_JAR="$RG35XX_ASSEMBLY_ROOT/build/freej2me_plus-lr.jar"
 [ -s "$JAVA_JAR" ] || fail "Ant completed but build/freej2me_plus-lr.jar is missing"
 
-note "Native compile: ARMv5TE/uClibc, soft-float, no host-architecture fallback"
+note "Native compile: ARMv5TE/uClibc, soft-float, preserving upstream Makefile flags"
 (
   cd "$RG35XX_ASSEMBLY_ROOT/src/libretro"
   make clean
+  # Remove host/user flag leakage. Project flags are reintroduced by Makefile +
+  # rg35xx/rc1_make_overlay.mk; target CPU/ABI flags stay in CC/CXX commands.
+  unset CFLAGS CXXFLAGS LDFLAGS CPPFLAGS
   make platform=unix \
-    CC="$RG35XX_CC" \
-    CXX="$RG35XX_CXX" \
-    CFLAGS="$TARGET_FLAGS" \
-    CXXFLAGS="$TARGET_FLAGS"
+    CC="$CC_CMD" \
+    CXX="$CXX_CMD"
 )
 CORE_SO="$RG35XX_ASSEMBLY_ROOT/src/libretro/freej2me_plus_libretro.so"
 [ -s "$CORE_SO" ] || fail "native build completed but libretro core is missing"
