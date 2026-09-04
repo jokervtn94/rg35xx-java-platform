@@ -9,7 +9,7 @@ processAlpha is false, and skips fully transparent pixels without allocation.
 
 --- a/src/org/recompile/mobile/PlatformGraphics.java
 +++ b/src/org/recompile/mobile/PlatformGraphics.java
-@@ -537,56 +537,55 @@
+@@ -537,61 +537,52 @@
  	public void drawRGB(int[] rgbData, int offset, int scanlength, int x, int y, int width, int height, boolean processAlpha)
  	{
  		if (width <= 0 || height <= 0) { return; }
