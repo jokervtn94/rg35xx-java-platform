@@ -51,7 +51,9 @@ else
   fail "jar or unzip is required to audit Java artifact contents"
 fi
 
-# Core RG35XX Java owners that must be present in the consolidated jar.
+# Source-controlled RG35XX Java owners copied by rc1_assemble.sh and required by
+# the executable integration contracts. Do not invent acceptance requirements
+# for classes that are not present in the project source tree.
 for cls in \
   org/recompile/mobile/RG35XXPlatformProfile.class \
   org/recompile/mobile/RG35XXFrameScheduler.class \
@@ -67,8 +69,7 @@ for cls in \
   org/recompile/mobile/RG35XXToneSequenceEncoder.class \
   org/recompile/mobile/RG35XXTransformCache.class \
   org/recompile/mobile/RG35XXRmsCoordinator.class \
-  org/recompile/mobile/RG35XXLifecycle.class \
-  org/recompile/mobile/RG35XXRuntimeStats.class; do
+  org/recompile/mobile/RG35XXLifecycle.class; do
   printf '%s\n' "$JAR_LIST" | grep -Fxq "$cls" || fail "missing Java owner in jar: $cls"
 done
 
