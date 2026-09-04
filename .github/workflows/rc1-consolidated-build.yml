@@ -8,6 +8,7 @@ on:
       - 'tasklog/RC1-011W-TASKLOG.md'
       - 'tasklog/RC1-011X-TASKLOG.md'
       - 'tasklog/RC1-011Y-TASKLOG.md'
+      - 'tasklog/RC1-011Z-TASKLOG.md'
       - 'scripts/rc1_assemble.sh'
       - 'scripts/rc1_runtime_build_overlay.sh'
       - 'scripts/rc1_compile.sh'
@@ -74,9 +75,11 @@ jobs:
 
           curl -L --fail --retry 3 "$CLASSPATH_URL" -o "$ext/classpath-0.99.tar.gz"
           echo "$CLASSPATH_SHA256  $ext/classpath-0.99.tar.gz" | sha256sum -c -
-          mkdir -p "$ext/classpath-src"
-          tar -xzf "$ext/classpath-0.99.tar.gz" -C "$ext/classpath-src" --strip-components=1
-          test -f "$ext/classpath-src/gnu/java/awt/peer/headless/HeadlessToolkit.java"
+          mkdir -p "$ext/classpath-assembly-src" "$ext/classpath-runtime-src"
+          tar -xzf "$ext/classpath-0.99.tar.gz" -C "$ext/classpath-assembly-src" --strip-components=1
+          tar -xzf "$ext/classpath-0.99.tar.gz" -C "$ext/classpath-runtime-src" --strip-components=1
+          test -f "$ext/classpath-assembly-src/gnu/java/awt/peer/headless/HeadlessToolkit.java"
+          test -f "$ext/classpath-runtime-src/gnu/java/awt/peer/headless/HeadlessToolkit.java"
 
           curl -L --fail --retry 3 "$DEJAVU_URL" -o "$ext/dejavu-sans-ttf-2.37.zip"
           echo "$DEJAVU_ARCHIVE_SHA256  $ext/dejavu-sans-ttf-2.37.zip" | sha256sum -c -
@@ -102,7 +105,7 @@ jobs:
           set -euo pipefail
           export RG35XX_FREEJ2ME_ROOT="$EXT_ROOT/freej2me"
           export RG35XX_ASSEMBLY_ROOT="$RUNNER_TEMP/rg35xx-assembly"
-          export RG35XX_CLASSPATH_ROOT="$EXT_ROOT/classpath-src"
+          export RG35XX_CLASSPATH_ROOT="$EXT_ROOT/classpath-assembly-src"
           export RG35XX_FONT_FILE="$EXT_ROOT/DejaVuSans.ttf"
           export RG35XX_FONT_RUNTIME_PATH="$FONT_RUNTIME_PATH"
           export RG35XX_SOUNDFONT_FILE="$EXT_ROOT/GeneralUser-GS.sf2"
@@ -110,6 +113,11 @@ jobs:
           export RG35XX_RUNTIME_ASSEMBLY_ROOT="$RUNNER_TEMP/rg35xx-classpath-runtime"
 
           sh scripts/rc1_assemble.sh
+
+          # rc1_assemble.sh intentionally modifies its Classpath input. The runtime
+          # overlay owns a separate pristine GNU Classpath 0.99 baseline and must
+          # never be asked to rewrite an already-overlaid tree.
+          export RG35XX_CLASSPATH_ROOT="$EXT_ROOT/classpath-runtime-src"
           sh scripts/rc1_runtime_build_overlay.sh
 
           echo "RG35XX_ASSEMBLY_ROOT=$RG35XX_ASSEMBLY_ROOT" >> "$GITHUB_ENV"
