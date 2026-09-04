@@ -1,59 +1,50 @@
-# RGJ-B6-002..006 — consolidated lifecycle integration specification
-#
-# Libretro.java target integration
-# -------------------------------
-# Startup, after target environment/protocol streams are valid:
-#     RG35XXLifecycle.platformStart();
-#
-# Immediately before platform.load(game) / case 10 new-game path:
-#     RG35XXLifecycle.beforeGameLoad();
-#
-# MIDlet pause/destroy boundaries where the libretro facade owns the event:
-#     RG35XXLifecycle.pauseBarrier();
-#     RG35XXLifecycle.destroyBarrier();
-#
-# Game unload/replacement:
-#     RG35XXLifecycle.unloadGame();
-# This must occur before discarding the old MobilePlatform/MIDlet state.
-#
-# Final Java shutdown:
-#     RG35XXLifecycle.platformShutdown();
-# Do not separately reorder RMS/audio teardown around it.
-#
-# IMPORTANT: RG35XXAudioBootstrap attachment still happens only after the
-# inherited dedicated FD property is available. Lifecycle coordinates reset and
-# shutdown; it does not manufacture the inherited descriptor.
-#
-# freej2me_libretro.c target integration
-# --------------------------------------
-# retro_load_game / Java process setup:
-#   1. init media cache + mixer/event callback
-#   2. create dedicated audio pipe
-#   3. fork JamVM
-#   4. parent closes write end; child closes read end
-#   5. child receives -Dfreej2me.rg35xx.audio.fd=<write_fd>
-#   6. parent audio worker drains pipe independently of retro_run
-#
-# game RESET command:
-#   mixer_reset() BEFORE media_cache_reset().
-#
-# retro_unload_game:
-#   allow Java lifecycle unload/reset to complete before destroying process-owned
-#   resources. Do not kill a live Java child before its RMS force-flush barrier.
-#
-# retro_deinit final ordering:
-#   request/observe Java shutdown where current core protocol permits;
-#   stop worker ownership;
-#   close audio pipe;
-#   reset mixer;
-#   reset/free media cache;
-#   destroy remaining synchronization objects.
-#
-# Preserved invariants
-# --------------------
-# - stdout stays binary video IPC; never redirect it for logs/audio.
-# - fixed frontend geometry remains 640x480 RGB565.
-# - receiver pthread and async audio callback/ring remain independent of retro_run.
-# - no 3-second/aggressive watchdog.
-# - native MIDI END_OF_MEDIA remains authoritative.
-# - old SD audio bridge remains rollback-only until consolidated device pass.
+From: RG35XX Java Platform
+Task: RGJ-B6-002..006 / RGJ-RC1-011R
+Subject: [PATCH] Libretro: bind RG35XX lifecycle to Java platform and game load
+
+This executable diff owns the Java-side lifecycle boundaries that are already
+present in pinned Libretro.java. Native process teardown and EOF/platformShutdown
+remain owned by 0017 so the same parser tail is not patched twice.
+
+--- a/src/org/recompile/freej2me/Libretro.java
++++ b/src/org/recompile/freej2me/Libretro.java
+@@ -18,6 +18,7 @@
+ package org.recompile.freej2me;
+ 
+ import org.recompile.mobile.Mobile;
+ import org.recompile.mobile.MobilePlatform;
++import org.recompile.mobile.RG35XXLifecycle;
+ 
+ import java.io.File;
+ import java.net.URLDecoder;
+@@ -83,6 +84,9 @@
+ 		{
+ 			public void run() { updatePauseTimer(); }
+ 		});
++
++		/* Process-lifetime target services attach after MobilePlatform exists. */
++		RG35XXLifecycle.platformStart();
+ 
+ 		lio = new LibretroIO();
+ 
+@@ -162,11 +166,17 @@
+ 
+ 								path = new String(buffer, 0, bytesRead);
+ 
++								/* Flush/reset the previous game before MobilePlatform.load()
++								 * replaces loader/suite context. */
++								RG35XXLifecycle.beforeGameLoad();
+ 								if(Mobile.getPlatform().load(getFormattedLocation(URLDecoder.decode(path, Mobile.textEncoding))))
+ 								{
++									RG35XXLifecycle.afterGameLoad();
+ 									if(Mobile.libretroRestartRequested == 1)
+ 									{
+ 										frameHeader[14] = Mobile.libretroRestartRequested;
+@@ -181,6 +191,7 @@
+ 								}
+ 								else
+ 								{
++									RG35XXLifecycle.gameLoadFailed();
+ 									Mobile.log(Mobile.LOG_ERROR, Libretro.class.getPackage().getName() + "." + Libretro.class.getSimpleName() + ": " + "Couldn't load jar...");
+ 									System.exit(0);
+ 								}
