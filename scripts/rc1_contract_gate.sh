@@ -1,10 +1,11 @@
 #!/bin/sh
 set -eu
 
-# RGJ-RC1-011Q — integration-contract executability gate.
+# RGJ-RC1-011Q/011R — integration-contract executability gate.
 # The historical `patches/*.patch` directory contains a mix of executable
 # unified diffs and design/specification documents. Build-ready must never feed
-# a specification document to `patch(1)` and pretend the source was assembled.
+# a specification document or placeholder hunk to `patch(1)` and pretend the
+# source was assembled.
 
 MODE="${1:---project-static}"
 case "$MODE" in
@@ -43,26 +44,30 @@ for p in $ACTIVE_CONTRACTS; do
   [ -f "$f" ] || fail "missing active integration contract: $p"
   TOTAL=$((TOTAL + 1))
 
-  # Require all three structural pieces of a normal unified diff. Merely having
-  # a .patch suffix, prose beginning with '#', or code snippets is not enough.
-  if grep -q '^--- ' "$f" && grep -q '^+++ ' "$f" && grep -q '^@@ ' "$f"; then
+  # A build-ready patch must contain real git/unified-diff file headers and at
+  # least one hunk with numeric old/new ranges. Historical contracts often use
+  # a bare '@@' as a prose placeholder; patch(1) cannot apply that safely.
+  if grep -q '^--- a/' "$f" \
+     && grep -q '^+++ b/' "$f" \
+     && grep -Eq '^@@ -[0-9]+(,[0-9]+)? \+[0-9]+(,[0-9]+)? @@' "$f"; then
     EXECUTABLE=$((EXECUTABLE + 1))
-    note "EXECUTABLE-DIFF: $p"
+    note "EXECUTABLE-DIFF-SHAPE: $p"
   else
     SPEC_ONLY=$((SPEC_ONLY + 1))
-    note "SPEC-ONLY: $p"
+    note "SPEC-ONLY/PLACEHOLDER: $p"
   fi
 done
 
 [ "$TOTAL" -gt 0 ] || fail "active contract set is empty"
-note "summary total=$TOTAL executable=$EXECUTABLE spec-only=$SPEC_ONLY"
+note "summary total=$TOTAL executable-shape=$EXECUTABLE spec-or-placeholder=$SPEC_ONLY"
 
 if [ "$MODE" = "--build-ready" ] && [ "$SPEC_ONLY" -ne 0 ]; then
-  fail "$SPEC_ONLY active integration contracts are specification-only; materialize executable source overlays/diffs before BUILD-READY"
+  fail "$SPEC_ONLY active integration contracts are specification-only or contain placeholder hunks; materialize exact pinned-source diffs/overlays before BUILD-READY"
 fi
 
 if [ "$MODE" = "--project-static" ]; then
-  note "STATIC CONTRACT INVENTORY PASS — specification-only items remain build blockers by design"
+  note "STATIC CONTRACT INVENTORY PASS — specification/placeholder items remain build blockers by design"
 else
-  note "BUILD-READY CONTRACT EXECUTABILITY PASS"
+  note "BUILD-READY CONTRACT DIFF-SHAPE PASS"
+  note "rc1_assemble.sh still performs patch --dry-run against the exact pinned source before mutation"
 fi
