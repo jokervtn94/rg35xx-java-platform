@@ -23,7 +23,7 @@ Desktop/AWT construction remains unchanged when RG35XXPlatformProfile is false.
 +		/* The target branch must happen before any JavaSound/JLayer backend is
 +		 * constructed. Unsupported target types become a safe stub and never
 +		 * fall through to desktop audio. */
-+		if(RG35XXPlatformProfile.isActive())
++		if(RG35XXPlatformProfile.isActive() && Mobile.sound != false)
 +		{
 +			initRG35XXDirectPlayer(stream, type);
 +			controls[0] = new volumeControl(this.player);
@@ -34,7 +34,7 @@ Desktop/AWT construction remains unchanged when RG35XXPlatformProfile is false.
  		if(Mobile.sound == false) { player = new audioplayer(); }
  		else
  		{
-@@ -276,6 +286,60 @@
+@@ -276,6 +286,61 @@
  		Mobile.log(Mobile.LOG_DEBUG, PlatformPlayer.class.getPackage().getName() + "." + PlatformPlayer.class.getSimpleName() + ": " + "media type: " + contentType);
  	}
  
@@ -64,6 +64,7 @@ Desktop/AWT construction remains unchanged when RG35XXPlatformProfile is false.
 +		}
 +		catch(Exception e)
 +		{
++			if(rg35xxPlayer != null) { rg35xxPlayer.close(); rg35xxPlayer = null; }
 +			Mobile.log(Mobile.LOG_ERROR, PlatformPlayer.class.getPackage().getName() + "." + PlatformPlayer.class.getSimpleName() + ": RG35XX media setup failed: " + e.getMessage());
 +		}
 +
@@ -96,7 +97,7 @@ Desktop/AWT construction remains unchanged when RG35XXPlatformProfile is false.
  	public PlatformPlayer(String locator)
  	{
  		if(locator.equals(Manager.TONE_DEVICE_LOCATOR) || locator.equals(Manager.MIDI_DEVICE_LOCATOR))
-@@ -672,6 +736,48 @@
+@@ -672,6 +737,48 @@
  		public Sequence getSequence() { return null; }
  	}
  
@@ -121,7 +122,7 @@ Desktop/AWT construction remains unchanged when RG35XXPlatformProfile is false.
 +			if(rg35xxPlayer.start())
 +			{
 +				state = Player.STARTED;
-+				notifyListeners(PlayerListener.STARTED, Long.valueOf(rg35xxPlayer.setMediaTime(getMediaTime())));
++				notifyListeners(PlayerListener.STARTED, Long.valueOf(getMediaTime()));
 +			}
 +		}
 +
@@ -130,13 +131,13 @@ Desktop/AWT construction remains unchanged when RG35XXPlatformProfile is false.
 +			if(rg35xxPlayer.stop())
 +			{
 +				state = Player.PREFETCHED;
-+				notifyListeners(PlayerListener.STOPPED, Long.valueOf(0L));
++				notifyListeners(PlayerListener.STOPPED, Long.valueOf(getMediaTime()));
 +			}
 +		}
 +
 +		public void setLoopCount(int count) { rg35xxPlayer.setLoopCount(count); }
 +		public long setMediaTime(long now) { return rg35xxPlayer.setMediaTime(now); }
-+		public long getMediaTime() { return rg35xxPlayer.getState() >= RG35XXNativePlayer.PREFETCHED ? RG35XXMediaRegistry.get(rg35xxPlayer.getPlayerId()).mediaTimeUs : 0L; }
++		public long getMediaTime() { RG35XXMediaRegistry.Entry e = RG35XXMediaRegistry.get(rg35xxPlayer.getPlayerId()); return e == null ? 0L : e.mediaTimeUs; }
 +		public boolean isRunning() { return rg35xxPlayer.getState() == RG35XXNativePlayer.STARTED; }
 +		public void deallocate() { if(isRunning()) stop(); state = Player.REALIZED; }
 +		public void close() { rg35xxPlayer.close(); }
@@ -146,7 +147,7 @@ Desktop/AWT construction remains unchanged when RG35XXPlatformProfile is false.
  	private class midiPlayer extends audioplayer implements MetaEventListener
  	{
  		private Sequencer midi;
-@@ -1949,6 +2055,10 @@
+@@ -1949,6 +2056,10 @@
  
  			try
  			{
@@ -157,7 +158,7 @@ Desktop/AWT construction remains unchanged when RG35XXPlatformProfile is false.
  				if (player instanceof midiPlayer)
  				{
  					if(((midiPlayer)player).synthesizer == null) { return getLevel(); } // Only make changes if the midi subsystem for this player is available
-@@ -2012,6 +2122,10 @@
+@@ -2012,6 +2123,10 @@
  			{
  				muted = mute;
  
