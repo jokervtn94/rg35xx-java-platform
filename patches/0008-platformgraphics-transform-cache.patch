@@ -1,29 +1,107 @@
-# RG35XX Java Platform 1.0 Beta 4
-# PlatformGraphics Sprite transform-cache integration
-#
-# Scope: transformed drawRegion / drawTransformedImage hot path only.
-# TRANS_NONE must retain the existing direct drawRGB path.
-#
-# Integration model:
-#   RG35XXTransformCache.Map map = RG35XXTransformCache.get(width, height, transform);
-#   int[] sourceMap = map.sourceIndex;
-#
-# The transformed destination loop then indexes the source subregion through
-# sourceMap rather than recomputing switch/rotation/mirror arithmetic per pixel.
-# Source origin must still be added by the caller:
-#   int local = sourceMap[dy * map.width + dx];
-#   int sx = local % width;
-#   int sy = local / width;
-#   int pixel = source[(srcY + sy) * sourceStride + srcX + sx];
-#
-# Correctness requirements:
-# - keep all 8 javax.microedition.lcdui.game.Sprite transform constants exact
-# - preserve drawRegion source bounds validation
-# - preserve anchor handling and current translation/clip behavior
-# - preserve source alpha and PNG tRNS repair results
-# - never cache mutable image pixels, only geometry maps
-# - reset cache between games together with RG35XXImageCache
-#
-# Cache is intentionally small (24 maps) because typical J2ME sprite sheets
-# repeatedly use a handful of dimensions.  It trades a bounded amount of RAM
-# for reduced integer arithmetic in animation-heavy titles.
+From: RG35XX Java Platform
+Task: RGJ-RC1-011R / 008
+Subject: [PATCH] PlatformGraphics: materialize geometry-only transform cache
+
+The pinned PlatformGraphics normalizes public MIDP/DirectGraphics transforms to
+its internal DoJa-style FLIP_* ids before drawTransformedImage().
+RG35XXTransformCache is keyed by MIDP Sprite transform semantics, so this diff
+maps the internal id once per draw and uses the cached destination-to-source map
+inside the pixel loop. Mutable image pixels are never cached.
+
+--- a/src/org/recompile/mobile/PlatformGraphics.java
++++ b/src/org/recompile/mobile/PlatformGraphics.java
+@@ -3070,20 +3070,31 @@
+ 			// Some of the following transforms require temp variables
+ 			final int origSwidth = swidth;
+ 			final int origSheight = sheight;
+ 
+-			if (transform == FLIP_ROTATE_RIGHT ||
+-				transform == FLIP_ROTATE_LEFT ||
+-				transform == FLIP_ROTATE_RIGHT_VERTICAL ||
+-				transform == FLIP_ROTATE_RIGHT_HORIZONTAL)
++			/* PlatformGraphics uses DoJa-style FLIP ids internally, while the
++			 * geometry cache is keyed by MIDP Sprite transform semantics. Convert
++			 * once here instead of recomputing transform arithmetic per pixel. */
++			int cacheTransform;
++			switch (transform)
+ 			{
+-				int tmp = swidth;
+-				swidth = sheight;
+-				sheight = tmp;
++				case FLIP_HORIZONTAL:                cacheTransform = Sprite.TRANS_MIRROR; break;
++				case FLIP_VERTICAL:                  cacheTransform = Sprite.TRANS_MIRROR_ROT180; break;
++				case FLIP_ROTATE:                    cacheTransform = Sprite.TRANS_ROT180; break;
++				case FLIP_ROTATE_LEFT:               cacheTransform = Sprite.TRANS_ROT270; break;
++				case FLIP_ROTATE_RIGHT:              cacheTransform = Sprite.TRANS_ROT90; break;
++				case FLIP_ROTATE_RIGHT_HORIZONTAL:   cacheTransform = Sprite.TRANS_MIRROR_ROT270; break;
++				case FLIP_ROTATE_RIGHT_VERTICAL:     cacheTransform = Sprite.TRANS_MIRROR_ROT90; break;
++				default:                             cacheTransform = Sprite.TRANS_NONE; break;
+ 			}
++			final RG35XXTransformCache.Map transformMap =
++				RG35XXTransformCache.get(origSwidth, origSheight, cacheTransform);
++			final int[] sourceMap = transformMap.sourceIndex;
++			swidth = transformMap.width;
++			sheight = transformMap.height;
+ 
+ 			int imgWidth = image.getWidth();
+ 			int[] imgData = image.getDataBuffer();
+ 
+@@ -3115,49 +3126,11 @@
+ 
+ 				for (int x = drawX; x < drawWidth; x++)
+ 				{
+ 					int baseX = (int) ((startX + (long) (x - drawX) * stepX) >> 16);
+ 
+ 					if (baseX >= swidth) { baseX = swidth - 1; }
+ 					if (baseX < 0) { baseX = 0; }
+ 
+-					switch (transform)
+-					{
+-						case FLIP_HORIZONTAL:
+-							imgX = sx + (origSwidth - 1 - baseX);
+-							imgY = sy + baseY;
+-							break;
+-
+-						case FLIP_VERTICAL:
+-							imgX = sx + baseX;
+-							imgY = sy + (origSheight - 1 - baseY);
+-							break;
+-
+-						case FLIP_ROTATE: // 180 degrees
+-							imgX = sx + (origSwidth - 1 - baseX);
+-							imgY = sy + (origSheight - 1 - baseY);
+-							break;
+-
+-						case FLIP_ROTATE_RIGHT: // ROT90
+-							imgX = sx + baseY;
+-							imgY = sy + (origSheight - 1 - baseX);
+-							break;
+-
+-						case FLIP_ROTATE_LEFT: // ROT270
+-							imgX = sx + (origSwidth - 1 - baseY);
+-							imgY = sy + baseX;
+-							break;
+-
+-						case FLIP_ROTATE_RIGHT_VERTICAL:
+-							imgX = sx + (origSwidth - 1 - baseY);
+-							imgY = sy + (origSheight - 1 - baseX);
+-
+-							break;
+-
+-						case FLIP_ROTATE_RIGHT_HORIZONTAL:
+-							imgX = sx + baseY;
+-							imgY = sy + baseX;
+-							break;
+-
+-						default:
+-							imgX = sx + baseX;
+-							imgY = sy + baseY;
+-							break;
+-					}
++					final int local = sourceMap[baseY * transformMap.width + baseX];
++					imgX = sx + (local % origSwidth);
++					imgY = sy + (local / origSwidth);
+ 
+ 					canvasData[destRow + x] = blendPixels(imgData[imgY * imgWidth + imgX], canvasData[destRow + x]);
+ 				}
+ 			}
