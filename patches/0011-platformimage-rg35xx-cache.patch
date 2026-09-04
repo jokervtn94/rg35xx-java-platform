@@ -9,7 +9,7 @@ all other constructors remain unchanged.
 
 --- a/src/org/recompile/mobile/PlatformImage.java
 +++ b/src/org/recompile/mobile/PlatformImage.java
-@@ -203,8 +203,24 @@
+@@ -184,22 +184,42 @@
  	public PlatformImage(byte[] imageData, int imageOffset, int imageLength, boolean mutable) // DoJa also uses this one, creates mutable images like DirectGraphics
  	{
  		// Create Image from Byte Array Range (Data is PNG, JPG, etc.)
@@ -32,7 +32,16 @@ all other constructors remain unchanged.
  
  		BufferedImage image;
  		
-@@ -221,6 +237,10 @@
+ 		try { image = ImageIO.read(stream); } 
+ 		catch (IOException e) { throw new IllegalArgumentException("Failed to read image from Byte Array." + e.getMessage()); }
+ 		
+ 		if(image == null) { throw new IllegalArgumentException("Can't load image from byte array, as the returned image is null."); }
+ 
+ 		if(image.getType() == BufferedImage.TYPE_INT_ARGB || image.getType() == BufferedImage.TYPE_INT_RGB) { canvas = image; }
+ 		else 
+ 		{
+ 			canvas = new BufferedImage(image.getWidth(), image.getHeight(), BufferedImage.TYPE_INT_ARGB);
+ 			canvas.getGraphics().drawImage(image, 0, 0, null);
  		}
  
  		dataBuffer = ((DataBufferInt) canvas.getRaster().getDataBuffer()).getData();
