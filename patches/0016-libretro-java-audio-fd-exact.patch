@@ -1,10 +1,13 @@
 From: RG35XX Java Platform
-Task: RGJ-RC1-011R / 010J
-Subject: [PATCH] libretro: exact dedicated RG35XX audio FD inheritance
+Task: RGJ-RC1-011R / 010J / 010L
+Subject: [PATCH] libretro: exact RG35XX JVM selector and dedicated audio FD
 
-This executable diff is the authoritative process/FD owner for the dedicated
-Java->native audio transport. It supersedes patch 0004 for source mutation;
-0015 owns worker drain and 0017 owns graceful teardown/media shutdown.
+This executable diff is the sole native process/JVM-argv owner. It supersedes
+0004 for source mutation and owns both properties that must precede -jar:
+  -Dfreej2me.rg35xx=true
+  -Dfreej2me.rg35xx.audio.fd=<fd> (only when the dedicated pipe exists)
+0015 owns worker drain; 0017 owns graceful teardown/media shutdown. 0018 consumes
+the target selector in Java but must not mutate this argv region again.
 
 --- a/src/libretro/freej2me_libretro.c
 +++ b/src/libretro/freej2me_libretro.c
@@ -22,7 +25,7 @@ Java->native audio transport. It supersedes patch 0004 for source mutation;
  #include <retro_miscellaneous.h>
  
 -#define NUM_ARGUMENTS 7
-+#define NUM_ARGUMENTS 8
++#define NUM_ARGUMENTS 9
  
  const char *slash = path_default_slash();
  
@@ -34,17 +37,40 @@ Java->native audio transport. It supersedes patch 0004 for source mutation;
  
  #elif _WIN32
  BOOL succeeded = FALSE;
-@@ -846,7 +848,8 @@
- 	params[3] = strdup(freej2meapp);
- 	params[4] = strdup(resArg[0]);
- 	params[5] = strdup(resArg[1]);
--	params[6] = NULL; // Null-terminate the array
-+	params[6] = NULL; // Original argv terminator; javaOpen may shift it for RG35XX audio.
+@@ -838,15 +840,27 @@
+ 	/* Allocate memory for launch arguments */
+ 	params = (char**)malloc(sizeof(char*) * NUM_ARGUMENTS);
+ #ifdef __linux__
+ 	params[0] = strdup("java");
++	params[1] = strdup("-Dfreej2me.rg35xx=true");
++	params[2] = strdup("-jar");
++	params[3] = strdup(supported_encodings[characterEncoding]);
++	params[4] = strdup(freej2meapp);
++	params[5] = strdup(resArg[0]);
++	params[6] = strdup(resArg[1]);
 +	params[7] = NULL;
++	params[8] = NULL; // javaOpen may use slot 2 for the optional audio FD property.
+ #elif _WIN32
+ 	params[0] = strdup("javaw");
++	params[1] = strdup("-jar");
++	params[2] = strdup(supported_encodings[characterEncoding]);
++	params[3] = strdup(freej2meapp);
++	params[4] = strdup(resArg[0]);
++	params[5] = strdup(resArg[1]);
++	params[6] = NULL;
++	params[7] = NULL;
++	params[8] = NULL;
+ #endif
+-	params[1] = strdup("-jar");
+-	params[2] = strdup(supported_encodings[characterEncoding]);
+-	params[3] = strdup(freej2meapp);
+-	params[4] = strdup(resArg[0]);
+-	params[5] = strdup(resArg[1]);
+-	params[6] = NULL; // Null-terminate the array
  
  	log_fn(RETRO_LOG_INFO, "Preparing to open FreeJ2ME-Plus' Java app.\n");
  
-@@ -1550,6 +1553,8 @@
+@@ -1550,6 +1564,8 @@
  	int pid = 0;
  	int fd_stdin  = 0;
  	int fd_stdout = 1;
@@ -53,12 +79,12 @@ Java->native audio transport. It supersedes patch 0004 for source mutation;
  
  	/*
  	 * parent <-- 0 --  pRead  <-- 1 --  child
-@@ -1558,12 +1563,42 @@
+@@ -1558,12 +1574,42 @@
  	pipe(pRead); /* 0: pRead, 1: pWrite */
  	pipe(pWrite);
  
-+	/* Dedicated RG35XX audio must never share stdin/stdout/stderr. Build the
-+	 * inherited -D property in parent-owned argv storage before fork(). */
++	/* Dedicated RG35XX audio must never share stdin/stdout/stderr. The target
++	 * selector is already params[1]; insert the optional audio property at [2]. */
 +	rg35xx_audio_pipe_init(&rg35xx_java_audio_pipe);
 +	audio_pipe_ready = rg35xx_audio_pipe_create(&rg35xx_java_audio_pipe);
 +	if(audio_pipe_ready)
@@ -73,12 +99,12 @@ Java->native audio transport. It supersedes patch 0004 for source mutation;
 +		{
 +			snprintf(audio_fd_property, sizeof(audio_fd_property),
 +				"-Dfreej2me.rg35xx.audio.fd=%d", audio_fd);
-+			for(int i = 6; i >= 1; --i) { params[i + 1] = params[i]; }
-+			params[1] = strdup(audio_fd_property);
-+			if(params[1] == NULL)
++			for(int i = 7; i >= 2; --i) { params[i + 1] = params[i]; }
++			params[2] = strdup(audio_fd_property);
++			if(params[2] == NULL)
 +			{
-+				for(int i = 1; i <= 6; ++i) { params[i] = params[i + 1]; }
-+				params[7] = NULL;
++				for(int i = 2; i <= 7; ++i) { params[i] = params[i + 1]; }
++				params[8] = NULL;
 +				rg35xx_audio_pipe_close(&rg35xx_java_audio_pipe);
 +				audio_pipe_ready = 0;
 +			}
@@ -96,7 +122,7 @@ Java->native audio transport. It supersedes patch 0004 for source mutation;
  
  		dup2(pWrite[0], fd_stdin);  /* read from parent pWrite */
  		dup2(pRead[1], fd_stdout);  /* write to parent pRead */
-@@ -1580,13 +1615,21 @@
+@@ -1580,13 +1626,21 @@
  
  	if(pid>0) /* parent */
  	{
