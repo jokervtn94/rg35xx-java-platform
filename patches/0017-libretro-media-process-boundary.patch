@@ -99,10 +99,9 @@ IOException explicitly for the fail-closed Java event parser.
  import java.io.File;
 +import java.io.IOException;
  import java.net.URLDecoder;
-@@ -114 +115,2 @@
- 			byte[] buffer;
+@@ -118,0 +119 @@
 +			final byte[] rg35xxMediaEvent = new byte[13];
-@@ -334 +336,26 @@
+@@ -334,2 +336,28 @@
 +							case 14: // RG35XX native LOOPED / END_OF_MEDIA event
 +								if(code != 13) { throw new IOException("Invalid RG35XX media event length: " + code); }
 +								bytesRead = 0;
@@ -129,7 +128,6 @@ IOException explicitly for the fail-closed Java event parser.
 +							break;
 +
  							case 15: // Libretro core requested a new frame.
-@@ -335 +362,2 @@
  								lastCoreUpdateTime = System.currentTimeMillis();
 +								org.recompile.mobile.RG35XXMediaRegistry.drainNativeEvents();
 @@ -436 +464,11 @@
