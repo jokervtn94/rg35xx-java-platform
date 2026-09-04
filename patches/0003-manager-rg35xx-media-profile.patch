@@ -1,16 +1,15 @@
 From: RG35XX Java Platform
-Task: RGJ-B3-002 / RGJ-RC1-011R
+Task: RGJ-B3-002 / RGJ-RC1-011R / RGJ-RC1-011AD
 Subject: [PATCH] MMAPI Manager: gate truthful capabilities by RG35XX target
 
 The shared Manager facade must preserve upstream desktop/AWT capability reporting.
 Only explicit RG35XX launches use the conservative target capability table.
+This revision rebases the import hunk to the exact pinned Manager source so the
+contract applies with zero fuzz.
 
 --- a/src/javax/microedition/media/Manager.java
 +++ b/src/javax/microedition/media/Manager.java
-@@ -41,6 +41,8 @@
- import org.recompile.mobile.Mobile;
- import org.recompile.mobile.PlatformPlayer;
- import org.recompile.mobile.JavaxPlatformPlayer;
+@@ -44,3 +44,5 @@
  import org.recompile.mobile.SiemensPlatformPlayer;
 +import org.recompile.mobile.RG35XXMediaProfile;
 +import org.recompile.mobile.RG35XXPlatformProfile;
