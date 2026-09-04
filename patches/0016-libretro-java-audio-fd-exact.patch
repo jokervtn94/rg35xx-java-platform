@@ -1,5 +1,5 @@
 From: RG35XX Java Platform
-Task: RGJ-RC1-011R / 010J / 010L / RGJ-RC1-011AK
+Task: RGJ-RC1-011R / 010J / 010L / RGJ-RC1-011AK / RGJ-RC1-011AL
 Subject: [PATCH] libretro: exact RG35XX JVM selector and dedicated audio FD
 
 This executable diff is the sole native process/JVM-argv owner. It supersedes
@@ -24,11 +24,7 @@ the target selector in Java but must not mutate this argv region again.
  
 @@ -107,0 +109 @@
 +static struct rg35xx_audio_pipe rg35xx_java_audio_pipe;
-@@ -854,16 +856,26 @@
- 	/* Allocate memory for launch arguments */
- 	params = (char**)malloc(sizeof(char*) * NUM_ARGUMENTS);
- #ifdef __linux__
- 	params[0] = strdup("java");
+@@ -857,0 +860,8 @@
 +	params[1] = strdup("-Dfreej2me.rg35xx=true");
 +	params[2] = strdup("-jar");
 +	params[3] = strdup(supported_encodings[characterEncoding]);
@@ -37,8 +33,7 @@ the target selector in Java but must not mutate this argv region again.
 +	params[6] = strdup(resArg[1]);
 +	params[7] = NULL;
 +	params[8] = NULL; // javaOpen may use slot 2 for the optional audio FD property.
- #elif _WIN32
- 	params[0] = strdup("javaw");
+@@ -859,0 +870,8 @@
 +	params[1] = strdup("-jar");
 +	params[2] = strdup(supported_encodings[characterEncoding]);
 +	params[3] = strdup(freej2meapp);
@@ -47,16 +42,13 @@ the target selector in Java but must not mutate this argv region again.
 +	params[6] = NULL;
 +	params[7] = NULL;
 +	params[8] = NULL;
- #endif
+@@ -861,6 +879,0 @@
 -	params[1] = strdup("-jar");
 -	params[2] = strdup(supported_encodings[characterEncoding]);
 -	params[3] = strdup(freej2meapp);
 -	params[4] = strdup(resArg[0]);
 -	params[5] = strdup(resArg[1]);
 -	params[6] = NULL; // Null-terminate the array
- 
- 	log_fn(RETRO_LOG_INFO, "Preparing to open FreeJ2ME-Plus' Java app.\n");
- 
 @@ -1535,6 +1547,8 @@
  	int pid = 0;
  	int fd_stdin  = 0;
