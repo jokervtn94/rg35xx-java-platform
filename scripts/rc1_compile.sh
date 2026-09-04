@@ -1,13 +1,15 @@
 #!/bin/sh
 set -eu
 
-# RGJ-RC1-011O/011P — deterministic first-build harness.
+# RGJ-RC1-011O/011P/011R — deterministic first-build harness.
 # This script does not assemble source; run rc1_assemble.sh and
 # rc1_runtime_build_overlay.sh first. It preserves the pinned upstream
 # Makefile's own CFLAGS/CXXFLAGS/INCLUDES/fPIC definitions instead of
 # replacing them from the command line.
 
+ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 : "${RG35XX_ASSEMBLY_ROOT:?set RG35XX_ASSEMBLY_ROOT to the disposable assembled FreeJ2ME tree}"
+: "${RG35XX_RUNTIME_ASSEMBLY_ROOT:?set RG35XX_RUNTIME_ASSEMBLY_ROOT to the disposable GNU Classpath runtime tree produced by rc1_runtime_build_overlay.sh}"
 : "${RG35XX_CC:?set RG35XX_CC to the ARMv5TE uClibc gcc executable}"
 : "${RG35XX_CXX:?set RG35XX_CXX to the ARMv5TE uClibc g++ executable}"
 
@@ -16,6 +18,7 @@ note() { echo "RC1 COMPILE: $*"; }
 
 [ -x "$RG35XX_CC" ] || fail "RG35XX_CC is not executable: $RG35XX_CC"
 [ -x "$RG35XX_CXX" ] || fail "RG35XX_CXX is not executable: $RG35XX_CXX"
+[ -d "$RG35XX_RUNTIME_ASSEMBLY_ROOT" ] || fail "runtime Classpath assembly missing: $RG35XX_RUNTIME_ASSEMBLY_ROOT"
 [ -f "$RG35XX_ASSEMBLY_ROOT/build.xml" ] || fail "assembled FreeJ2ME build.xml missing"
 [ -f "$RG35XX_ASSEMBLY_ROOT/src/libretro/Makefile" ] || fail "assembled libretro Makefile missing"
 [ -f "$RG35XX_ASSEMBLY_ROOT/src/libretro/rg35xx/rc1_make_overlay.mk" ] || fail "RG35XX Make overlay missing"
@@ -26,6 +29,12 @@ CC_MACHINE=$($RG35XX_CC -dumpmachine 2>/dev/null || true)
 CXX_MACHINE=$($RG35XX_CXX -dumpmachine 2>/dev/null || true)
 case "$CC_MACHINE" in arm*-uclibc*|arm*-linux-uclibc*) ;; *) fail "unexpected C compiler target: $CC_MACHINE" ;; esac
 case "$CXX_MACHINE" in arm*-uclibc*|arm*-linux-uclibc*) ;; *) fail "unexpected C++ compiler target: $CXX_MACHINE" ;; esac
+
+# Reject a host/x86 JNI machine-header selection before any compile step. The
+# runtime configure/build remains responsible for selecting the actual ARM JNI
+# header; this gate only prevents a known-incompatible target from proceeding.
+RG35XX_RUNTIME_ASSEMBLY_ROOT="$RG35XX_RUNTIME_ASSEMBLY_ROOT" \
+  sh "$ROOT/scripts/rc1_jni_target_preflight.sh"
 
 TARGET_FLAGS="-marm -march=armv5te -mtune=arm926ej-s -mfloat-abi=soft"
 CC_CMD="$RG35XX_CC $TARGET_FLAGS"
