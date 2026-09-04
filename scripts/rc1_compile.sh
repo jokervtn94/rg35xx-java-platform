@@ -1,0 +1,59 @@
+#!/bin/sh
+set -eu
+
+# RGJ-RC1-011O — deterministic first-build harness.
+# This script does not assemble source; run rc1_assemble.sh and rc1_runtime_build_overlay.sh first.
+# It performs the first Java/native compilation only when every explicit input has been provided.
+
+: "${RG35XX_ASSEMBLY_ROOT:?set RG35XX_ASSEMBLY_ROOT to the disposable assembled FreeJ2ME tree}"
+: "${RG35XX_CC:?set RG35XX_CC to the ARMv5TE uClibc gcc executable}"
+: "${RG35XX_CXX:?set RG35XX_CXX to the ARMv5TE uClibc g++ executable}"
+
+fail() { echo "RC1 COMPILE: FAIL: $*" >&2; exit 1; }
+note() { echo "RC1 COMPILE: $*"; }
+
+[ -x "$RG35XX_CC" ] || fail "RG35XX_CC is not executable: $RG35XX_CC"
+[ -x "$RG35XX_CXX" ] || fail "RG35XX_CXX is not executable: $RG35XX_CXX"
+[ -f "$RG35XX_ASSEMBLY_ROOT/build.xml" ] || fail "assembled FreeJ2ME build.xml missing"
+[ -f "$RG35XX_ASSEMBLY_ROOT/src/libretro/Makefile" ] || fail "assembled libretro Makefile missing"
+[ -f "$RG35XX_ASSEMBLY_ROOT/src/libretro/rg35xx/rc1_make_overlay.mk" ] || fail "RG35XX Make overlay missing"
+[ "$(grep -c '^include rg35xx/rc1_make_overlay\.mk$' "$RG35XX_ASSEMBLY_ROOT/src/libretro/Makefile.common")" = 1 ] || fail "Makefile.common must include RG35XX overlay exactly once"
+
+CC_MACHINE=$($RG35XX_CC -dumpmachine 2>/dev/null || true)
+CXX_MACHINE=$($RG35XX_CXX -dumpmachine 2>/dev/null || true)
+case "$CC_MACHINE" in arm*-uclibc*|arm*-linux-uclibc*) ;; *) fail "unexpected C compiler target: $CC_MACHINE" ;; esac
+case "$CXX_MACHINE" in arm*-uclibc*|arm*-linux-uclibc*) ;; *) fail "unexpected C++ compiler target: $CXX_MACHINE" ;; esac
+
+TARGET_FLAGS="-marm -march=armv5te -mtune=arm926ej-s -mfloat-abi=soft"
+
+command -v ant >/dev/null 2>&1 || fail "ant not found"
+command -v make >/dev/null 2>&1 || fail "make not found"
+
+note "Java compile: clean Ant build against consolidated source"
+(
+  cd "$RG35XX_ASSEMBLY_ROOT"
+  rm -rf build
+  ant
+)
+[ -s "$RG35XX_ASSEMBLY_ROOT/build/freej2me-lr.jar" ] || fail "Ant completed but build/freej2me-lr.jar is missing"
+
+note "Native compile: ARMv5TE/uClibc, soft-float, no host-architecture fallback"
+(
+  cd "$RG35XX_ASSEMBLY_ROOT/src/libretro"
+  make clean
+  make platform=unix \
+    CC="$RG35XX_CC" \
+    CXX="$RG35XX_CXX" \
+    CFLAGS="$TARGET_FLAGS" \
+    CXXFLAGS="$TARGET_FLAGS"
+)
+[ -s "$RG35XX_ASSEMBLY_ROOT/src/libretro/freej2me_plus_libretro.so" ] || fail "native build completed but libretro core is missing"
+
+# Static artifact checks only. Device validation remains separate.
+if command -v file >/dev/null 2>&1; then
+  file "$RG35XX_ASSEMBLY_ROOT/src/libretro/freej2me_plus_libretro.so" | grep -qi 'ARM' || fail "built core is not identified as ARM"
+fi
+
+note "COMPILE PASS CANDIDATE: Java JAR and ARM core were produced."
+note "Do not mark BUILD-PASS until compiler/link output has been reviewed for warnings/errors and unresolved RG35XX symbols."
+note "Do not mark DEVICE-TEST-PASS until the artifacts have been exercised on the RG35XX."
