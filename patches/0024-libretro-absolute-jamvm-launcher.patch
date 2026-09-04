@@ -1,0 +1,35 @@
+From: RG35XX Java Platform
+Task: RGJ-RC1-011BU
+Subject: [PATCH] libretro: launch JamVM by absolute RG35XX path
+
+This patch is applied after 0023. It fixes the real-device failure where
+javaOpen() reached fork successfully but execvp("java", ...) failed with ENOENT
+because RetroArch's inherited PATH does not contain a java executable.
+
+The validated RG35XX JamVM lives at /mnt/mmc/CFW/java/bin/jamvm. Keep the
+existing argv intact, keep stdout dedicated to binary video IPC, and retain the
+persistent stderr diagnostics established by 0023.
+
+--- a/src/libretro/freej2me_libretro.c
++++ b/src/libretro/freej2me_libretro.c
+@@ -1830,11 +1830,16 @@
+ 		close(pWrite[1]);
+ 		close(pRead[0]);
+ 
+ 		chdir(systemPath);
+ 
+-		execvp(cmd, params);
++		const char *rg35xx_jamvm_path = "/mnt/mmc/CFW/java/bin/jamvm";
++		fprintf(stderr, "RG35XX exec JamVM path=%s argv0=%s\n",
++		        rg35xx_jamvm_path, params[0] ? params[0] : "(null)");
++		fflush(stderr);
++		execv(rg35xx_jamvm_path, params);
+ 
+-		/* execvp failure! */
+-		fprintf(stderr, "RG35XX execvp failed for %s: errno=%d (%s)\n", cmd, errno, strerror(errno));
++		/* execv failure! */
++		fprintf(stderr, "RG35XX execv failed for %s: errno=%d (%s)\n",
++		        rg35xx_jamvm_path, errno, strerror(errno));
+ 		fflush(stderr);
+ 		retro_deinit();
+ 	}
