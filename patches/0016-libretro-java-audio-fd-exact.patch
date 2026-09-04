@@ -11,16 +11,9 @@ the target selector in Java but must not mutate this argv region again.
 
 --- a/src/libretro/freej2me_libretro.c
 +++ b/src/libretro/freej2me_libretro.c
-@@ -20,7 +20,8 @@
- #ifdef __linux__
- #include <stdarg.h>
- #include <unistd.h>
- #include <sys/wait.h>
+@@ -23,0 +24 @@
 +#include "rg35xx_audio_pipe.h"
- #elif _WIN32
- #include <windows.h>
- #include <tlhelp32.h>
-@@ -29,7 +30,7 @@
+@@ -30,7 +31,7 @@
  #include <file/file_path.h>
  #include <retro_miscellaneous.h>
  
@@ -29,15 +22,9 @@ the target selector in Java but must not mutate this argv region again.
  
  const char *slash = path_default_slash();
  
-@@ -91,6 +92,7 @@
- int javaProcess;
- int pRead[2];
- int pWrite[2];
+@@ -107,0 +109 @@
 +static struct rg35xx_audio_pipe rg35xx_java_audio_pipe;
- 
- #elif _WIN32
- BOOL succeeded = FALSE;
-@@ -838,16 +840,26 @@
+@@ -854,16 +856,26 @@
  	/* Allocate memory for launch arguments */
  	params = (char**)malloc(sizeof(char*) * NUM_ARGUMENTS);
  #ifdef __linux__
@@ -70,7 +57,7 @@ the target selector in Java but must not mutate this argv region again.
  
  	log_fn(RETRO_LOG_INFO, "Preparing to open FreeJ2ME-Plus' Java app.\n");
  
-@@ -1550,6 +1564,8 @@
+@@ -1535,6 +1547,8 @@
  	int pid = 0;
  	int fd_stdin  = 0;
  	int fd_stdout = 1;
@@ -79,7 +66,7 @@ the target selector in Java but must not mutate this argv region again.
  
  	/*
  	 * parent <-- 0 --  pRead  <-- 1 --  child
-@@ -1558,12 +1574,42 @@
+@@ -1544,10 +1558,42 @@
  	pipe(pRead); /* 0: pRead, 1: pWrite */
  	pipe(pWrite);
  
@@ -122,7 +109,7 @@ the target selector in Java but must not mutate this argv region again.
  
  		dup2(pWrite[0], fd_stdin);  /* read from parent pWrite */
  		dup2(pRead[1], fd_stdout);  /* write to parent pRead */
-@@ -1580,13 +1626,21 @@
+@@ -1565,12 +1611,20 @@
  
  	if(pid>0) /* parent */
  	{
