@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/rc1-consolidated-build.yml'
       - 'tasklog/RC1-011W-TASKLOG.md'
+      - 'tasklog/RC1-011X-TASKLOG.md'
       - 'scripts/rc1_assemble.sh'
       - 'scripts/rc1_runtime_build_overlay.sh'
       - 'scripts/rc1_compile.sh'
@@ -62,6 +63,9 @@ jobs:
           set -euo pipefail
           ext="$RUNNER_TEMP/rg35xx-external"
           mkdir -p "$ext"
+
+          sh native/vendor_tinysoundfont.sh
+          sh native/verify_tinysoundfont_vendor.sh
 
           git clone https://github.com/TASEmulators/freej2me-plus.git "$ext/freej2me"
           git -C "$ext/freej2me" checkout --detach "$FREEJ2ME_PIN"
