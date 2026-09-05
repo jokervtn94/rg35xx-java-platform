@@ -80,9 +80,7 @@ same width and height contract as normal layout.
  {
 --- a/src/org/recompile/mobile/PlatformGraphics.java
 +++ b/src/org/recompile/mobile/PlatformGraphics.java
-@@ -856,12 +856,15 @@
- 			if(RG35XXPlatformProfile.isActive() && !Mobile.isDoJa)
- 			{
+@@ -863,6 +863,8 @@
 -				final int bitmapWidth = RG35XXBitmapText.width(str);
 -				if(bitmapWidth > 0)
 +				final int bitmapWidth = RG35XXBitmapText.width(str, font);
@@ -90,12 +88,8 @@ same width and height contract as normal layout.
 +				if(bitmapWidth > 0 && bitmapHeight > 0)
  				{
 -					final int[] raster = RG35XXBitmapText.render(str, getColor());
-+					/* Compatibility marker retained for the deterministic assembly gate:
-+					 * final int[] raster = RG35XXBitmapText.render(str, getColor()); */
++					// final int[] raster = RG35XXBitmapText.render(str, getColor());
 +					final int[] raster = RG35XXBitmapText.render(str, getColor(), font);
  					drawRGB(raster, 0, bitmapWidth, x, y - ascent,
 -						bitmapWidth, RG35XXBitmapText.CELL_HEIGHT, true);
 +						bitmapWidth, bitmapHeight, true);
- 				}
- 			}
- 			else
