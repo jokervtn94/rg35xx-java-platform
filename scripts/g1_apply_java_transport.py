@@ -5,7 +5,6 @@ The transform is deliberately fail-closed. It only accepts the exact structural
 markers present in pinned FreeJ2ME commit 13ec186903087156c145268f8706eecfaf9f1e50.
 """
 import pathlib
-import re
 import sys
 
 if len(sys.argv) != 2:
@@ -59,25 +58,24 @@ once(
     "\t\tipcOut.println(\"+READY\");\n\t\tipcOut.flush();",
     "ready stream")
 
-# Replace the synchronous frame serialization inside command 15. Keep all input,
-# repeat, fast-forward and config behavior before the Send Frame marker intact.
-pat = re.compile(
-    r"(?P<indent>\t+)\/\* Send Frame to Libretro \*\/\s*"
-    r"try\s*\{.*?\}\s*catch\(Exception e\)\s*\{.*?\}",
-    re.S,
-)
-matches = list(pat.finditer(s))
-if len(matches) != 1:
-    raise SystemExit("G1 JAVA OVERLAY FAIL: synchronous frame block count=%d" % len(matches))
-indent = matches[0].group("indent")
+# The pinned source contains nested synchronized/for blocks inside the old
+# try/catch, so brace-based regex is intentionally avoided. Replace between two
+# stable comments that bracket exactly the synchronous frame serializer.
+start_marker = "\t\t\t\t\t\t\t\t/* Send Frame to Libretro */\n"
+end_marker = "\t\t\t\t\t\t\t\t// We are now ready to start monitoring for pauses, the first frame was requested and sent\n"
+if s.count(start_marker) != 1:
+    raise SystemExit("G1 JAVA OVERLAY FAIL: send marker count=%d" % s.count(start_marker))
+if s.count(end_marker) != 1:
+    raise SystemExit("G1 JAVA OVERLAY FAIL: end marker count=%d" % s.count(end_marker))
+start = s.index(start_marker)
+end = s.index(end_marker, start)
 replacement = (
-    indent + "/* Golden G1: do not serialize the frame on the command parser thread. */\n" +
-    indent + "rg35xxFrames.requestFrame(lcdWidth, lcdHeight, lcdData,\n" +
-    indent + "\tMobile.getPlatform().getLcdFrontbuffer());"
+    "\t\t\t\t\t\t\t\t/* Golden G1: frame serialization is owned by RG35XX-FrameWorker. */\n"
+    "\t\t\t\t\t\t\t\trg35xxFrames.requestFrame(lcdWidth, lcdHeight, lcdData,\n"
+    "\t\t\t\t\t\t\t\t\tMobile.getPlatform().getLcdFrontbuffer());\n\n"
 )
-s = s[:matches[0].start()] + replacement + s[matches[0].end():]
+s = s[:start] + replacement + s[end:]
 
-# Pinned-source safety checks.
 for forbidden in (
     "System.out.write(frameHeader",
     "System.out.write(frameBuffer",
