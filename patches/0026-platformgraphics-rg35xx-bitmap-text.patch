@@ -39,7 +39,7 @@ format.
  
 --- a/src/libretro/freej2me_libretro.c
 +++ b/src/libretro/freej2me_libretro.c
-@@ -165,8 +165,9 @@
+@@ -165,7 +165,8 @@
  unsigned int frameHeight = MAX_HEIGHT;
  unsigned int frameSize = MAX_WIDTH * MAX_HEIGHT;
  unsigned int frameBufferSize = MAX_WIDTH * MAX_HEIGHT * 3;
