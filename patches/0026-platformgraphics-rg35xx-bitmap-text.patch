@@ -11,7 +11,7 @@ validated by the comprehensive device test.
 
 --- a/src/org/recompile/mobile/PlatformGraphics.java
 +++ b/src/org/recompile/mobile/PlatformGraphics.java
-@@ -853,7 +853,19 @@
+@@ -853,7 +853,20 @@
  			if((anchor & Graphics.BOTTOM)>0) { y = y-height; }
  			if((anchor & Graphics.BASELINE)>0) { y = y-ascent; }
  
