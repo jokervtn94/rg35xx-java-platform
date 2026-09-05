@@ -104,7 +104,7 @@ prepareMediaEngine(), so the desktop JavaSound toneChannel is null by design.
  
  	public static synchronized Player createPlayer(InputStream stream, String type) throws IOException, MediaException
  	{
-@@ -166,6 +172,51 @@
+@@ -167,4 +173,49 @@
  		if (volume < 0) { volume = 0; } 
  		else if (volume > 100) { volume = 100; }
 +
@@ -154,4 +154,3 @@ prepareMediaEngine(), so the desktop JavaSound toneChannel is null by design.
 +		}
  
  		final int restoreBankMSB = toneChannel.getController(0);    // Bank MSB
-         final int restoreBankLSB = toneChannel.getController(32);   // Bank LSB
