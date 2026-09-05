@@ -3,15 +3,18 @@ package org.recompile.mobile;
 import javax.microedition.lcdui.Font;
 
 /**
- * RG35XX framebuffer text fallback.
+ * RG35XX fixed-cell framebuffer text renderer.
  *
- * This deliberately avoids java.awt.Graphics2D glyph rasterization.  The target
- * JamVM/GNU Classpath headless stack can provide Font metrics, but its Java2D
- * drawGlyphVector scanline path is not reliable on the handheld.  Metrics stay
- * owned by MIDP Font; only glyph pixels are rendered here.
+ * Compatible reconstruction of the historical 8x12 raster path. The exact
+ * old glyph resource has not been recovered. This implementation deliberately
+ * avoids java.awt.Graphics2D glyph rasterization and also avoids the dynamic
+ * charWidth/fontHeight scaling used by RC1-011CA.
  */
 public final class RG35XXBitmapText
 {
+    public static final int CELL_WIDTH = 8;
+    public static final int CELL_HEIGHT = 12;
+
     private RG35XXBitmapText() {}
 
     public static void draw(int[] dst, int width, int height,
@@ -19,71 +22,69 @@ public final class RG35XXBitmapText
         Font font, int argb, int clipLeft, int clipTop, int clipRight, int clipBottom)
     {
         if(dst == null || text == null || text.length() == 0) return;
+        if(width <= 0 || height <= 0) return;
+        if(dst.length < width * height) return;
 
-        int sy = Math.max(1, fontHeight / 7);
-        int top = baseline - ascent;
+        final int left = Math.max(0, clipLeft);
+        final int topClip = Math.max(0, clipTop);
+        final int right = Math.min(width, clipRight);
+        final int bottom = Math.min(height, clipBottom);
+        if(left >= right || topClip >= bottom) return;
+
+        final int top = baseline - ascent;
         int penX = x;
 
         for(int i = 0; i < text.length(); i++)
         {
-            char ch = text.charAt(i);
-            int advance = 0;
-            try { advance = font == null ? 0 : font.charWidth(ch); }
-            catch(Throwable ignored) { advance = 0; }
-            if(advance <= 0) advance = Math.max(6, fontHeight / 2);
-
-            int sx = Math.max(1, (advance - 1) / 5);
-            int glyphWidth = 5 * sx;
-            int drawX = penX + Math.max(0, (advance - glyphWidth) / 2);
-            drawGlyph(dst, width, height, ch, drawX, top, sx, sy, argb,
-                clipLeft, clipTop, clipRight, clipBottom);
-            penX += advance;
+            drawGlyph8x12(dst, width, height, text.charAt(i), penX, top, argb,
+                left, topClip, right, bottom);
+            penX += CELL_WIDTH;
+            if(penX >= right) break;
         }
     }
 
-    private static void drawGlyph(int[] dst, int width, int height, char ch,
-        int x, int y, int sx, int sy, int argb,
+    private static void drawGlyph8x12(int[] dst, int width, int height, char ch,
+        int x, int y, int argb,
         int clipLeft, int clipTop, int clipRight, int clipBottom)
     {
-        int[] rows = glyph(ch);
-        for(int gy = 0; gy < 7; gy++)
+        final int[] rows = glyph5x7(ch);
+
+        /* Fixed nearest-neighbour expansion from the embedded 5x7 seed to an
+         * 8x12 cell. No metric-dependent scaling is performed at runtime. */
+        for(int dy = 0; dy < CELL_HEIGHT; dy++)
         {
-            int bits = rows[gy];
-            for(int gx = 0; gx < 5; gx++)
+            final int py = y + dy;
+            if(py < 0 || py >= height || py < clipTop || py >= clipBottom) continue;
+            final int sy = (dy * 7) / CELL_HEIGHT;
+            final int bits = rows[sy];
+            final int row = py * width;
+
+            for(int dx = 0; dx < CELL_WIDTH; dx++)
             {
-                if((bits & (1 << (4 - gx))) == 0) continue;
-                int px0 = x + gx * sx;
-                int py0 = y + gy * sy;
-                for(int yy = 0; yy < sy; yy++)
-                {
-                    int py = py0 + yy;
-                    if(py < 0 || py >= height || py < clipTop || py >= clipBottom) continue;
-                    int row = py * width;
-                    for(int xx = 0; xx < sx; xx++)
-                    {
-                        int px = px0 + xx;
-                        if(px < 0 || px >= width || px < clipLeft || px >= clipRight) continue;
-                        int idx = row + px;
-                        dst[idx] = blend(argb, dst[idx]);
-                    }
-                }
+                final int px = x + dx;
+                if(px < 0 || px >= width || px < clipLeft || px >= clipRight) continue;
+                final int sx = (dx * 5) / CELL_WIDTH;
+                if((bits & (1 << (4 - sx))) == 0) continue;
+                final int idx = row + px;
+                if(idx < 0 || idx >= dst.length) continue;
+                dst[idx] = blend(argb, dst[idx]);
             }
         }
     }
 
     private static int blend(int src, int dst)
     {
-        int a = src >>> 24;
+        final int a = src >>> 24;
         if(a == 255) return src;
         if(a == 0) return dst;
-        int ia = 255 - a;
-        int r = (((src >> 16) & 255) * a + ((dst >> 16) & 255) * ia) / 255;
-        int g = (((src >> 8) & 255) * a + ((dst >> 8) & 255) * ia) / 255;
-        int b = ((src & 255) * a + (dst & 255) * ia) / 255;
+        final int ia = 255 - a;
+        final int r = (((src >> 16) & 255) * a + ((dst >> 16) & 255) * ia) / 255;
+        final int g = (((src >> 8) & 255) * a + ((dst >> 8) & 255) * ia) / 255;
+        final int b = ((src & 255) * a + (dst & 255) * ia) / 255;
         return 0xFF000000 | (r << 16) | (g << 8) | b;
     }
 
-    private static int[] glyph(char c)
+    private static int[] glyph5x7(char c)
     {
         if(c >= 'a' && c <= 'z') c = (char)(c - 32);
         switch(c)
