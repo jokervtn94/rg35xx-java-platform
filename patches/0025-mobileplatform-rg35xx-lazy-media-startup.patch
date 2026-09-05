@@ -12,7 +12,7 @@ RG35XX launches use the already-integrated lazy native MIDI/WAV bridge instead.
 
 --- a/src/org/recompile/mobile/MobilePlatform.java
 +++ b/src/org/recompile/mobile/MobilePlatform.java
-@@ -819,7 +819,12 @@
+@@ -819,7 +819,11 @@
  			 * Load up everything needed to play sound before the jar opens to minimize ingame stutters
  			 * this basically just loads up the synthesizers, as they're the biggest troublemakers.
  			 */
