@@ -46,66 +46,6 @@ handshake to 20 seconds.
  
 --- a/src/libretro/freej2me_libretro.c
 +++ b/src/libretro/freej2me_libretro.c
-@@ -174,6 +174,21 @@
- bool fast_forwarding = false;
- int framesDropped = 0;
- 
-+static void rg35xx_video_submit(void)
-+{
-+	static uint16_t rg35xxFrame565[MAX_WIDTH * MAX_HEIGHT];
-+	unsigned int i;
-+	for(i = 0; i < frameSize; i++)
-+	{
-+		const unsigned int p = frame[i];
-+		const uint16_t r = (uint16_t)((p >> 19) & 0x1F);
-+		const uint16_t g = (uint16_t)((p >> 10) & 0x3F);
-+		const uint16_t b = (uint16_t)((p >> 3) & 0x1F);
-+		rg35xxFrame565[i] = (uint16_t)((r << 11) | (g << 5) | b);
-+	}
-+	Video(rg35xxFrame565, frameWidth, frameHeight, sizeof(uint16_t) * frameWidth);
-+}
-+
- float normal_throttle_rate = DEFAULT_FPS;
- 
- /* Libretro exposed config variables START */
-@@ -1391,7 +1406,7 @@
- 				{
- 					Environ(RETRO_ENVIRONMENT_SET_MESSAGE_EXT, (void*)&messages[FRAMES_DROPPED_MSG]);
- 				}
--				Video(frame, frameWidth, frameHeight, sizeof(unsigned int) * frameWidth);
-+				rg35xx_video_submit();
- 				return;
- 			}
- 			if(status<0 && errno != EAGAIN)
-@@ -1399,7 +1414,7 @@
- 			{
- 				Environ(RETRO_ENVIRONMENT_SET_MESSAGE_EXT, (void*)&messages[INVALID_STATUS_MSG]);
- 				fflush(stdout);
--				Video(frame, frameWidth, frameHeight, sizeof(unsigned int) * frameWidth);
-+				rg35xx_video_submit();
- 				return;
- 			}
- 			/*
-@@ -1575,7 +1590,7 @@
- 	}
- 
- 	/* send frame to libretro irrespective of FreeJ2ME running (for error messages) */
--	Video(frame, frameWidth, frameHeight, sizeof(unsigned int) * frameWidth);
-+	rg35xx_video_submit();
- 
- 	/*
- 	 * I couldn't find a way for the frontend to notify FreeJ2ME's process that it has paused,
-@@ -1617,7 +1632,7 @@
- 	info->geometry.aspect_ratio = ((float)BASE_WIDTH) / ((float)BASE_HEIGHT);
- 
- 	info->timing.fps = DEFAULT_FPS;
--	int pixelformat = RETRO_PIXEL_FORMAT_XRGB8888;
-+	int pixelformat = RETRO_PIXEL_FORMAT_RGB565;
- 	Environ(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &pixelformat);
- }
-
---- a/src/libretro/freej2me_libretro.c
-+++ b/src/libretro/freej2me_libretro.c
 @@ -22,6 +22,8 @@
  #include <stdarg.h>
  #include <unistd.h>
@@ -115,7 +55,7 @@ handshake to 20 seconds.
  #include <pthread.h>
  #include "rg35xx_audio_pipe.h"
  #elif _WIN32
-@@ -174,6 +176,21 @@
+@@ -174,6 +176,36 @@
  bool fast_forwarding = false;
  int framesDropped = 0;
  
@@ -134,10 +74,25 @@ handshake to 20 seconds.
 +static unsigned int rg35xx_frame_payload_used = 0;
 +static int rg35xx_frame_rotation = 0;
 +
- static void rg35xx_video_submit(void)
- {
- 	static uint16_t rg35xxFrame565[MAX_WIDTH * MAX_HEIGHT];
-@@ -1150,6 +1167,179 @@
++static void rg35xx_video_submit(void)
++{
++	static uint16_t rg35xxFrame565[MAX_WIDTH * MAX_HEIGHT];
++	unsigned int i;
++	for(i = 0; i < frameSize; i++)
++	{
++		const unsigned int p = frame[i];
++		const uint16_t r = (uint16_t)((p >> 19) & 0x1F);
++		const uint16_t g = (uint16_t)((p >> 10) & 0x3F);
++		const uint16_t b = (uint16_t)((p >> 3) & 0x1F);
++		rg35xxFrame565[i] = (uint16_t)((r << 11) | (g << 5) | b);
++	}
++	Video(rg35xxFrame565, frameWidth, frameHeight, sizeof(uint16_t) * frameWidth);
++}
++
+ float normal_throttle_rate = DEFAULT_FPS;
+ 
+ /* Libretro exposed config variables START */
+@@ -1135,6 +1167,179 @@
  		rg35xx_send_media_event(&e);
  }
  
@@ -317,7 +272,7 @@ handshake to 20 seconds.
  void retro_run(void)
  {
  	int i = 0;
-@@ -1387,6 +1577,18 @@
+@@ -1372,6 +1577,18 @@
  
  		}
  
@@ -336,7 +291,24 @@ handshake to 20 seconds.
  		/*
  		 * grab frame
  		 * some jars are noisy
-@@ -1540,6 +1742,8 @@
+@@ -1391,14 +1608,14 @@
+ 				{
+ 					Environ(RETRO_ENVIRONMENT_SET_MESSAGE_EXT, (void*)&messages[FRAMES_DROPPED_MSG]);
+ 				}
+-				Video(frame, frameWidth, frameHeight, sizeof(unsigned int) * frameWidth);
++				rg35xx_video_submit();
+ 				return;
+ 			}
+ 			if(status<0 && errno != EAGAIN)
+ 			{
+ 				Environ(RETRO_ENVIRONMENT_SET_MESSAGE_EXT, (void*)&messages[INVALID_STATUS_MSG]);
+ 				fflush(stdout);
+-				Video(frame, frameWidth, frameHeight, sizeof(unsigned int) * frameWidth);
++				rg35xx_video_submit();
+ 				return;
+ 			}
+ 			/*
+@@ -1525,6 +1742,8 @@
  			}
  		}
  
@@ -345,7 +317,25 @@ handshake to 20 seconds.
  		/* draw pointer */
  		/* check if the clicked pointer needs to be shown */
  		if(joymouseClickedTime>0)
-@@ -1996,15 +2200,41 @@
+@@ -1575,7 +1794,7 @@
+ 	}
+ 
+ 	/* send frame to libretro irrespective of FreeJ2ME running (for error messages) */
+-	Video(frame, frameWidth, frameHeight, sizeof(unsigned int) * frameWidth);
++	rg35xx_video_submit();
+ 
+ 	/*
+ 	 * I couldn't find a way for the frontend to notify FreeJ2ME's process that it has paused,
+@@ -1617,7 +1836,7 @@
+ 	info->geometry.aspect_ratio = ((float)BASE_WIDTH) / ((float)BASE_HEIGHT);
+ 
+ 	info->timing.fps = DEFAULT_FPS;
+-	int pixelformat = RETRO_PIXEL_FORMAT_XRGB8888;
++	int pixelformat = RETRO_PIXEL_FORMAT_RGB565;
+ 	Environ(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &pixelformat);
+ }
+ 
+@@ -1981,15 +2200,41 @@
  	CloseHandle(javaProcess.hThread); // Close the thread handle, not needed
  #endif
  
