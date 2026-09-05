@@ -73,11 +73,12 @@ jobs:
         run: |
           set -euo pipefail
           make clean
+          # Put target CPU switches in the compiler command itself. Supplying a
+          # command-line CFLAGS variable would override Makefile.common include
+          # flags and break libretro-common headers.
           make platform=unix \
-            CC=/opt/miyoo/bin/arm-miyoo-linux-uclibcgnueabi-gcc \
-            CXX=/opt/miyoo/bin/arm-miyoo-linux-uclibcgnueabi-g++ \
-            CFLAGS='-O3 -march=armv5te -mtune=arm926ej-s -mfloat-abi=soft' \
-            CXXFLAGS='-O3 -march=armv5te -mtune=arm926ej-s -mfloat-abi=soft' \
+            CC='/opt/miyoo/bin/arm-miyoo-linux-uclibcgnueabi-gcc -march=armv5te -mtune=arm926ej-s -mfloat-abi=soft' \
+            CXX='/opt/miyoo/bin/arm-miyoo-linux-uclibcgnueabi-g++ -march=armv5te -mtune=arm926ej-s -mfloat-abi=soft' \
             LDFLAGS='-lm -lpthread'
 
       - name: Verify device ABI and G1 ownership
