@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-# RGJ-RC1-011N/011R/011AC/011BC/011BD/011BR/011BU/011BY deterministic assembly driver.
+# RGJ-RC1-011N/011R/011AC/011BC/011BD/011BR/011BU/011BY/011BZ deterministic assembly driver.
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 PIN_FREEJ2ME="13ec186903087156c145268f8706eecfaf9f1e50"
 : "${RG35XX_FREEJ2ME_ROOT:?set RG35XX_FREEJ2ME_ROOT to the pinned FreeJ2ME checkout}"
@@ -51,9 +51,6 @@ do cp "$ROOT/native/$f" "$NATIVE_DST/$f"; done
 cp "$ROOT/native/vendor/TinySoundFont/tml.h" "$NATIVE_DST/vendor/TinySoundFont/tml.h"
 cp "$ROOT/native/vendor/TinySoundFont/tsf.h" "$NATIVE_DST/vendor/TinySoundFont/tsf.h"
 
-# Authoritative active source-mutation order.
-# 0025 restores the proven RG35XX lazy media startup baseline after all shared
-# MobilePlatform/lifecycle mutations: RG35XX skips eager JavaSound/ALSA prepare.
 PATCH_ORDER="
 0003-manager-rg35xx-media-profile.patch
 0007-platformgraphics-rg35xx-fast-drawrgb.patch
@@ -112,6 +109,7 @@ done
 
 CORE_C="$RG35XX_ASSEMBLY_ROOT/src/libretro/freej2me_libretro.c"
 MOBILE_PLATFORM="$RG35XX_ASSEMBLY_ROOT/src/org/recompile/mobile/MobilePlatform.java"
+MANAGER_JAVA="$RG35XX_ASSEMBLY_ROOT/src/javax/microedition/media/Manager.java"
 grep -q '^#define NUM_ARGUMENTS 9$' "$CORE_C" || fail "assembled core missing 0016 NUM_ARGUMENTS 9"
 grep -q -- '-Dfreej2me.rg35xx=true' "$CORE_C" || fail "assembled core missing RG35XX JVM selector"
 grep -q -- '-Dfreej2me.rg35xx.audio.fd=%d' "$CORE_C" || fail "assembled core missing dedicated audio-FD JVM property"
@@ -129,6 +127,16 @@ awk '
   /loader\.start\(\);/ { start=NR }
   END { exit !(gate > 0 && prep > gate && start > prep) }
 ' "$MOBILE_PLATFORM" || fail "RG35XX media startup gate is not structurally before prepareMediaEngine/loader.start"
+
+# RG35XX playTone must return through native transport before any desktop
+# JavaSound toneChannel dereference. BY intentionally leaves toneChannel null.
+awk '
+  /if\(RG35XXPlatformProfile\.isActive\(\)\)/ && rg==0 { rg=NR }
+  /final int restoreBankMSB = toneChannel\.getController\(0\);/ { tc=NR }
+  /next\.start\(\)/ { ns=NR }
+  END { exit !(rg > 0 && ns > rg && tc > ns) }
+' "$MANAGER_JAVA" || fail "RG35XX playTone native branch is not before JavaSound toneChannel access"
+grep -Fq 'RG35XX tone transport unavailable' "$MANAGER_JAVA" || fail "assembled Manager missing native playTone transport"
 
 cat > "$NATIVE_DST/rc1_sources.mk" <<'EOF'
 RG35XX_NATIVE_SRCS := \
@@ -153,4 +161,5 @@ TML_COUNT=$(grep -l '^[[:space:]]*#define[[:space:]][[:space:]]*TML_IMPLEMENTATI
 [ "$TML_COUNT" = 1 ] || fail "assembled TML implementation owner count is $TML_COUNT"
 note "ASSEMBLY PASS: $RG35XX_ASSEMBLY_ROOT"
 note "RG35XX LAZY MEDIA STARTUP PASS: eager JavaSound/ALSA prepare is bypassed on target"
+note "RG35XX PLAYTONE ORDER PASS: native transport precedes desktop toneChannel access"
 note "Next: compile Java + ARMv5TE/uClibc; no DEVICE-TEST-PASS claimed."
