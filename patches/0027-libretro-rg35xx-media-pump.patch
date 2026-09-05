@@ -1,0 +1,77 @@
+From: RG35XX Java Platform
+Task: RGJ-RC1-011CG
+Subject: [PATCH] libretro: pump RG35XX media on retro_run owner thread
+
+Device evidence from RC1-011CF shows PCM/WAV, MIDI and ToneControl can enter
+started state, but no audio is heard and END_OF_MEDIA never arrives. The native
+mixer existed but had no render owner. The old background pipe-drain thread only
+dispatched commands and could not advance PCM/MIDI time or submit samples.
+
+RC1-011CG moves media command draining and mixer advancement onto retro_run(),
+which is also the valid libretro callback owner. This avoids concurrent mixer
+mutation, continuously drains Java media writes without blocking the frontend,
+submits 735 stereo frames per 60 Hz libretro run (44100 Hz exact), and allows
+END_OF_MEDIA/LOOPED events to be generated and returned to Java.
+
+--- a/src/libretro/freej2me_libretro.c
++++ b/src/libretro/freej2me_libretro.c
+@@ -938,13 +938,12 @@
+ 
+ static void rg35xx_audio_drain_start(void)
+ {
+-	if(rg35xx_audio_drain_started || rg35xx_java_audio_pipe.read_fd < 0) return;
+-	rg35xx_audio_drain_running = 1;
+-	if(pthread_create(&rg35xx_audio_drain_thread, NULL,
+-	                  rg35xx_audio_drain_main, NULL) == 0)
+-		rg35xx_audio_drain_started = 1;
+-	else
+-		rg35xx_audio_drain_running = 0;
++	/* RC1-011CG: media commands and mixer rendering are pumped from retro_run()
++	 * on one owner thread. The old background drain thread could mutate mixer
++	 * state concurrently with rendering and, more importantly, there was no
++	 * mixer render owner at all, so media never advanced to END_OF_MEDIA. */
++	rg35xx_audio_drain_running = 0;
++	rg35xx_audio_drain_started = 0;
+ }
+ 
+ static void rg35xx_audio_drain_stop(void)
+@@ -1167,6 +1166,26 @@
+ 		rg35xx_send_media_event(&e);
+ }
+ 
++#define RG35XX_AUDIO_FRAMES_PER_RUN 735u /* 44100 Hz / 60 Hz libretro timing */
++static int16_t rg35xx_audio_run_buffer[RG35XX_AUDIO_FRAMES_PER_RUN * 2u];
++
++static void rg35xx_pump_media_audio(void)
++{
++	/* The dedicated Java->native media FD is nonblocking on the parent read
++	 * side. Drain whatever command bytes are available, then advance the mixer
++	 * exactly once for this libretro frame. This also guarantees completion
++	 * events progress even when the video producer is temporarily stalled. */
++	int drained = rg35xx_audio_pipe_drain(&rg35xx_java_audio_pipe);
++	size_t frames;
++	if(drained < 0)
++	{
++		log_fn(RETRO_LOG_WARN, "RG35XX media pipe drain failed; keeping frontend alive.\n");
++	}
++	frames = rg35xx_mixer_render(rg35xx_audio_run_buffer, RG35XX_AUDIO_FRAMES_PER_RUN);
++	if(AudioBatch && soundEnabled && frames > 0)
++		AudioBatch(rg35xx_audio_run_buffer, frames);
++}
++
+ #ifdef __linux__
+ static void rg35xx_frame_rx_reset(void)
+ {
+@@ -1360,7 +1379,11 @@
+ 
+ 	if(isRunning())
+ 	{
+-		/* Serialize native completion events through the existing control writer. */
++		/* RC1-011CG: keep media ownership on retro_run so Java audio writes cannot
++		 * starve forever, PCM/MIDI clocks advance, and END_OF_MEDIA is generated. */
++		rg35xx_pump_media_audio();
++
++		/* Serialize completion events after this frame's mixer advance. */
+ 		rg35xx_drain_media_events_to_java();
+ 
+ 		/* request frame */
