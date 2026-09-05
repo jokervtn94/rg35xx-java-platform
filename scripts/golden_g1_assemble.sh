@@ -24,8 +24,7 @@ cp "$ROOT/src/org/recompile/freej2me/RG35XXGoldenFrameTransport.java" \
 python3 "$ROOT/scripts/g1_apply_java_transport.py" \
    "$GOLDEN_ASSEMBLY/src/org/recompile/freej2me/Libretro.java"
 
-# Native receiver + Smart-Fit presenter reconstructed from the Golden core
-# architecture and protocol. Keep it isolated from upstream source ownership.
+# Native receiver + Smart-Fit presenter reconstructed from the Golden core.
 mkdir -p "$GOLDEN_ASSEMBLY/src/libretro/rg35xx/golden"
 cp "$ROOT/native/golden/rg35xx_golden_video.h" \
    "$GOLDEN_ASSEMBLY/src/libretro/rg35xx/golden/rg35xx_golden_video.h"
@@ -43,19 +42,33 @@ SOURCES_C += rg35xx/golden/rg35xx_golden_video.c
 INCLUDES += -Irg35xx/golden
 EOF
 
-# Source contract: no synchronous frame parser may survive in retro_run.
 CORE="$GOLDEN_ASSEMBLY/src/libretro/freej2me_libretro.c"
 JAVA="$GOLDEN_ASSEMBLY/src/org/recompile/freej2me/Libretro.java"
+
+# Video contract.
 grep -Fq 'RETRO_PIXEL_FORMAT_RGB565' "$CORE" || fail "RGB565 frontend contract missing"
 grep -Fq 'rg35xx_golden_video_start()' "$CORE" || fail "receiver start missing"
 grep -Fq 'rg35xx_golden_video_present(' "$CORE" || fail "present owner missing"
 grep -Fq 'RG35XXGoldenFrameTransport' "$JAVA" || fail "Java frame worker missing"
 grep -Fq 'rg35xxFrames.requestFrame' "$JAVA" || fail "async frame request missing"
+grep -Fq 'rg35xxFrames.sendControlFrame' "$JAVA" || fail "restart control frame missing"
 if grep -Fq 'status = read_from_pipe(pRead[0], frameHeader, 15)' "$CORE"; then
     fail "synchronous frame-header read survived"
 fi
 if grep -Fq 'System.out.write(frameBuffer' "$JAVA"; then
     fail "synchronous Java frame write survived"
 fi
+
+# Device-proven Golden runtime contract.
+grep -Fq '#define NUM_ARGUMENTS 10' "$CORE" || fail "Golden argv count missing"
+grep -Fq 'const char *freej2meapp = "freej2me-lr.jar";' "$CORE" || fail "Golden JAR name missing"
+grep -Fq '"/mnt/mmc/CFW/java/bin/jamvm"' "$CORE" || fail "absolute JamVM missing"
+grep -Fq '"-Dawt.toolkit=gnu.java.awt.peer.headless.HeadlessToolkit"' "$CORE" || fail "headless Toolkit property missing"
+grep -Fq '"-Djava.awt.graphicsenv=gnu.java.awt.peer.headless.HeadlessGraphicsEnvironment"' "$CORE" || fail "headless GraphicsEnvironment property missing"
+grep -Fq '"-Djava.awt.headless=true"' "$CORE" || fail "java.awt.headless property missing"
+grep -Fq 'open("/mnt/mmc/freej2me-java-error.log"' "$CORE" || fail "Golden stderr log path missing"
+grep -Fq 'execv(cmd, params);' "$CORE" || fail "absolute execv missing"
+if grep -Fq 'execvp(cmd, params);' "$CORE"; then fail "PATH-dependent execvp survived"; fi
+if grep -Fq 'dup2(' "$CORE"; then :; else fail "pipe ownership unexpectedly absent"; fi
 
 note "PASS: $GOLDEN_ASSEMBLY"
