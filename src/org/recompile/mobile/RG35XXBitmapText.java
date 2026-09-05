@@ -38,10 +38,15 @@ public final class RG35XXBitmapText
         if(bitmapWidth <= 0) return new int[0];
         if(bitmapWidth > Integer.MAX_VALUE / CELL_HEIGHT) return new int[0];
 
+        /* PlatformGraphics.getColor() is RGB (0xRRGGBB). The RG35XX path
+         * composites with drawRGB(..., processAlpha=true), so copying RGB
+         * verbatim makes every glyph pixel alpha=0 and therefore invisible. */
+        final int opaqueArgb = argb | 0xFF000000;
+
         final int[] pixels = new int[bitmapWidth * CELL_HEIGHT];
         for(int i = 0; i < text.length(); i++)
         {
-            drawGlyph8x12(pixels, bitmapWidth, text.charAt(i), i * CELL_WIDTH, argb);
+            drawGlyph8x12(pixels, bitmapWidth, text.charAt(i), i * CELL_WIDTH, opaqueArgb);
         }
         return pixels;
     }
