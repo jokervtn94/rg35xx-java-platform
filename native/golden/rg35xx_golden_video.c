@@ -27,8 +27,6 @@ struct rg35xx_golden_state
     unsigned long generation;
     unsigned long presented_generation;
 
-    /* Java emits the Golden RGB565 wire representation as high byte then low
-     * byte. Decode explicitly instead of aliasing it as host-endian uint16_t. */
     unsigned char wire_payload[RG35XX_GOLDEN_MAX_PIXELS * 2u];
     uint16_t canvas[RG35XX_GOLDEN_MAX_PIXELS];
 
@@ -107,9 +105,6 @@ static int valid_header(const unsigned char h[RG35XX_GOLDEN_HEADER_SIZE],
     return 1;
 }
 
-/* Recover the next plausible 0xFE frame boundary without ever publishing an
- * invalid transaction. This mirrors the recovery property visible in the
- * Golden core diagnostics ("invalid header ...; resync"). */
 static int read_header_resync(unsigned char h[RG35XX_GOLDEN_HEADER_SIZE],
                               unsigned *w, unsigned *hh, unsigned *rotation)
 {
@@ -126,9 +121,6 @@ static int read_header_resync(unsigned char h[RG35XX_GOLDEN_HEADER_SIZE],
         if(read_exact(g.read_fd, h + 1, RG35XX_GOLDEN_HEADER_SIZE - 1u) <= 0) return 0;
         scanned += RG35XX_GOLDEN_HEADER_SIZE - 1u;
         if(valid_header(h, w, hh, rotation)) return 1;
-        /* The consumed 15 bytes may contain another 0xFE. A bounded receiver
-         * cannot push them back, so continue scanning the stream. The current
-         * valid front generation remains untouched throughout recovery. */
     }
     return 0;
 }
@@ -336,21 +328,32 @@ int rg35xx_golden_video_present(rg35xx_golden_video_cb video_cb,
     pthread_mutex_unlock(&g.mutex);
 
     if(g.snapshot.rotation == 0)
-    {
         blit_nearest(&g.snapshot);
-    }
     else
-    {
-        /* Rotation reconstruction is a separate G1 sub-gate. Never present a
-         * wrongly sized/rotated buffer while that transform is still unknown. */
         return 0;
-    }
 
     if(geometry_cb) geometry_cb(g.output_width, g.output_height);
     video_cb(g.canvas, g.output_width, g.output_height,
              (size_t)g.output_width * sizeof(uint16_t));
     g.presented_generation = generation;
     return 1;
+}
+
+int rg35xx_golden_video_source_geometry(unsigned *width, unsigned *height,
+                                        unsigned *rotation)
+{
+    int ok = 0;
+    if(!g.mutex_ready || !width || !height || !rotation) return 0;
+    pthread_mutex_lock(&g.mutex);
+    if(g.front->generation != 0)
+    {
+        *width = g.front->width;
+        *height = g.front->height;
+        *rotation = g.front->rotation;
+        ok = 1;
+    }
+    pthread_mutex_unlock(&g.mutex);
+    return ok;
 }
 
 unsigned long rg35xx_golden_video_generation(void)
