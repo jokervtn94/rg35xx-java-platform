@@ -13,6 +13,16 @@ public final class RG35XXBitmapText
     public static final int CELL_WIDTH = 8;
     public static final int CELL_HEIGHT = 12;
 
+    /* Keep the MIDP-facing 8x12 advance/height contract, but do not stretch
+     * the 5x7 seed over the whole cell. Reserving side/bottom whitespace is
+     * important on the RG35XX 240px display: when edge pixels from adjacent
+     * cells touch, glyphs turn into the long boxed/underlined shapes seen in
+     * device screenshots even though the framebuffer itself is correct. */
+    private static final int GLYPH_WIDTH = 6;
+    private static final int GLYPH_HEIGHT = 9;
+    private static final int GLYPH_X = 1;
+    private static final int GLYPH_Y = 1;
+
     private RG35XXBitmapText() {}
 
     public static int width(String text)
@@ -40,19 +50,21 @@ public final class RG35XXBitmapText
     {
         final int[] rows = glyph5x7(ch);
 
-        /* Fixed nearest-neighbour expansion from the embedded 5x7 seed to an
-         * 8x12 cell. No MIDP metric-dependent scaling occurs here. */
-        for(int dy = 0; dy < CELL_HEIGHT; dy++)
+        /* Modest nearest-neighbour expansion inside the fixed 8x12 cell.
+         * The advance remains 8 pixels, so existing PlatformFont metrics and
+         * MIDP layout stay deterministic, while a one-pixel side bearing
+         * prevents neighboring glyphs from merging visually. */
+        for(int dy = 0; dy < GLYPH_HEIGHT; dy++)
         {
-            final int sy = (dy * 7) / CELL_HEIGHT;
+            final int sy = (dy * 7) / GLYPH_HEIGHT;
             final int bits = rows[sy];
-            final int row = dy * width;
+            final int row = (GLYPH_Y + dy) * width;
 
-            for(int dx = 0; dx < CELL_WIDTH; dx++)
+            for(int dx = 0; dx < GLYPH_WIDTH; dx++)
             {
-                final int sx = (dx * 5) / CELL_WIDTH;
+                final int sx = (dx * 5) / GLYPH_WIDTH;
                 if((bits & (1 << (4 - sx))) == 0) continue;
-                final int idx = row + x + dx;
+                final int idx = row + x + GLYPH_X + dx;
                 if(idx >= 0 && idx < pixels.length) pixels[idx] = argb;
             }
         }
