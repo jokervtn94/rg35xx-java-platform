@@ -5,10 +5,10 @@ import javax.microedition.lcdui.Font;
 /**
  * RG35XX bitmap text producer.
  *
- * The fallback glyph seed is 5x7, but the output raster now follows the active
- * MIDP Font metrics instead of imposing a fixed 8x12 advance. This keeps the
- * pixels emitted by drawString() inside the same width/height contract used by
- * stringWidth(), charWidth(), anchors, clipping and TextBox/Form layout.
+ * The fallback glyph seed is 5x7, but the output raster follows the active
+ * MIDP Font metrics instead of imposing a fixed advance. CJ keeps this visual
+ * contract while removing the old int[7] allocation for every glyph, which was
+ * a hot GC path in text-heavy JARs on JamVM.
  */
 public final class RG35XXBitmapText
 {
@@ -35,8 +35,6 @@ public final class RG35XXBitmapText
         if(bitmapWidth <= 0 || bitmapHeight <= 0) return new int[0];
         if(bitmapWidth > Integer.MAX_VALUE / bitmapHeight) return new int[0];
 
-        /* PlatformGraphics.getColor() is RGB (0xRRGGBB) on this path while
-         * drawRGB(..., processAlpha=true) expects ARGB. Keep glyphs opaque. */
         final int opaqueArgb = argb | 0xFF000000;
         final int[] pixels = new int[bitmapWidth * bitmapHeight];
 
@@ -47,9 +45,6 @@ public final class RG35XXBitmapText
             int advance = font.charWidth(ch);
             if(advance < 1) advance = 1;
 
-            /* stringWidth() is authoritative for the final raster width. Clamp
-             * the last cell so rounding/peer differences cannot write outside
-             * the MIDP-measured line box. */
             int cellWidth = advance;
             if(penX + cellWidth > bitmapWidth) cellWidth = bitmapWidth - penX;
             if(cellWidth <= 0) break;
@@ -65,12 +60,7 @@ public final class RG35XXBitmapText
                                   int x, int cellWidth, int argb)
     {
         if(ch == ' ' || cellWidth <= 0) return;
-        final int[] rows = glyph5x7(ch);
-
-        /* Preserve one trailing pixel as inter-glyph whitespace whenever the
-         * measured MIDP advance allows it. This avoids the boxed/underlined
-         * artifacts seen with edge-to-edge glyph cells while still respecting
-         * proportional font advances. */
+        final long rows = glyph5x7(ch);
         final int glyphWidth = cellWidth > 2 ? cellWidth - 1 : cellWidth;
         final int glyphHeight = height > 3 ? height - 3 : height;
         final int glyphY = height > glyphHeight ? (height - glyphHeight) / 2 : 0;
@@ -79,7 +69,7 @@ public final class RG35XXBitmapText
         for(int dy = 0; dy < glyphHeight; dy++)
         {
             final int sy = (dy * 7) / glyphHeight;
-            final int bits = rows[sy];
+            final int bits = (int)((rows >> ((6 - sy) * 5)) & 31L);
             final int row = (glyphY + dy) * width;
 
             for(int dx = 0; dx < glyphWidth; dx++)
@@ -94,7 +84,7 @@ public final class RG35XXBitmapText
         }
     }
 
-    private static int[] glyph5x7(char c)
+    private static long glyph5x7(char c)
     {
         if(c >= 'a' && c <= 'z') c = (char)(c - 32);
         switch(c)
@@ -126,11 +116,16 @@ public final class RG35XXBitmapText
             case '[': return r(14,8,8,8,8,8,14); case ']': return r(14,2,2,2,2,2,14);
             case '!': return r(4,4,4,4,4,0,4); case '?': return r(14,17,1,2,4,0,4);
             case '#': return r(10,31,10,10,31,10,0); case '%': return r(17,2,4,8,16,17,0);
-            case '*': return r(0,21,14,31,14,21,0); case ' ': return r(0,0,0,0,0,0,0);
+            case '*': return r(0,21,14,31,14,21,0); case ' ': return 0L;
             default: return r(14,17,1,2,4,0,4);
         }
     }
 
-    private static int[] r(int a,int b,int c,int d,int e,int f,int g)
-    { return new int[]{a,b,c,d,e,f,g}; }
+    private static long r(int a,int b,int c,int d,int e,int f,int g)
+    {
+        return ((long)(a & 31) << 30) | ((long)(b & 31) << 25) |
+               ((long)(c & 31) << 20) | ((long)(d & 31) << 15) |
+               ((long)(e & 31) << 10) | ((long)(f & 31) << 5) |
+               (long)(g & 31);
+    }
 }
