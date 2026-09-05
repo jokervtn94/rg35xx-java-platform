@@ -1,0 +1,76 @@
+name: Golden G1 Source Build
+
+on:
+  push:
+    branches: [ golden-clean-rebuild ]
+  workflow_dispatch:
+
+jobs:
+  g1-source-build:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout clean rebuild branch
+        uses: actions/checkout@v4
+
+      - name: Checkout exact pinned FreeJ2ME source
+        uses: actions/checkout@v4
+        with:
+          repository: TASEmulators/freej2me-plus
+          ref: 13ec186903087156c145268f8706eecfaf9f1e50
+          path: upstream
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ant gcc g++ make
+
+      - name: Select Java 8 for Java 6 target support
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Assemble G1 from clean pinned source
+        run: |
+          GOLDEN_UPSTREAM="$GITHUB_WORKSPACE/upstream" \
+          GOLDEN_ASSEMBLY="$GITHUB_WORKSPACE/assembled" \
+          sh scripts/golden_g1_assemble.sh
+
+      - name: Compile Java 6 runtime
+        working-directory: assembled
+        run: ant
+
+      - name: Verify Java class version and frame worker
+        working-directory: assembled
+        run: |
+          javap -verbose build/classes/org/recompile/freej2me/Libretro.class | grep 'major version: 50'
+          javap -p build/classes/org/recompile/freej2me/RG35XXGoldenFrameTransport.class | grep 'requestFrame'
+          jar tf build/freej2me_plus-lr.jar | grep 'org/recompile/freej2me/RG35XXGoldenFrameTransport.class'
+
+      - name: Compile native G1 host core
+        working-directory: assembled/src/libretro
+        run: make clean all platform=unix
+
+      - name: Verify native ownership and RGB565 boundary
+        working-directory: assembled/src/libretro
+        run: |
+          nm -a freej2me_plus_libretro.so | grep 'rg35xx_golden_video_start'
+          nm -a freej2me_plus_libretro.so | grep 'rg35xx_golden_video_present'
+          strings -a freej2me_plus_libretro.so | grep 'RG35XX G1 video receiver failed to start'
+          grep -q 'RETRO_PIXEL_FORMAT_RGB565' freej2me_libretro.c
+          ! grep -q 'status = read_from_pipe(pRead\[0\], frameHeader, 15)' freej2me_libretro.c
+
+      - name: Package G1 host evidence
+        run: |
+          mkdir -p evidence
+          cp assembled/build/freej2me_plus-lr.jar evidence/
+          cp assembled/src/libretro/freej2me_plus_libretro.so evidence/
+          cp assembled/src/org/recompile/freej2me/Libretro.java evidence/assembled-Libretro.java
+          cp assembled/src/libretro/freej2me_libretro.c evidence/assembled-freej2me_libretro.c
+          sha256sum evidence/* > evidence/SHA256SUMS
+
+      - name: Upload G1 source-build evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: rg35xx-golden-g1-source-build
+          path: evidence
