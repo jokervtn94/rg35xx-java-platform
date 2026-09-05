@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-# RGJ-RC1-011N/011R/011AC/011BC/011BD/011BR/011BU deterministic assembly driver.
+# RGJ-RC1-011N/011R/011AC/011BC/011BD/011BR/011BU/011BY deterministic assembly driver.
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 PIN_FREEJ2ME="13ec186903087156c145268f8706eecfaf9f1e50"
 : "${RG35XX_FREEJ2ME_ROOT:?set RG35XX_FREEJ2ME_ROOT to the pinned FreeJ2ME checkout}"
@@ -52,17 +52,8 @@ cp "$ROOT/native/vendor/TinySoundFont/tml.h" "$NATIVE_DST/vendor/TinySoundFont/t
 cp "$ROOT/native/vendor/TinySoundFont/tsf.h" "$NATIVE_DST/vendor/TinySoundFont/tsf.h"
 
 # Authoritative active source-mutation order.
-# Superseded historical contracts: 0004->0016, 0005->0010/0017,
-# 0006->0018, 0014->0017/0018, 0009->0021 policy baseline, 0012/0013->0020.
-# 0021 is intentionally NOT applied: it verifies that pinned upstream synchronous
-# multi-file RecordStore remains authoritative and requires no source mutation.
-# 0022 is materialized by the Classpath overlay above.
-# 0017 is intentionally applied before 0015: it establishes graceful EOF and
-# event helpers; 0015 owns subsequent mixer/runtime init/reset/close against that
-# already-defined process boundary.
-# 0023 is diagnostics-only and persists JamVM stderr before the first frame.
-# 0024 is applied after 0023 and replaces PATH-dependent execvp("java") with the
-# validated absolute RG35XX JamVM executable path.
+# 0025 restores the proven RG35XX lazy media startup baseline after all shared
+# MobilePlatform/lifecycle mutations: RG35XX skips eager JavaSound/ALSA prepare.
 PATCH_ORDER="
 0003-manager-rg35xx-media-profile.patch
 0007-platformgraphics-rg35xx-fast-drawrgb.patch
@@ -77,6 +68,7 @@ PATCH_ORDER="
 0020-pinned-graphics-input-lifecycle-consolidation.patch
 0023-libretro-persistent-jamvm-stderr.patch
 0024-libretro-absolute-jamvm-launcher.patch
+0025-mobileplatform-rg35xx-lazy-media-startup.patch
 "
 
 normalize_patch_targets()
@@ -96,25 +88,17 @@ apply_patch_strict()
   patch_name="$2"
   dry_log="$RG35XX_ASSEMBLY_ROOT/.rc1-${patch_name}.dry.log"
   apply_log="$RG35XX_ASSEMBLY_ROOT/.rc1-${patch_name}.apply.log"
-
-  if ! patch -d "$RG35XX_ASSEMBLY_ROOT" -p1 --batch --forward --fuzz=0 --dry-run \
-      < "$patch_file" >"$dry_log" 2>&1; then
-    cat "$dry_log" >&2
-    fail "zero-fuzz dry-run failed: $patch_name"
+  if ! patch -d "$RG35XX_ASSEMBLY_ROOT" -p1 --batch --forward --fuzz=0 --dry-run < "$patch_file" >"$dry_log" 2>&1; then
+    cat "$dry_log" >&2; fail "zero-fuzz dry-run failed: $patch_name"
   fi
   if grep -Eiq 'reversed|previously applied|skipping patch|ignored|FAILED|reject' "$dry_log"; then
-    cat "$dry_log" >&2
-    fail "zero-fuzz dry-run reported skipped/reversed/rejected hunk: $patch_name"
+    cat "$dry_log" >&2; fail "zero-fuzz dry-run reported skipped/reversed/rejected hunk: $patch_name"
   fi
-
-  if ! patch -d "$RG35XX_ASSEMBLY_ROOT" -p1 --batch --forward --fuzz=0 \
-      < "$patch_file" >"$apply_log" 2>&1; then
-    cat "$apply_log" >&2
-    fail "zero-fuzz apply failed: $patch_name"
+  if ! patch -d "$RG35XX_ASSEMBLY_ROOT" -p1 --batch --forward --fuzz=0 < "$patch_file" >"$apply_log" 2>&1; then
+    cat "$apply_log" >&2; fail "zero-fuzz apply failed: $patch_name"
   fi
   if grep -Eiq 'reversed|previously applied|skipping patch|ignored|FAILED|reject' "$apply_log"; then
-    cat "$apply_log" >&2
-    fail "zero-fuzz apply reported skipped/reversed/rejected hunk: $patch_name"
+    cat "$apply_log" >&2; fail "zero-fuzz apply reported skipped/reversed/rejected hunk: $patch_name"
   fi
 }
 
@@ -127,26 +111,24 @@ done
 [ -f "$ROOT/patches/0022-pinned-headless-font-peer-consolidation.patch" ] || fail "missing GNU Classpath font contract 0022"
 
 CORE_C="$RG35XX_ASSEMBLY_ROOT/src/libretro/freej2me_libretro.c"
+MOBILE_PLATFORM="$RG35XX_ASSEMBLY_ROOT/src/org/recompile/mobile/MobilePlatform.java"
 grep -q '^#define NUM_ARGUMENTS 9$' "$CORE_C" || fail "assembled core missing 0016 NUM_ARGUMENTS 9"
 grep -q -- '-Dfreej2me.rg35xx=true' "$CORE_C" || fail "assembled core missing RG35XX JVM selector"
 grep -q -- '-Dfreej2me.rg35xx.audio.fd=%d' "$CORE_C" || fail "assembled core missing dedicated audio-FD JVM property"
-[ "$(grep -Fxc 'static struct rg35xx_audio_pipe rg35xx_java_audio_pipe = { -1, -1 };' "$CORE_C")" = 1 ] || fail "assembled core fail-closed audio-pipe declaration count is not one"
-grep -q 'rg35xx_audio_pipe_create(&rg35xx_java_audio_pipe)' "$CORE_C" || fail "assembled core missing dedicated audio pipe creation"
-grep -q 'rg35xx_mixer_init(rg35xx_core_media_event);' "$CORE_C" || fail "assembled core missing native mixer init hook"
-[ "$(grep -Fxc '			rg35xx_audio_drain_start();' "$CORE_C")" = 1 ] || fail "assembled core audio drain start call count is not one"
-awk '
-  /rg35xx_audio_pipe_parent_after_fork\(&rg35xx_java_audio_pipe\);/ { parent = NR }
-  /rg35xx_audio_drain_start\(\);/ { drain = NR }
-  END { exit !(parent > 0 && drain == parent + 1) }
-' "$CORE_C" || fail "assembled core audio drain start is not immediately after parent audio-pipe handoff"
-grep -q 'rg35xx_native_media_shutdown();' "$CORE_C" || fail "assembled core missing final native media shutdown hook"
-grep -Fq 'fopen("/mnt/mmc/Java/freej2me-java.log", "a")' "$CORE_C" || fail "assembled core missing persistent JamVM diagnostic path"
-grep -Fq 'dup2(rg35xx_java_log_fd, 2)' "$CORE_C" || fail "assembled core missing stderr-only diagnostic redirect"
-if grep -Fq 'dup2(rg35xx_java_log_fd, 1)' "$CORE_C"; then fail "diagnostic log must never replace binary stdout video IPC"; fi
 grep -Fq '"/mnt/mmc/CFW/java/bin/jamvm"' "$CORE_C" || fail "assembled core missing absolute RG35XX JamVM path"
 grep -Fq 'execv(rg35xx_jamvm_path, params);' "$CORE_C" || fail "assembled core missing absolute JamVM execv"
 if grep -Fq 'execvp(cmd, params);' "$CORE_C"; then fail "assembled core still contains PATH-dependent java execvp"; fi
-grep -Fq 'RG35XX execv failed for %s: errno=%d (%s)' "$CORE_C" || fail "assembled core missing JamVM execv failure diagnostic"
+grep -Fq 'fopen("/mnt/mmc/Java/freej2me-java.log", "a")' "$CORE_C" || fail "assembled core missing persistent JamVM diagnostic path"
+grep -Fq 'dup2(rg35xx_java_log_fd, 2)' "$CORE_C" || fail "assembled core missing stderr-only diagnostic redirect"
+if grep -Fq 'dup2(rg35xx_java_log_fd, 1)' "$CORE_C"; then fail "diagnostic log must never replace binary stdout video IPC"; fi
+grep -Fq 'if(!RG35XXPlatformProfile.isActive())' "$MOBILE_PLATFORM" || fail "assembled MobilePlatform missing RG35XX lazy media gate"
+grep -Fq 'RG35XX: SKIPPING prepareMediaEngine; native media is lazy-initialized' "$MOBILE_PLATFORM" || fail "assembled MobilePlatform missing lazy-media diagnostic"
+awk '
+  /if\(!RG35XXPlatformProfile\.isActive\(\)\)/ { gate=NR }
+  /javax\.microedition\.media\.Manager\.prepareMediaEngine\(\);/ { prep=NR }
+  /loader\.start\(\);/ { start=NR }
+  END { exit !(gate > 0 && prep > gate && start > prep) }
+' "$MOBILE_PLATFORM" || fail "RG35XX media startup gate is not structurally before prepareMediaEngine/loader.start"
 
 cat > "$NATIVE_DST/rc1_sources.mk" <<'EOF'
 RG35XX_NATIVE_SRCS := \
@@ -170,8 +152,5 @@ TML_COUNT=$(grep -l '^[[:space:]]*#define[[:space:]][[:space:]]*TML_IMPLEMENTATI
 [ "$TSF_COUNT" = 1 ] || fail "assembled TSF implementation owner count is $TSF_COUNT"
 [ "$TML_COUNT" = 1 ] || fail "assembled TML implementation owner count is $TML_COUNT"
 note "ASSEMBLY PASS: $RG35XX_ASSEMBLY_ROOT"
-note "CLASSPATH FONT OVERLAY PASS: $RG35XX_CLASSPATH_ROOT"
-note "ZERO-FUZZ PATCH/MARKER PASS: all active integration hunks and native lifecycle markers are present"
-note "JAMVM STDERR DIAGNOSTIC PASS: /mnt/mmc/Java/freej2me-java.log is assembled without touching stdout video IPC"
-note "ABSOLUTE JAMVM LAUNCH PASS: /mnt/mmc/CFW/java/bin/jamvm is used directly; PATH-dependent java execvp removed"
-note "Next: compile the modified GNU Classpath tree, then run rc1_runtime_build_overlay.sh + rc1_compile.sh; no DEVICE-TEST-PASS claimed."
+note "RG35XX LAZY MEDIA STARTUP PASS: eager JavaSound/ALSA prepare is bypassed on target"
+note "Next: compile Java + ARMv5TE/uClibc; no DEVICE-TEST-PASS claimed."
