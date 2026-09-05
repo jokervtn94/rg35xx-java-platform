@@ -45,6 +45,11 @@ void rg35xx_golden_video_deinit(void);
 int rg35xx_golden_video_present(rg35xx_golden_video_cb video_cb,
                                 rg35xx_golden_geometry_cb geometry_cb);
 
+/* Logical MIDlet source geometry remains independent from the fixed physical
+ * RG35XX output surface used by Smart-Fit. */
+int rg35xx_golden_video_source_geometry(unsigned *width, unsigned *height,
+                                        unsigned *rotation);
+
 unsigned long rg35xx_golden_video_generation(void);
 unsigned long rg35xx_golden_video_presented_generation(void);
 
