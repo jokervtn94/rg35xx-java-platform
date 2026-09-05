@@ -2,21 +2,17 @@ From: RG35XX Java Platform
 Task: RGJ-RC1-011CG / RGJ-RC1-011CH / RGJ-RC1-011CI / RGJ-RC1-011CJ
 Subject: [PATCH] RG35XX: media pump, audio default, metric text and video hot-path cache
 
-Device evidence from RC1-011CF showed PCM/WAV, MIDI and ToneControl could enter
-started state, but no audio was heard and END_OF_MEDIA never arrived. The native
-mixer existed but had no render owner. The old background pipe-drain thread only
-dispatched commands and could not advance PCM/MIDI time or submit samples.
-
-RC1-011CG moves media command draining and mixer advancement onto the libretro
-run owner. RC1-011CH defaults sound on when a minimal RG35XX frontend does not
-expose the freej2me_sound option. RC1-011CI keeps that path but synchronizes the
-bitmap fallback raster with MIDP Font metrics. RC1-011CJ avoids reconverting an
-unchanged 32-bit Java frame to RGB565 on every retro_run; the conversion cache is
-invalidated only when a new Java frame or software pointer changes the pixels.
+CJ keeps the validated media lifecycle and text path while removing two costly
+hot-path allocations/conversions on RG35XX. The native RGB565 conversion buffer
+is cached across retro_run() calls and invalidated only when a new Java frame or
+software pointer changes pixels. The Java bitmap glyph helper separately removes
+per-glyph int[7] allocations in the project source.
 
 --- a/src/libretro/freej2me_libretro.c
 +++ b/src/libretro/freej2me_libretro.c
-@@ -194,16 +194,22 @@ static int rg35xx_frame_rotation = 0;
+@@ -191,17 +191,23 @@
+ static unsigned int rg35xx_frame_payload_used = 0;
+ static int rg35xx_frame_rotation = 0;
  
 +static uint16_t rg35xxFrame565[MAX_WIDTH * MAX_HEIGHT];
 +static int rg35xxFrame565Dirty = 1;
@@ -26,13 +22,14 @@ invalidated only when a new Java frame or software pointer changes the pixels.
 -	static uint16_t rg35xxFrame565[MAX_WIDTH * MAX_HEIGHT];
 -	unsigned int i;
 -	for(i = 0; i < frameSize; i++)
-+	if(rg35xxFrame565Dirty)
- 	{
+-	{
 -		const unsigned int p = frame[i];
 -		const uint16_t r = (uint16_t)((p >> 19) & 0x1F);
 -		const uint16_t g = (uint16_t)((p >> 10) & 0x3F);
 -		const uint16_t b = (uint16_t)((p >> 3) & 0x1F);
 -		rg35xxFrame565[i] = (uint16_t)((r << 11) | (g << 5) | b);
++	if(rg35xxFrame565Dirty)
++	{
 +		unsigned int i;
 +		for(i = 0; i < frameSize; i++)
 +		{
@@ -46,7 +43,7 @@ invalidated only when a new Java frame or software pointer changes the pixels.
  	}
  	Video(rg35xxFrame565, frameWidth, frameHeight, sizeof(uint16_t) * frameWidth);
  }
-@@ -158,7 +164,9 @@ int rotateScreen = 0; /* Allows rotations between 0, 90, 180 and 270 degrees */
+@@ -219,7 +225,9 @@
  int phoneType = 0; /* 0=Standard (Nokia/Sony/Samsung), 1=LG, 2=Motorola/SoftBank, 3=Motorola Triplets... */
  int backlightColor = 1; /* 0=Disabled, 1=Green, etc. */
  int gameFPS = 60; /* Auto(0), 60, 55, 50, 45, 40, 35, 30, 25, 20, 15, 10 */
@@ -75,7 +72,7 @@ invalidated only when a new Java frame or software pointer changes the pixels.
  }
  
  static void rg35xx_audio_drain_stop(void)
-@@ -1161,13 +1166,33 @@ static void rg35xx_send_media_event(const struct rg35xx_media_event_record *e)
+@@ -1160,13 +1165,33 @@
  	write_to_pipe(pWrite[1], p, sizeof(p));
  }
  
@@ -109,14 +106,15 @@ invalidated only when a new Java frame or software pointer changes the pixels.
  #ifdef __linux__
  static void rg35xx_frame_rx_reset(void)
  {
-@@ -1355,6 +1380,7 @@ static int rg35xx_receive_frame_nonblocking(void)
+@@ -1333,6 +1358,7 @@
+ 		}
  	}
  
 +	rg35xxFrame565Dirty = 1;
  	framesDropped = 0;
  	frameRequested = false;
  	rg35xx_frame_rx_reset();
-@@ -1768,6 +1794,7 @@ void retro_run(void)
+@@ -1748,6 +1774,7 @@
  		/* check if the clicked pointer needs to be shown */
  		if(joymouseClickedTime>0)
  		{
@@ -124,7 +122,7 @@ invalidated only when a new Java frame or software pointer changes the pixels.
  			joymouseClickedTime--;
  
  			for(i=0; i<24; i++)
-@@ -1792,6 +1819,7 @@ void retro_run(void)
+@@ -1772,6 +1799,7 @@
  		/* Otherwise, draw the standard pointer */
  		else if(joymouseTime>0)
  		{
