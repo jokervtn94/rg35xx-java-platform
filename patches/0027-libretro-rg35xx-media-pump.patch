@@ -26,7 +26,7 @@ same width and height contract as normal layout.
  int customMidi; /* Also acts as a boolean */
  int customFont; /* Also acts as a boolean */
  int fontOffset = 0; /* -4, -3, -2, -1, 0 (Default), 1, 2, 3, 4 */
-@@ -938,13 +940,12 @@
+@@ -938,13 +940,10 @@
  
  static void rg35xx_audio_drain_start(void)
  {
@@ -44,7 +44,7 @@ same width and height contract as normal layout.
  }
  
  static void rg35xx_audio_drain_stop(void)
-@@ -1161,12 +1162,35 @@ static void rg35xx_send_media_event(const struct rg35xx_media_event_record *e)
+@@ -1161,13 +1162,33 @@ static void rg35xx_send_media_event(const struct rg35xx_media_event_record *e)
  	write_to_pipe(pWrite[1], p, sizeof(p));
  }
  
