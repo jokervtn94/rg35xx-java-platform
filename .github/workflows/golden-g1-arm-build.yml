@@ -73,9 +73,6 @@ jobs:
         run: |
           set -euo pipefail
           make clean
-          # Put target CPU switches in the compiler command itself. Supplying a
-          # command-line CFLAGS variable would override Makefile.common include
-          # flags and break libretro-common headers.
           make platform=unix \
             CC='/opt/miyoo/bin/arm-miyoo-linux-uclibcgnueabi-gcc -march=armv5te -mtune=arm926ej-s -mfloat-abi=soft' \
             CXX='/opt/miyoo/bin/arm-miyoo-linux-uclibcgnueabi-g++ -march=armv5te -mtune=arm926ej-s -mfloat-abi=soft' \
@@ -94,7 +91,10 @@ jobs:
           grep -q 'Machine:.*ARM' /tmp/g1-elf.txt
           grep -q 'Version5 EABI' /tmp/g1-elf.txt
           grep -q 'soft-float ABI' /tmp/g1-elf.txt
-          /opt/miyoo/bin/arm-miyoo-linux-uclibcgnueabi-nm -D "$CORE" | grep rg35xx_golden_video_present
+          # link.T intentionally hides implementation helpers from the exported
+          # libretro ABI, so inspect the complete symbol table rather than -D.
+          /opt/miyoo/bin/arm-miyoo-linux-uclibcgnueabi-nm "$CORE" | grep rg35xx_golden_video_present
+          /opt/miyoo/bin/arm-miyoo-linux-uclibcgnueabi-nm "$CORE" | grep rg35xx_golden_video_start
           javap -verbose build/classes/org/recompile/freej2me/Libretro.class | grep 'major version: 50'
           jar tf "$JAR" | grep 'RG35XXGoldenFrameTransport.class'
 
