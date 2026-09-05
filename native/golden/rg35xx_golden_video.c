@@ -21,12 +21,17 @@ struct rg35xx_golden_state
 
     struct rg35xx_golden_frame a;
     struct rg35xx_golden_frame b;
+    struct rg35xx_golden_frame snapshot;
     struct rg35xx_golden_frame *front;
     struct rg35xx_golden_frame *back;
     unsigned long generation;
     unsigned long presented_generation;
 
+    /* Java emits the Golden RGB565 wire representation as high byte then low
+     * byte. Decode explicitly instead of aliasing it as host-endian uint16_t. */
+    unsigned char wire_payload[RG35XX_GOLDEN_MAX_PIXELS * 2u];
     uint16_t canvas[RG35XX_GOLDEN_MAX_PIXELS];
+
     unsigned cached_src_w;
     unsigned cached_src_h;
     unsigned cached_dst_w;
@@ -102,6 +107,41 @@ static int valid_header(const unsigned char h[RG35XX_GOLDEN_HEADER_SIZE],
     return 1;
 }
 
+/* Recover the next plausible 0xFE frame boundary without ever publishing an
+ * invalid transaction. This mirrors the recovery property visible in the
+ * Golden core diagnostics ("invalid header ...; resync"). */
+static int read_header_resync(unsigned char h[RG35XX_GOLDEN_HEADER_SIZE],
+                              unsigned *w, unsigned *hh, unsigned *rotation)
+{
+    unsigned char byte;
+    unsigned scanned = 0;
+    const unsigned max_scan = RG35XX_GOLDEN_MAX_PIXELS * 2u + RG35XX_GOLDEN_HEADER_SIZE;
+
+    while(g.run && scanned < max_scan)
+    {
+        if(read_exact(g.read_fd, &byte, 1u) <= 0) return 0;
+        ++scanned;
+        if(byte != 0xFE) continue;
+        h[0] = byte;
+        if(read_exact(g.read_fd, h + 1, RG35XX_GOLDEN_HEADER_SIZE - 1u) <= 0) return 0;
+        scanned += RG35XX_GOLDEN_HEADER_SIZE - 1u;
+        if(valid_header(h, w, hh, rotation)) return 1;
+        /* The consumed 15 bytes may contain another 0xFE. A bounded receiver
+         * cannot push them back, so continue scanning the stream. The current
+         * valid front generation remains untouched throughout recovery. */
+    }
+    return 0;
+}
+
+static void decode_wire_rgb565(struct rg35xx_golden_frame *dst,
+                               const unsigned char *src, size_t pixels)
+{
+    size_t i;
+    for(i = 0; i < pixels; ++i)
+        dst->pixels[i] = (uint16_t)(((uint16_t)src[i * 2u] << 8) |
+                                   (uint16_t)src[i * 2u + 1u]);
+}
+
 static void publish_back(unsigned w, unsigned h, unsigned rot,
                          const unsigned char header[RG35XX_GOLDEN_HEADER_SIZE])
 {
@@ -132,24 +172,17 @@ static void *receiver_main(void *unused)
     while(g.run)
     {
         unsigned w, h, rotation;
+        size_t pixels;
         size_t payload;
-        int status;
 
         if(!write_exact(g.write_fd, request, sizeof(request))) break;
-        status = read_exact(g.read_fd, header, sizeof(header));
-        if(status <= 0) break;
+        if(!read_header_resync(header, &w, &h, &rotation)) break;
 
-        if(!valid_header(header, &w, &h, &rotation))
-        {
-            /* Do not poison the currently presented generation. The caller may
-             * restart/resync the Java process; this receiver never publishes an
-             * impossible geometry. */
-            continue;
-        }
+        pixels = (size_t)w * (size_t)h;
+        payload = pixels * 2u;
+        if(read_exact(g.read_fd, g.wire_payload, payload) <= 0) break;
 
-        payload = (size_t)w * (size_t)h * 2u;
-        status = read_exact(g.read_fd, g.back->pixels, payload);
-        if(status <= 0) break;
+        decode_wire_rgb565(g.back, g.wire_payload, pixels);
         publish_back(w, h, rotation, header);
     }
 
@@ -171,8 +204,6 @@ static void fit_geometry(unsigned sw, unsigned sh,
         return;
     }
 
-    /* Preserve aspect ratio using integer math. Never alter the MIDlet's logical
-     * LCD size. Upscale or downscale only in the native presentation surface. */
     fw = ow;
     fh = (unsigned)(((unsigned long long)sh * ow) / sw);
     if(fh > oh)
@@ -263,7 +294,7 @@ void rg35xx_golden_video_stop(void)
 {
     if(!g.started) return;
     g.run = 0;
-    pthread_cancel(g.thread); /* read_exact may be blocked on Java stdout. */
+    pthread_cancel(g.thread);
     pthread_join(g.thread, NULL);
     g.started = 0;
 }
@@ -281,7 +312,7 @@ void rg35xx_golden_video_deinit(void)
 int rg35xx_golden_video_present(rg35xx_golden_video_cb video_cb,
                                 rg35xx_golden_geometry_cb geometry_cb)
 {
-    struct rg35xx_golden_frame local;
+    size_t bytes;
     unsigned long generation;
     if(!video_cb || !g.mutex_ready) return 0;
 
@@ -292,28 +323,26 @@ int rg35xx_golden_video_present(rg35xx_golden_video_cb video_cb,
         pthread_mutex_unlock(&g.mutex);
         return 0;
     }
-    /* Copy a coherent generation, never the receiver's in-flight back buffer. */
-    local.width = g.front->width;
-    local.height = g.front->height;
-    local.rotation = g.front->rotation;
-    local.vibration_duration = g.front->vibration_duration;
-    local.vibration_strength = g.front->vibration_strength;
-    local.restart_requested = g.front->restart_requested;
-    local.encoding_requested = g.front->encoding_requested;
-    local.generation = generation;
-    memcpy(local.pixels, g.front->pixels,
-           (size_t)local.width * local.height * sizeof(uint16_t));
+    g.snapshot.width = g.front->width;
+    g.snapshot.height = g.front->height;
+    g.snapshot.rotation = g.front->rotation;
+    g.snapshot.vibration_duration = g.front->vibration_duration;
+    g.snapshot.vibration_strength = g.front->vibration_strength;
+    g.snapshot.restart_requested = g.front->restart_requested;
+    g.snapshot.encoding_requested = g.front->encoding_requested;
+    g.snapshot.generation = generation;
+    bytes = (size_t)g.snapshot.width * g.snapshot.height * sizeof(uint16_t);
+    memcpy(g.snapshot.pixels, g.front->pixels, bytes);
     pthread_mutex_unlock(&g.mutex);
 
-    if(local.rotation == 0)
+    if(g.snapshot.rotation == 0)
     {
-        blit_nearest(&local);
+        blit_nearest(&g.snapshot);
     }
     else
     {
-        /* G1 deliberately fails safe for rotated content until the recovered
-         * Golden rotation transform is materialized. It must never publish raw
-         * or mis-sized data merely to keep the frontend moving. */
+        /* Rotation reconstruction is a separate G1 sub-gate. Never present a
+         * wrongly sized/rotated buffer while that transform is still unknown. */
         return 0;
     }
 
