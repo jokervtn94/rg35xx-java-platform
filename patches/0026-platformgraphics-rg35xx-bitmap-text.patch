@@ -1,13 +1,17 @@
 From: RG35XX Java Platform
-Task: RGJ-RC1-011CC
-Subject: [PATCH] graphics: composite RG35XX bitmap text through drawRGB
+Task: RGJ-RC1-011CC / RGJ-RC1-011CD
+Subject: [PATCH] graphics: composite text safely and restore RG35XX RGB565 video
 
-Device evidence from RC1-011CB shows the fixed-cell glyphs are visible and the
-MIDlet/input loop remains healthy, but direct framebuffer writes produce severe
-vertical stripes/pixel corruption. Keep the Java2D glyph bypass, but never let
-the text helper touch canvasData. Build an isolated transparent ARGB bitmap and
-composite it through PlatformGraphics.drawRGB(processAlpha=true), a path already
-validated by the comprehensive device test.
+RC1-011CC keeps the Java2D glyph bypass while rendering text into an isolated
+ARGB bitmap and compositing through PlatformGraphics.drawRGB.
+
+RC1-011CD follows device screenshots showing deterministic alternating blue
+columns even after text compositing. The consolidated core currently submits an
+unsigned-int XRGB8888 frame with a four-byte pitch, while the historical RG35XX
+Golden Baseline is recorded as RGB565-fastpack. Preserve the existing 32-bit
+working frame for rotation/pointer logic, but convert it into a dedicated RGB565
+submission buffer at the libretro boundary and advertise the matching pixel
+format.
 
 --- a/src/org/recompile/mobile/PlatformGraphics.java
 +++ b/src/org/recompile/mobile/PlatformGraphics.java
@@ -33,3 +37,70 @@ validated by the comprehensive device test.
  		}
  	}
  
+--- a/src/libretro/freej2me_libretro.c
++++ b/src/libretro/freej2me_libretro.c
+@@ -165,8 +165,9 @@
+ unsigned int frameHeight = MAX_HEIGHT;
+ unsigned int frameSize = MAX_WIDTH * MAX_HEIGHT;
+ unsigned int frameBufferSize = MAX_WIDTH * MAX_HEIGHT * 3;
+ unsigned int frame[MAX_WIDTH * MAX_HEIGHT];
++uint16_t rg35xxFrame565[MAX_WIDTH * MAX_HEIGHT];
+ unsigned char frameBuffer[MAX_WIDTH * MAX_HEIGHT * 3];
+ unsigned char frameHeader[15]; // This is always frameHeader's length in Libretro.java -1 (we read the status byte separately)
+ struct retro_game_info gameinfo;
+@@ -174,6 +175,20 @@
+ bool fast_forwarding = false;
+ int framesDropped = 0;
+ 
++static void rg35xx_video_submit(void)
++{
++	unsigned int i;
++	for(i = 0; i < frameSize; i++)
++	{
++		const unsigned int p = frame[i];
++		const uint16_t r = (uint16_t)((p >> 19) & 0x1F);
++		const uint16_t g = (uint16_t)((p >> 10) & 0x3F);
++		const uint16_t b = (uint16_t)((p >> 3) & 0x1F);
++		rg35xxFrame565[i] = (uint16_t)((r << 11) | (g << 5) | b);
++	}
++	Video(rg35xxFrame565, frameWidth, frameHeight, sizeof(uint16_t) * frameWidth);
++}
++
+ float normal_throttle_rate = DEFAULT_FPS;
+ 
+ /* Libretro exposed config variables START */
+@@ -1391,7 +1406,7 @@
+ 				{
+ 					Environ(RETRO_ENVIRONMENT_SET_MESSAGE_EXT, (void*)&messages[FRAMES_DROPPED_MSG]);
+ 				}
+-				Video(frame, frameWidth, frameHeight, sizeof(unsigned int) * frameWidth);
++				rg35xx_video_submit();
+ 				return;
+ 			}
+ 			if(status<0 && errno != EAGAIN)
+@@ -1399,7 +1414,7 @@
+ 			{
+ 				Environ(RETRO_ENVIRONMENT_SET_MESSAGE_EXT, (void*)&messages[INVALID_STATUS_MSG]);
+ 				fflush(stdout);
+-				Video(frame, frameWidth, frameHeight, sizeof(unsigned int) * frameWidth);
++				rg35xx_video_submit();
+ 				return;
+ 			}
+ 			/*
+@@ -1575,7 +1590,7 @@
+ 	}
+ 
+ 	/* send frame to libretro irrespective of FreeJ2ME running (for error messages) */
+-	Video(frame, frameWidth, frameHeight, sizeof(unsigned int) * frameWidth);
++	rg35xx_video_submit();
+ 
+ 	/*
+ 	 * I couldn't find a way for the frontend to notify FreeJ2ME's process that it has paused,
+@@ -1617,7 +1632,7 @@
+ 	info->geometry.aspect_ratio = ((float)BASE_WIDTH) / ((float)BASE_HEIGHT);
+ 
+ 	info->timing.fps = DEFAULT_FPS;
+-	int pixelformat = RETRO_PIXEL_FORMAT_XRGB8888;
++	int pixelformat = RETRO_PIXEL_FORMAT_RGB565;
+ 	Environ(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &pixelformat);
+ }
