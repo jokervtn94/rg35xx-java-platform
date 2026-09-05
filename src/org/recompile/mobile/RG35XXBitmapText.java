@@ -1,14 +1,12 @@
 package org.recompile.mobile;
 
-import javax.microedition.lcdui.Font;
-
 /**
- * RG35XX fixed-cell framebuffer text renderer.
+ * RG35XX fixed-cell bitmap text producer.
  *
  * Compatible reconstruction of the historical 8x12 raster path. The exact
- * old glyph resource has not been recovered. This implementation deliberately
- * avoids java.awt.Graphics2D glyph rasterization and also avoids the dynamic
- * charWidth/fontHeight scaling used by RC1-011CA.
+ * old glyph resource has not been recovered. This class never touches the
+ * PlatformGraphics framebuffer directly: it only builds an isolated ARGB
+ * bitmap which PlatformGraphics composites through its proven drawRGB path.
  */
 public final class RG35XXBitmapText
 {
@@ -17,71 +15,47 @@ public final class RG35XXBitmapText
 
     private RG35XXBitmapText() {}
 
-    public static void draw(int[] dst, int width, int height,
-        String text, int x, int baseline, int ascent, int fontHeight,
-        Font font, int argb, int clipLeft, int clipTop, int clipRight, int clipBottom)
+    public static int width(String text)
     {
-        if(dst == null || text == null || text.length() == 0) return;
-        if(width <= 0 || height <= 0) return;
-        if(dst.length < width * height) return;
-
-        final int left = Math.max(0, clipLeft);
-        final int topClip = Math.max(0, clipTop);
-        final int right = Math.min(width, clipRight);
-        final int bottom = Math.min(height, clipBottom);
-        if(left >= right || topClip >= bottom) return;
-
-        final int top = baseline - ascent;
-        int penX = x;
-
-        for(int i = 0; i < text.length(); i++)
-        {
-            drawGlyph8x12(dst, width, height, text.charAt(i), penX, top, argb,
-                left, topClip, right, bottom);
-            penX += CELL_WIDTH;
-            if(penX >= right) break;
-        }
+        if(text == null || text.length() == 0) return 0;
+        if(text.length() > Integer.MAX_VALUE / CELL_WIDTH) return 0;
+        return text.length() * CELL_WIDTH;
     }
 
-    private static void drawGlyph8x12(int[] dst, int width, int height, char ch,
-        int x, int y, int argb,
-        int clipLeft, int clipTop, int clipRight, int clipBottom)
+    public static int[] render(String text, int argb)
+    {
+        final int bitmapWidth = width(text);
+        if(bitmapWidth <= 0) return new int[0];
+        if(bitmapWidth > Integer.MAX_VALUE / CELL_HEIGHT) return new int[0];
+
+        final int[] pixels = new int[bitmapWidth * CELL_HEIGHT];
+        for(int i = 0; i < text.length(); i++)
+        {
+            drawGlyph8x12(pixels, bitmapWidth, text.charAt(i), i * CELL_WIDTH, argb);
+        }
+        return pixels;
+    }
+
+    private static void drawGlyph8x12(int[] pixels, int width, char ch, int x, int argb)
     {
         final int[] rows = glyph5x7(ch);
 
         /* Fixed nearest-neighbour expansion from the embedded 5x7 seed to an
-         * 8x12 cell. No metric-dependent scaling is performed at runtime. */
+         * 8x12 cell. No MIDP metric-dependent scaling occurs here. */
         for(int dy = 0; dy < CELL_HEIGHT; dy++)
         {
-            final int py = y + dy;
-            if(py < 0 || py >= height || py < clipTop || py >= clipBottom) continue;
             final int sy = (dy * 7) / CELL_HEIGHT;
             final int bits = rows[sy];
-            final int row = py * width;
+            final int row = dy * width;
 
             for(int dx = 0; dx < CELL_WIDTH; dx++)
             {
-                final int px = x + dx;
-                if(px < 0 || px >= width || px < clipLeft || px >= clipRight) continue;
                 final int sx = (dx * 5) / CELL_WIDTH;
                 if((bits & (1 << (4 - sx))) == 0) continue;
-                final int idx = row + px;
-                if(idx < 0 || idx >= dst.length) continue;
-                dst[idx] = blend(argb, dst[idx]);
+                final int idx = row + x + dx;
+                if(idx >= 0 && idx < pixels.length) pixels[idx] = argb;
             }
         }
-    }
-
-    private static int blend(int src, int dst)
-    {
-        final int a = src >>> 24;
-        if(a == 255) return src;
-        if(a == 0) return dst;
-        final int ia = 255 - a;
-        final int r = (((src >> 16) & 255) * a + ((dst >> 16) & 255) * ia) / 255;
-        final int g = (((src >> 8) & 255) * a + ((dst >> 8) & 255) * ia) / 255;
-        final int b = ((src & 255) * a + (dst & 255) * ia) / 255;
-        return 0xFF000000 | (r << 16) | (g << 8) | b;
     }
 
     private static int[] glyph5x7(char c)
