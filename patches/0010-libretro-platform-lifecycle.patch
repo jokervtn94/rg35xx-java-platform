@@ -1,18 +1,10 @@
 From: RG35XX Java Platform
-Task: RGJ-B6-002..006 / RGJ-RC1-011R / RGJ-RC1-011BV
-Subject: [PATCH] Libretro: bind RG35XX lifecycle and headless boot baseline
+Task: RGJ-B6-002..006 / RGJ-RC1-011R
+Subject: [PATCH] Libretro: bind RG35XX lifecycle to Java platform and game load
 
 This executable diff owns the Java-side lifecycle boundaries that are already
 present in pinned Libretro.java. Native process teardown and EOF/platformShutdown
 remain owned by 0017 so the same parser tail is not patched twice.
-
-RGJ-RC1-011BV also establishes the minimal RG35XX AWT boot baseline. The real
-device reached JamVM but GNU Classpath selected GtkToolkit and failed on missing
-libgtkpeer.so before MobilePlatform/MIDlet startup. Libretro is headless by
-definition on RG35XX, so main() selects GNU Classpath HeadlessToolkit before the
-Libretro constructor creates MobilePlatform/PlatformFont. This does not add GTK,
-does not alter desktop launchers, and remains reversible if the stock device
-Classpath cannot provide a usable headless peer.
 
 The source is pinned exactly, so this revision uses insertion-only hunks at the
 verified line boundaries to remove GNU patch fuzz/context ambiguity.
@@ -21,25 +13,15 @@ verified line boundaries to remove GNU patch fuzz/context ambiguity.
 +++ b/src/org/recompile/freej2me/Libretro.java
 @@ -20,0 +21,1 @@
 +import org.recompile.mobile.RG35XXLifecycle;
-@@ -52,6 +53,10 @@
- 	public static void main(String args[])
- 	{
-+		/* RG35XX/libretro is a headless target. Select the Classpath headless
-+		 * peer before MobilePlatform -> PlatformFont can initialize AWT. */
-+		System.setProperty("awt.toolkit", "gnu.java.awt.peer.headless.HeadlessToolkit");
-+
- 		Mobile.clearOldLog();
- 		Libretro app = new Libretro(args);
- 	}
-@@ -87,0 +93,3 @@
+@@ -87,0 +89,3 @@
 +
 +		/* Process-lifetime target services attach after MobilePlatform exists. */
 +		RG35XXLifecycle.platformStart();
-@@ -176,0 +185,3 @@
+@@ -176,0 +181,3 @@
 +								/* Flush/reset the previous game before MobilePlatform.load()
 +								 * replaces loader/suite context. */
 +								RG35XXLifecycle.beforeGameLoad();
-@@ -178,0 +190,1 @@
+@@ -178,0 +186,1 @@
 +									RG35XXLifecycle.afterGameLoad();
-@@ -192,0 +205,1 @@
+@@ -192,0 +201,1 @@
 +									RG35XXLifecycle.gameLoadFailed();
