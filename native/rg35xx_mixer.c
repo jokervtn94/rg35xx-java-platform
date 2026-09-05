@@ -2,11 +2,13 @@
 #include "rg35xx_midi_backend.h"
 #include <string.h>
 
-/* Tasklog: RGJ-B3-006 / RGJ-B3-STAB-001 / RGJ-RC1-010D / RGJ-RC1-010H */
+/* Tasklog: RGJ-B3-006 / RGJ-B3-STAB-001 / RGJ-RC1-010D / RGJ-RC1-010H / RGJ-RC1-011CI */
 #define RG35XX_MIXER_CHUNK_FRAMES 1024u
 #define RG35XX_PCM_PHASE_BITS 15u
 #define RG35XX_PCM_PHASE_ONE  (1u << RG35XX_PCM_PHASE_BITS)
 #define RG35XX_PCM_PHASE_MASK (RG35XX_PCM_PHASE_ONE - 1u)
+#define RG35XX_MASTER_GAIN_NUM 3
+#define RG35XX_MASTER_GAIN_DEN 4
 
 struct pcm_voice {
     uint32_t player_id;
@@ -31,6 +33,14 @@ static int16_t clamp16(int32_t v)
     if(v > 32767) return 32767;
     if(v < -32768) return -32768;
     return (int16_t)v;
+}
+
+static int32_t apply_master_headroom(int32_t v)
+{
+    /* CH device evidence confirmed correct media timing/output but audible
+     * roughness. Keep 25% digital headroom before the final hard clamp so
+     * full-scale PCM and MIDI summation do not immediately flatten peaks. */
+    return (v * RG35XX_MASTER_GAIN_NUM) / RG35XX_MASTER_GAIN_DEN;
 }
 
 static int32_t lerp_s16(int16_t a, int16_t b, uint32_t frac_q15)
@@ -240,7 +250,8 @@ static void render_chunk(int16_t *out, size_t frames)
             right += (r * e->volume) / 100;
             e->media_time_us = (((v->source_pos_q15 >> RG35XX_PCM_PHASE_BITS) * UINT64_C(1000000)) / (uint64_t)e->sample_rate);
         }
-        out[f * 2] = clamp16(left); out[f * 2 + 1] = clamp16(right);
+        out[f * 2] = clamp16(apply_master_headroom(left));
+        out[f * 2 + 1] = clamp16(apply_master_headroom(right));
     }
 }
 
