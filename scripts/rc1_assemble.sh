@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-# RGJ-RC1-011N/011R/011AC/011BC/011BD/011BR/011BU/011BY/011BZ/011CA deterministic assembly driver.
+# RGJ-RC1-011N/011R/011AC/011BC/011BD/011BR/011BU/011BY/011BZ/011CA/011CC deterministic assembly driver.
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 PIN_FREEJ2ME="13ec186903087156c145268f8706eecfaf9f1e50"
 : "${RG35XX_FREEJ2ME_ROOT:?set RG35XX_FREEJ2ME_ROOT to the pinned FreeJ2ME checkout}"
@@ -113,6 +113,7 @@ CORE_C="$RG35XX_ASSEMBLY_ROOT/src/libretro/freej2me_libretro.c"
 MOBILE_PLATFORM="$RG35XX_ASSEMBLY_ROOT/src/org/recompile/mobile/MobilePlatform.java"
 MANAGER_JAVA="$RG35XX_ASSEMBLY_ROOT/src/javax/microedition/media/Manager.java"
 PLATFORM_GRAPHICS="$RG35XX_ASSEMBLY_ROOT/src/org/recompile/mobile/PlatformGraphics.java"
+BITMAP_TEXT="$RG35XX_ASSEMBLY_ROOT/src/org/recompile/mobile/RG35XXBitmapText.java"
 grep -q '^#define NUM_ARGUMENTS 9$' "$CORE_C" || fail "assembled core missing 0016 NUM_ARGUMENTS 9"
 grep -q -- '-Dfreej2me.rg35xx=true' "$CORE_C" || fail "assembled core missing RG35XX JVM selector"
 grep -q -- '-Dfreej2me.rg35xx.audio.fd=%d' "$CORE_C" || fail "assembled core missing dedicated audio-FD JVM property"
@@ -141,16 +142,21 @@ awk '
 ' "$MANAGER_JAVA" || fail "RG35XX playTone native branch is not before JavaSound toneChannel access"
 grep -Fq 'RG35XX tone transport unavailable' "$MANAGER_JAVA" || fail "assembled Manager missing native playTone transport"
 
-# Device evidence shows AWT metrics work while Graphics2D glyph scanline rendering
-# crashes. RG35XX text must use direct framebuffer bitmap rendering instead.
+# Device evidence: direct bitmap writes made glyphs visible but corrupted the
+# screen. The helper must only build an isolated ARGB raster, and PlatformGraphics
+# must composite it through the already device-validated drawRGB path.
 grep -Fq 'if(RG35XXPlatformProfile.isActive() && !Mobile.isDoJa)' "$PLATFORM_GRAPHICS" || fail "PlatformGraphics missing RG35XX text selector"
-grep -Fq 'RG35XXBitmapText.draw(canvasData, canvasWidth, canvasHeight,' "$PLATFORM_GRAPHICS" || fail "PlatformGraphics missing bitmap text call"
+grep -Fq 'final int[] raster = RG35XXBitmapText.render(str, getColor());' "$PLATFORM_GRAPHICS" || fail "PlatformGraphics missing isolated text raster"
+grep -Fq 'drawRGB(raster, 0, bitmapWidth, x, y - ascent,' "$PLATFORM_GRAPHICS" || fail "PlatformGraphics missing drawRGB text compositing"
+if grep -Fq 'RG35XXBitmapText.draw(canvasData' "$PLATFORM_GRAPHICS"; then fail "PlatformGraphics still allows direct text framebuffer writes"; fi
+if grep -Fq 'int[] dst' "$BITMAP_TEXT"; then fail "bitmap text helper still exposes framebuffer destination"; fi
 awk '
   /if\(RG35XXPlatformProfile\.isActive\(\) && !Mobile\.isDoJa\)/ { rg=NR }
-  /RG35XXBitmapText\.draw\(/ { bm=NR }
+  /RG35XXBitmapText\.render\(/ { render=NR }
+  /drawRGB\(raster,/ { rgb=NR }
   /gc\.drawString\(str, x, y\);/ { awt=NR }
-  END { exit !(rg > 0 && bm > rg && awt > bm) }
-' "$PLATFORM_GRAPHICS" || fail "RG35XX bitmap text path is not structurally before AWT drawString fallback"
+  END { exit !(rg > 0 && render > rg && rgb > render && awt > rgb) }
+' "$PLATFORM_GRAPHICS" || fail "RG35XX text compositing is not structurally before AWT drawString fallback"
 
 cat > "$NATIVE_DST/rc1_sources.mk" <<'EOF'
 RG35XX_NATIVE_SRCS := \
@@ -176,5 +182,5 @@ TML_COUNT=$(grep -l '^[[:space:]]*#define[[:space:]][[:space:]]*TML_IMPLEMENTATI
 note "ASSEMBLY PASS: $RG35XX_ASSEMBLY_ROOT"
 note "RG35XX LAZY MEDIA STARTUP PASS: eager JavaSound/ALSA prepare is bypassed on target"
 note "RG35XX PLAYTONE ORDER PASS: native transport precedes desktop toneChannel access"
-note "RG35XX BITMAP TEXT PASS: direct framebuffer text precedes AWT fallback on target"
+note "RG35XX TEXT COMPOSITE PASS: isolated ARGB raster enters device-validated drawRGB path"
 note "Next: compile Java + ARMv5TE/uClibc; no DEVICE-TEST-PASS claimed."
