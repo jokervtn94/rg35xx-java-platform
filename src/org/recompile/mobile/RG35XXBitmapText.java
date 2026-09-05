@@ -1,75 +1,94 @@
 package org.recompile.mobile;
 
+import javax.microedition.lcdui.Font;
+
 /**
- * RG35XX fixed-cell bitmap text producer.
+ * RG35XX bitmap text producer.
  *
- * Compatible reconstruction of the historical 8x12 raster path. The exact
- * old glyph resource has not been recovered. This class never touches the
- * PlatformGraphics framebuffer directly: it only builds an isolated ARGB
- * bitmap which PlatformGraphics composites through its proven drawRGB path.
+ * The fallback glyph seed is 5x7, but the output raster now follows the active
+ * MIDP Font metrics instead of imposing a fixed 8x12 advance. This keeps the
+ * pixels emitted by drawString() inside the same width/height contract used by
+ * stringWidth(), charWidth(), anchors, clipping and TextBox/Form layout.
  */
 public final class RG35XXBitmapText
 {
-    public static final int CELL_WIDTH = 8;
-    public static final int CELL_HEIGHT = 12;
-
-    /* Keep the MIDP-facing 8x12 advance/height contract, but do not stretch
-     * the 5x7 seed over the whole cell. Reserving side/bottom whitespace is
-     * important on the RG35XX 240px display: when edge pixels from adjacent
-     * cells touch, glyphs turn into the long boxed/underlined shapes seen in
-     * device screenshots even though the framebuffer itself is correct. */
-    private static final int GLYPH_WIDTH = 6;
-    private static final int GLYPH_HEIGHT = 9;
-    private static final int GLYPH_X = 1;
-    private static final int GLYPH_Y = 1;
-
     private RG35XXBitmapText() {}
 
-    public static int width(String text)
+    public static int width(String text, Font font)
     {
-        if(text == null || text.length() == 0) return 0;
-        if(text.length() > Integer.MAX_VALUE / CELL_WIDTH) return 0;
-        return text.length() * CELL_WIDTH;
+        if(text == null || text.length() == 0 || font == null) return 0;
+        final int w = font.stringWidth(text);
+        return w > 0 ? w : 0;
     }
 
-    public static int[] render(String text, int argb)
+    public static int height(Font font)
     {
-        final int bitmapWidth = width(text);
-        if(bitmapWidth <= 0) return new int[0];
-        if(bitmapWidth > Integer.MAX_VALUE / CELL_HEIGHT) return new int[0];
+        if(font == null) return 0;
+        final int h = font.getHeight();
+        return h > 0 ? h : 0;
+    }
 
-        /* PlatformGraphics.getColor() is RGB (0xRRGGBB). The RG35XX path
-         * composites with drawRGB(..., processAlpha=true), so copying RGB
-         * verbatim makes every glyph pixel alpha=0 and therefore invisible. */
+    public static int[] render(String text, int argb, Font font)
+    {
+        final int bitmapWidth = width(text, font);
+        final int bitmapHeight = height(font);
+        if(bitmapWidth <= 0 || bitmapHeight <= 0) return new int[0];
+        if(bitmapWidth > Integer.MAX_VALUE / bitmapHeight) return new int[0];
+
+        /* PlatformGraphics.getColor() is RGB (0xRRGGBB) on this path while
+         * drawRGB(..., processAlpha=true) expects ARGB. Keep glyphs opaque. */
         final int opaqueArgb = argb | 0xFF000000;
+        final int[] pixels = new int[bitmapWidth * bitmapHeight];
 
-        final int[] pixels = new int[bitmapWidth * CELL_HEIGHT];
+        int penX = 0;
         for(int i = 0; i < text.length(); i++)
         {
-            drawGlyph8x12(pixels, bitmapWidth, text.charAt(i), i * CELL_WIDTH, opaqueArgb);
+            final char ch = text.charAt(i);
+            int advance = font.charWidth(ch);
+            if(advance < 1) advance = 1;
+
+            /* stringWidth() is authoritative for the final raster width. Clamp
+             * the last cell so rounding/peer differences cannot write outside
+             * the MIDP-measured line box. */
+            int cellWidth = advance;
+            if(penX + cellWidth > bitmapWidth) cellWidth = bitmapWidth - penX;
+            if(cellWidth <= 0) break;
+
+            drawGlyph(pixels, bitmapWidth, bitmapHeight, ch, penX, cellWidth, opaqueArgb);
+            penX += advance;
+            if(penX >= bitmapWidth) break;
         }
         return pixels;
     }
 
-    private static void drawGlyph8x12(int[] pixels, int width, char ch, int x, int argb)
+    private static void drawGlyph(int[] pixels, int width, int height, char ch,
+                                  int x, int cellWidth, int argb)
     {
+        if(ch == ' ' || cellWidth <= 0) return;
         final int[] rows = glyph5x7(ch);
 
-        /* Modest nearest-neighbour expansion inside the fixed 8x12 cell.
-         * The advance remains 8 pixels, so existing PlatformFont metrics and
-         * MIDP layout stay deterministic, while a one-pixel side bearing
-         * prevents neighboring glyphs from merging visually. */
-        for(int dy = 0; dy < GLYPH_HEIGHT; dy++)
-        {
-            final int sy = (dy * 7) / GLYPH_HEIGHT;
-            final int bits = rows[sy];
-            final int row = (GLYPH_Y + dy) * width;
+        /* Preserve one trailing pixel as inter-glyph whitespace whenever the
+         * measured MIDP advance allows it. This avoids the boxed/underlined
+         * artifacts seen with edge-to-edge glyph cells while still respecting
+         * proportional font advances. */
+        final int glyphWidth = cellWidth > 2 ? cellWidth - 1 : cellWidth;
+        final int glyphHeight = height > 3 ? height - 3 : height;
+        final int glyphY = height > glyphHeight ? (height - glyphHeight) / 2 : 0;
+        if(glyphWidth <= 0 || glyphHeight <= 0) return;
 
-            for(int dx = 0; dx < GLYPH_WIDTH; dx++)
+        for(int dy = 0; dy < glyphHeight; dy++)
+        {
+            final int sy = (dy * 7) / glyphHeight;
+            final int bits = rows[sy];
+            final int row = (glyphY + dy) * width;
+
+            for(int dx = 0; dx < glyphWidth; dx++)
             {
-                final int sx = (dx * 5) / GLYPH_WIDTH;
+                final int sx = (dx * 5) / glyphWidth;
                 if((bits & (1 << (4 - sx))) == 0) continue;
-                final int idx = row + x + GLYPH_X + dx;
+                final int px = x + dx;
+                if(px < 0 || px >= width) continue;
+                final int idx = row + px;
                 if(idx >= 0 && idx < pixels.length) pixels[idx] = argb;
             }
         }
