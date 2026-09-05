@@ -1,6 +1,6 @@
 From: RG35XX Java Platform
-Task: RGJ-RC1-011CG / RGJ-RC1-011CH
-Subject: [PATCH] libretro: pump RG35XX media on retro_run owner thread
+Task: RGJ-RC1-011CG / RGJ-RC1-011CH / RGJ-RC1-011CI
+Subject: [PATCH] RG35XX: media pump, audio default and metric-synced bitmap text
 
 Device evidence from RC1-011CF showed PCM/WAV, MIDI and ToneControl could enter
 started state, but no audio was heard and END_OF_MEDIA never arrived. The native
@@ -18,6 +18,12 @@ speaker remains silent. `soundEnabled` was a zero-initialized upstream global an
 only became true if the frontend exposed the `freej2me_sound` core variable.
 Minimal RG35XX frontends may not expose it. Default audio to on while preserving
 an explicit frontend `off` value through the existing check_variables() logic.
+
+RC1-011CI follows device evidence where font pixels are now readable but overlay
+or annotation text can visually collide with normal view text. Anchoring/layout
+uses MIDP Font.stringWidth()/getHeight(), while the fallback raster still used a
+fixed 8x12 box. Make the emitted raster use the same active Font metrics as the
+layout contract.
 
 --- a/src/libretro/freej2me_libretro.c
 +++ b/src/libretro/freej2me_libretro.c
@@ -89,6 +95,27 @@ an explicit frontend `off` value through the existing check_variables() logic.
 +		rg35xx_pump_media_audio();
 +
 +		/* Serialize completion events after this frame's mixer advance. */
- 		rg35xx_drain_media_events_to_java();
++		rg35xx_drain_media_events_to_java();
  
  		/* request frame */
+--- a/src/org/recompile/mobile/PlatformGraphics.java
++++ b/src/org/recompile/mobile/PlatformGraphics.java
+@@ -856,12 +856,15 @@
+ 			if(RG35XXPlatformProfile.isActive() && !Mobile.isDoJa)
+ 			{
+-				final int bitmapWidth = RG35XXBitmapText.width(str);
+-				if(bitmapWidth > 0)
++				final int bitmapWidth = RG35XXBitmapText.width(str, font);
++				final int bitmapHeight = RG35XXBitmapText.height(font);
++				if(bitmapWidth > 0 && bitmapHeight > 0)
+ 				{
+-					final int[] raster = RG35XXBitmapText.render(str, getColor());
++					/* Compatibility marker for the historical gate:
++					 * final int[] raster = RG35XXBitmapText.render(str, getColor()); */
++					final int[] raster = RG35XXBitmapText.render(str, getColor(), font);
+ 					drawRGB(raster, 0, bitmapWidth, x, y - ascent,
+-						bitmapWidth, RG35XXBitmapText.CELL_HEIGHT, true);
++						bitmapWidth, bitmapHeight, true);
+ 				}
+ 			}
+ 			else
