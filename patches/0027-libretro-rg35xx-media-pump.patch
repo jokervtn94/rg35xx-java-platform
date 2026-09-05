@@ -1,9 +1,9 @@
 From: RG35XX Java Platform
-Task: RGJ-RC1-011CG
+Task: RGJ-RC1-011CG / RGJ-RC1-011CH
 Subject: [PATCH] libretro: pump RG35XX media on retro_run owner thread
 
-Device evidence from RC1-011CF shows PCM/WAV, MIDI and ToneControl can enter
-started state, but no audio is heard and END_OF_MEDIA never arrives. The native
+Device evidence from RC1-011CF showed PCM/WAV, MIDI and ToneControl could enter
+started state, but no audio was heard and END_OF_MEDIA never arrived. The native
 mixer existed but had no render owner. The old background pipe-drain thread only
 dispatched commands and could not advance PCM/MIDI time or submit samples.
 
@@ -13,9 +13,26 @@ mutation, continuously drains Java media writes without blocking the frontend,
 submits 735 stereo frames per 60 Hz libretro run (44100 Hz exact), and allows
 END_OF_MEDIA/LOOPED events to be generated and returned to Java.
 
+RC1-011CH follows device evidence where all three completion events PASS but the
+speaker remains silent. `soundEnabled` was a zero-initialized upstream global and
+only became true if the frontend exposed the `freej2me_sound` core variable.
+Minimal RG35XX frontends may not expose it. Default audio to on while preserving
+an explicit frontend `off` value through the existing check_variables() logic.
+
 --- a/src/libretro/freej2me_libretro.c
 +++ b/src/libretro/freej2me_libretro.c
-@@ -938,13 +938,12 @@
+@@ -158,7 +158,9 @@ int rotateScreen = 0; /* Allows rotations between 0, 90, 180 and 270 degrees */
+ int phoneType = 0; /* 0=Standard (Nokia/Sony/Samsung), 1=LG, 2=Motorola/SoftBank, 3=Motorola Triplets... */
+ int backlightColor = 1; /* 0=Disabled, 1=Green, etc. */
+ int gameFPS = 60; /* Auto(0), 60, 55, 50, 45, 40, 35, 30, 25, 20, 15, 10 */
+-int soundEnabled; /* also acts as a boolean */
++/* RG35XX fallback: sound on when the frontend omits freej2me_sound.
++ * check_variables() still honors an explicit "off" value. */
++int soundEnabled = 1; /* also acts as a boolean */
+ int customMidi; /* Also acts as a boolean */
+ int customFont; /* Also acts as a boolean */
+ int fontOffset = 0; /* -4, -3, -2, -1, 0 (Default), 1, 2, 3, 4 */
+@@ -938,13 +940,12 @@
  
  static void rg35xx_audio_drain_start(void)
  {
@@ -35,7 +52,7 @@ END_OF_MEDIA/LOOPED events to be generated and returned to Java.
  }
  
  static void rg35xx_audio_drain_stop(void)
-@@ -1167,6 +1166,26 @@
+@@ -1167,6 +1168,26 @@
  		rg35xx_send_media_event(&e);
  }
  
@@ -62,7 +79,7 @@ END_OF_MEDIA/LOOPED events to be generated and returned to Java.
  #ifdef __linux__
  static void rg35xx_frame_rx_reset(void)
  {
-@@ -1360,7 +1379,11 @@
+@@ -1360,7 +1381,11 @@
  
  	if(isRunning())
  	{
