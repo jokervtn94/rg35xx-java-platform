@@ -1,0 +1,33 @@
+From: RG35XX Java Platform
+Task: RGJ-RC1-011CA
+Subject: [PATCH] graphics: bypass GNU Classpath glyph rasterizer on RG35XX
+
+Device evidence shows MIDP font metrics are usable, while GNU Classpath
+Graphics2D.drawString reaches AbstractGraphics2D.renderScanline and throws NPE.
+Keep all existing MIDP metric/anchor calculations and desktop Java2D behavior,
+but route RG35XX glyph pixels directly into PlatformGraphics.canvasData.
+
+--- a/src/org/recompile/mobile/PlatformGraphics.java
++++ b/src/org/recompile/mobile/PlatformGraphics.java
+@@ -853,7 +853,20 @@
+ 			if((anchor & Graphics.BOTTOM)>0) { y = y-height; }
+ 			if((anchor & Graphics.BASELINE)>0) { y = y-ascent; }
+ 
+-			gc.drawString(str, x, y);
++			if(RG35XXPlatformProfile.isActive() && !Mobile.isDoJa)
++			{
++				final int clipLeft = Math.max(0, getClipX() + translateX);
++				final int clipTop = Math.max(0, getClipY() + translateY);
++				final int clipRight = Math.min(canvasWidth, getClipX() + translateX + getClipWidth());
++				final int clipBottom = Math.min(canvasHeight, getClipY() + translateY + getClipHeight());
++				RG35XXBitmapText.draw(canvasData, canvasWidth, canvasHeight,
++					str, x + translateX, y + translateY, ascent, height,
++					font, getColor(), clipLeft, clipTop, clipRight, clipBottom);
++			}
++			else
++			{
++				gc.drawString(str, x, y);
++			}
+ 		}
+ 	}
+ 
