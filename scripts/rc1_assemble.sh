@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-# RGJ-RC1-011N/011R/011AC/011BC/011BD/011BR/011BU/011BY/011BZ/011CA/011CC deterministic assembly driver.
+# RGJ-RC1-011N/011R/011AC/011BC/011BD/011BR/011BU/011BY/011BZ/011CA/011CC/011CF/011CG deterministic assembly driver.
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 PIN_FREEJ2ME="13ec186903087156c145268f8706eecfaf9f1e50"
 : "${RG35XX_FREEJ2ME_ROOT:?set RG35XX_FREEJ2ME_ROOT to the pinned FreeJ2ME checkout}"
@@ -68,6 +68,7 @@ PATCH_ORDER="
 0024-libretro-absolute-jamvm-launcher.patch
 0025-mobileplatform-rg35xx-lazy-media-startup.patch
 0026-platformgraphics-rg35xx-bitmap-text.patch
+0027-libretro-rg35xx-media-pump.patch
 "
 
 normalize_patch_targets()
@@ -142,6 +143,18 @@ awk '
 ' "$MANAGER_JAVA" || fail "RG35XX playTone native branch is not before JavaSound toneChannel access"
 grep -Fq 'RG35XX tone transport unavailable' "$MANAGER_JAVA" || fail "assembled Manager missing native playTone transport"
 
+# RC1-011CG media owner: Java commands, mixer advancement and libretro audio
+# submission must all be visible in the assembled core, and the pump must run
+# before completion events are serialized back to Java.
+grep -Fq '#define RG35XX_AUDIO_FRAMES_PER_RUN 735u' "$CORE_C" || fail "assembled core missing 44.1kHz/60Hz media cadence"
+grep -Fq 'rg35xx_mixer_render(rg35xx_audio_run_buffer, RG35XX_AUDIO_FRAMES_PER_RUN)' "$CORE_C" || fail "assembled core missing mixer render owner"
+grep -Fq 'AudioBatch(rg35xx_audio_run_buffer, frames);' "$CORE_C" || fail "assembled core missing libretro audio submission"
+awk '
+  /rg35xx_pump_media_audio\(\);/ { pump=NR }
+  /rg35xx_drain_media_events_to_java\(\);/ && drain==0 { drain=NR }
+  END { exit !(pump > 0 && drain > pump) }
+' "$CORE_C" || fail "media pump must advance before END_OF_MEDIA event drain"
+
 # Device evidence: direct bitmap writes made glyphs visible but corrupted the
 # screen. The helper must only build an isolated ARGB raster, and PlatformGraphics
 # must composite it through the already device-validated drawRGB path.
@@ -182,5 +195,6 @@ TML_COUNT=$(grep -l '^[[:space:]]*#define[[:space:]][[:space:]]*TML_IMPLEMENTATI
 note "ASSEMBLY PASS: $RG35XX_ASSEMBLY_ROOT"
 note "RG35XX LAZY MEDIA STARTUP PASS: eager JavaSound/ALSA prepare is bypassed on target"
 note "RG35XX PLAYTONE ORDER PASS: native transport precedes desktop toneChannel access"
+note "RG35XX MEDIA PUMP PASS: commands/render/AudioBatch/END_OF_MEDIA share retro_run ownership"
 note "RG35XX TEXT COMPOSITE PASS: isolated ARGB raster enters device-validated drawRGB path"
 note "Next: compile Java + ARMv5TE/uClibc; no DEVICE-TEST-PASS claimed."
