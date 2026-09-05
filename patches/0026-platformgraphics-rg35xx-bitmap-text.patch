@@ -1,28 +1,30 @@
 From: RG35XX Java Platform
-Task: RGJ-RC1-011CA
-Subject: [PATCH] graphics: bypass GNU Classpath glyph rasterizer on RG35XX
+Task: RGJ-RC1-011CC
+Subject: [PATCH] graphics: composite RG35XX bitmap text through drawRGB
 
-Device evidence shows MIDP font metrics are usable, while GNU Classpath
-Graphics2D.drawString reaches AbstractGraphics2D.renderScanline and throws NPE.
-Keep all existing MIDP metric/anchor calculations and desktop Java2D behavior,
-but route RG35XX glyph pixels directly into PlatformGraphics.canvasData.
+Device evidence from RC1-011CB shows the fixed-cell glyphs are visible and the
+MIDlet/input loop remains healthy, but direct framebuffer writes produce severe
+vertical stripes/pixel corruption. Keep the Java2D glyph bypass, but never let
+the text helper touch canvasData. Build an isolated transparent ARGB bitmap and
+composite it through PlatformGraphics.drawRGB(processAlpha=true), a path already
+validated by the comprehensive device test.
 
 --- a/src/org/recompile/mobile/PlatformGraphics.java
 +++ b/src/org/recompile/mobile/PlatformGraphics.java
-@@ -853,7 +853,20 @@
+@@ -853,7 +853,19 @@
  			if((anchor & Graphics.BOTTOM)>0) { y = y-height; }
  			if((anchor & Graphics.BASELINE)>0) { y = y-ascent; }
  
 -			gc.drawString(str, x, y);
 +			if(RG35XXPlatformProfile.isActive() && !Mobile.isDoJa)
 +			{
-+				final int clipLeft = Math.max(0, getClipX() + translateX);
-+				final int clipTop = Math.max(0, getClipY() + translateY);
-+				final int clipRight = Math.min(canvasWidth, getClipX() + translateX + getClipWidth());
-+				final int clipBottom = Math.min(canvasHeight, getClipY() + translateY + getClipHeight());
-+				RG35XXBitmapText.draw(canvasData, canvasWidth, canvasHeight,
-+					str, x + translateX, y + translateY, ascent, height,
-+					font, getColor(), clipLeft, clipTop, clipRight, clipBottom);
++				final int bitmapWidth = RG35XXBitmapText.width(str);
++				if(bitmapWidth > 0)
++				{
++					final int[] raster = RG35XXBitmapText.render(str, getColor());
++					drawRGB(raster, 0, bitmapWidth, x, y - ascent,
++						bitmapWidth, RG35XXBitmapText.CELL_HEIGHT, true);
++				}
 +			}
 +			else
 +			{
