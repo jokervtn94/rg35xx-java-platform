@@ -64,7 +64,7 @@ native core supplied -Dfreej2me.rg35xx=true.
 +
  	private byte[] frameBuffer = new byte[800*800*3];
  	private final byte[] frameHeader = new byte[]{(byte)0xFE,
-@@ -55,6 +74,12 @@
+@@ -55,5 +74,11 @@
  	public static void main(String args[])
  	{
 +		if("true".equalsIgnoreCase(System.getProperty("freej2me.rg35xx")))
