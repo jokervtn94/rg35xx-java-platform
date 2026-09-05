@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Integrate the Golden receiver-thread video transport into pinned libretro core.
+"""Integrate the Golden RG35XX transport/runtime contract into pinned libretro core.
 
-Only video ownership is changed here. Input/config/game-load command semantics stay
-on the original core thread. The receiver is intentionally started only after all
-variable-length boot payloads have been sent, preventing its 5-byte frame request
-from interleaving inside a path/settings payload.
+Video ownership is moved off retro_run() to a dedicated receiver thread. The
+launcher is also restored to the device-proven absolute JamVM/headless contract.
+The transform is fail-closed against pinned FreeJ2ME commit
+13ec186903087156c145268f8706eecfaf9f1e50.
 """
 import pathlib
 import re
@@ -25,6 +25,104 @@ def once(old, new, label):
         raise SystemExit("G1 NATIVE OVERLAY FAIL: %s marker count=%d" % (label, n))
     s = s.replace(old, new, 1)
 
+# ---------------------------------------------------------------------------
+# Golden runtime launcher contract
+# ---------------------------------------------------------------------------
+once('#define NUM_ARGUMENTS 7\n', '#define NUM_ARGUMENTS 10\n', "argument count")
+
+once(
+    '#ifdef __linux__\nconst char *freej2meapp = "freej2me_plus-lr.jar";',
+    '#ifdef __linux__\nconst char *freej2meapp = "freej2me-lr.jar";',
+    "Golden Linux runtime JAR name")
+
+# open() is used only for the stderr diagnostic file. stdout remains binary IPC.
+once(
+    '#include <stdarg.h>\n#include <unistd.h>\n#include <sys/wait.h>',
+    '#include <stdarg.h>\n#include <unistd.h>\n#include <fcntl.h>\n#include <sys/wait.h>',
+    "fcntl include")
+
+# Rebuild the Linux argv exactly around absolute JamVM and the headless GNU
+# Classpath properties proven by the Golden core. Keep the selected encoding as
+# a JVM -D property, before -jar.
+old_params = '''#ifdef __linux__
+\tparams[0] = strdup("java");
+#elif _WIN32
+\tparams[0] = strdup("javaw");
+#endif
+\tparams[1] = strdup("-jar");
+\tparams[2] = strdup(supported_encodings[characterEncoding]);
+\tparams[3] = strdup(freej2meapp);
+\tparams[4] = strdup(resArg[0]);
+\tparams[5] = strdup(resArg[1]);
+\tparams[6] = NULL; // Null-terminate the array
+'''
+new_params = '''#ifdef __linux__
+\tparams[0] = strdup("/mnt/mmc/CFW/java/bin/jamvm");
+\tparams[1] = strdup(supported_encodings[characterEncoding]);
+\tparams[2] = strdup("-Dawt.toolkit=gnu.java.awt.peer.headless.HeadlessToolkit");
+\tparams[3] = strdup("-Djava.awt.graphicsenv=gnu.java.awt.peer.headless.HeadlessGraphicsEnvironment");
+\tparams[4] = strdup("-Djava.awt.headless=true");
+\tparams[5] = strdup("-jar");
+\tparams[6] = strdup(freej2meapp);
+\tparams[7] = strdup(resArg[0]);
+\tparams[8] = strdup(resArg[1]);
+\tparams[9] = NULL; // Null-terminate the array
+#elif _WIN32
+\tparams[0] = strdup("javaw");
+\tparams[1] = strdup("-jar");
+\tparams[2] = strdup(supported_encodings[characterEncoding]);
+\tparams[3] = strdup(freej2meapp);
+\tparams[4] = strdup(resArg[0]);
+\tparams[5] = strdup(resArg[1]);
+\tparams[6] = NULL;
+#endif
+'''
+once(old_params, new_params, "Golden JamVM argv")
+
+# Child process: keep stdin/stdout pipe ownership unchanged, log only stderr,
+# use BIOS/systemPath as cwd, and remove PATH-dependent execvp.
+old_exec = '''\t\tdup2(pWrite[0], fd_stdin);  /* read from parent pWrite */
+\t\tdup2(pRead[1], fd_stdout);  /* write to parent pRead */
+
+\t\tclose(pWrite[1]);
+\t\tclose(pRead[0]);
+
+\t\tchdir(systemPath);
+
+\t\texecvp(cmd, params);
+
+\t\t/* execvp failure! */
+\t\tretro_deinit();
+'''
+new_exec = '''\t\tdup2(pWrite[0], fd_stdin);  /* read from parent pWrite */
+\t\tdup2(pRead[1], fd_stdout);  /* binary stdout -> parent pRead */
+
+\t\tclose(pWrite[1]);
+\t\tclose(pRead[0]);
+
+\t\t/* Golden device diagnostics: stderr only. Never redirect stdout because
+\t\t * stdout is the framed RGB565 protocol. */
+\t\t{
+\t\t\tint errfd = open("/mnt/mmc/freej2me-java-error.log", O_WRONLY | O_CREAT | O_APPEND, 0644);
+\t\t\tif(errfd >= 0)
+\t\t\t{
+\t\t\t\tdup2(errfd, 2);
+\t\t\t\tif(errfd != 2) close(errfd);
+\t\t\t}
+\t\t}
+
+\t\tchdir(systemPath);
+
+\t\texecv(cmd, params);
+
+\t\t/* execv failure! */
+\t\t_exit(127);
+'''
+once(old_exec, new_exec, "absolute JamVM exec")
+
+# ---------------------------------------------------------------------------
+# Golden receiver-thread video contract
+# ---------------------------------------------------------------------------
 once(
     '#include "freej2me_libretro.h"\n',
     '#include "freej2me_libretro.h"\n#include "rg35xx/golden/rg35xx_golden_video.h"\n',
@@ -127,7 +225,7 @@ start_new = ('\twrite_to_pipe(pWrite[1], startupevent, 5);\n\n'
              '\tlog_fn(RETRO_LOG_INFO, "Booting up...\\n");')
 once(start_marker, start_new, "receiver start after boot payloads")
 
-# Stop the receiver before killing/closing the Java process and its pipes.
+# Stop receiver before killing/closing Java process and pipes.
 once(
     'void retro_deinit(void)\n{\n\tif(isRunning())',
     'void retro_deinit(void)\n{\n\trg35xx_golden_video_deinit();\n\tif(isRunning())',
@@ -156,9 +254,12 @@ for forbidden in (
     'frameBufferSize = frameSize * 3',
     'Video(frame, frameWidth, frameHeight, sizeof(unsigned int) * frameWidth)',
     'javaRequestFrame[3] = 1',
+    'execvp(cmd, params)',
+    'params[0] = strdup("java")',
+    'const char *freej2meapp = "freej2me_plus-lr.jar"',
 ):
     if forbidden in s:
-        raise SystemExit("G1 NATIVE OVERLAY FAIL: synchronous video token remains: " + forbidden)
+        raise SystemExit("G1 NATIVE OVERLAY FAIL: forbidden legacy token remains: " + forbidden)
 
 for required in (
     'rg35xx_golden_video_start()',
@@ -166,6 +267,12 @@ for required in (
     'RETRO_PIXEL_FORMAT_RGB565',
     'RG35XX_G1_OUTPUT_WIDTH  640u',
     'rg35xx_golden_video_deinit();',
+    '/mnt/mmc/CFW/java/bin/jamvm',
+    '-Dawt.toolkit=gnu.java.awt.peer.headless.HeadlessToolkit',
+    '-Djava.awt.graphicsenv=gnu.java.awt.peer.headless.HeadlessGraphicsEnvironment',
+    '-Djava.awt.headless=true',
+    '/mnt/mmc/freej2me-java-error.log',
+    'execv(cmd, params);',
 ):
     if required not in s:
         raise SystemExit("G1 NATIVE OVERLAY FAIL: required token missing: " + required)
