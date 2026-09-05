@@ -6,13 +6,12 @@ import org.recompile.mobile.Mobile;
 /**
  * Golden RG35XX Java-side video transport.
  *
- * This is intentionally small and single-purpose: the libretro command parser
- * only signals that a frame is wanted. A dedicated low-priority worker snapshots
- * the current MIDlet frontbuffer, converts ARGB to the exact big-endian RGB565
- * byte stream used by the proven device binary, then writes one complete 16-byte
- * header + payload transaction to the preserved binary stdout stream.
+ * The libretro command parser only signals that a frame is wanted. A dedicated
+ * low-priority worker snapshots the current MIDlet frontbuffer, converts ARGB to
+ * the exact big-endian RGB565 byte stream used by the device-proven binary, then
+ * writes one complete 16-byte header + payload transaction to binary stdout.
  *
- * The class is Java-6 compatible and performs no per-frame allocation.
+ * Java-6 compatible. No per-frame allocation.
  */
 public final class RG35XXGoldenFrameTransport
 {
@@ -23,6 +22,8 @@ public final class RG35XXGoldenFrameTransport
 
     private final PrintStream ipcOut;
     private final Object signal = new Object();
+    /* Worker frames and rare control/restart frames share these scratch buffers. */
+    private final Object encodeLock = new Object();
     private final int[] argbSnapshot = new int[MAX_PIXELS];
     private final byte[] rgb565 = new byte[MAX_PIXELS * 2];
     private final byte[] high = new byte[65536];
@@ -33,7 +34,6 @@ public final class RG35XXGoldenFrameTransport
     private volatile boolean pending;
     private Thread worker;
 
-    /* Latest requested source. Published under signal, then consumed by worker. */
     private int width;
     private int height;
     private int[] lcdData;
@@ -61,10 +61,7 @@ public final class RG35XXGoldenFrameTransport
     {
         worker = new Thread(new Runnable()
         {
-            public void run()
-            {
-                workerLoop();
-            }
+            public void run() { workerLoop(); }
         }, "RG35XX-FrameWorker");
         worker.setDaemon(true);
         try { worker.setPriority(Thread.MIN_PRIORITY); }
@@ -72,19 +69,11 @@ public final class RG35XXGoldenFrameTransport
         worker.start();
     }
 
-    /**
-     * Coalescing request. Multiple libretro ticks while a frame is being encoded
-     * collapse to the latest frontbuffer state instead of queueing stale frames.
-     */
+    /** Coalescing request: stale pending frames are never queued. */
     public void requestFrame(int sourceWidth, int sourceHeight,
                              int[] sourceData, Object sourceLock)
     {
-        if(!running || sourceData == null || sourceLock == null) return;
-        if(sourceWidth <= 0 || sourceHeight <= 0 ||
-           sourceWidth > MAX_WIDTH || sourceHeight > MAX_HEIGHT) return;
-        final int pixels = sourceWidth * sourceHeight;
-        if(pixels <= 0 || pixels > MAX_PIXELS || sourceData.length < pixels) return;
-
+        if(!validSource(sourceWidth, sourceHeight, sourceData, sourceLock)) return;
         synchronized(signal)
         {
             width = sourceWidth;
@@ -94,6 +83,39 @@ public final class RG35XXGoldenFrameTransport
             pending = true;
             signal.notifyAll();
         }
+    }
+
+    /**
+     * Rare synchronous control transaction used by the character-encoding
+     * restart handshake. The old runtime sent a valid frame immediately before
+     * sleeping for the native core to restart it; preserving that ordering is
+     * required because no normal frame request may arrive before the restart.
+     */
+    public void sendControlFrame(int sourceWidth, int sourceHeight,
+                                 int[] sourceData, Object sourceLock)
+    {
+        if(!validSource(sourceWidth, sourceHeight, sourceData, sourceLock)) return;
+        try
+        {
+            synchronized(encodeLock)
+            {
+                sendFrameLocked(sourceWidth, sourceHeight, sourceData, sourceLock);
+            }
+        }
+        catch(Throwable t)
+        {
+            System.err.println("RG35XX-VIDEO JAVA control-frame error: " + t);
+        }
+    }
+
+    private boolean validSource(int sourceWidth, int sourceHeight,
+                                int[] sourceData, Object sourceLock)
+    {
+        if(!running || sourceData == null || sourceLock == null) return false;
+        if(sourceWidth <= 0 || sourceHeight <= 0 ||
+           sourceWidth > MAX_WIDTH || sourceHeight > MAX_HEIGHT) return false;
+        final int pixels = sourceWidth * sourceHeight;
+        return pixels > 0 && pixels <= MAX_PIXELS && sourceData.length >= pixels;
     }
 
     public void shutdown()
@@ -137,7 +159,10 @@ public final class RG35XXGoldenFrameTransport
 
             try
             {
-                sendFrame(w, h, data, lock);
+                synchronized(encodeLock)
+                {
+                    sendFrameLocked(w, h, data, lock);
+                }
             }
             catch(Throwable t)
             {
@@ -146,7 +171,8 @@ public final class RG35XXGoldenFrameTransport
         }
     }
 
-    private void sendFrame(int w, int h, int[] data, Object lock) throws Exception
+    /* Caller owns encodeLock. */
+    private void sendFrameLocked(int w, int h, int[] data, Object lock) throws Exception
     {
         final int pixels = w * h;
         if(pixels <= 0 || pixels > MAX_PIXELS || data == null || data.length < pixels)
