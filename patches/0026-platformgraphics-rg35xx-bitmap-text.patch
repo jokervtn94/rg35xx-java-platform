@@ -39,15 +39,9 @@ format.
  
 --- a/src/libretro/freej2me_libretro.c
 +++ b/src/libretro/freej2me_libretro.c
-@@ -165,7 +165,8 @@
- unsigned int frameHeight = MAX_HEIGHT;
- unsigned int frameSize = MAX_WIDTH * MAX_HEIGHT;
- unsigned int frameBufferSize = MAX_WIDTH * MAX_HEIGHT * 3;
+@@ -145,1 +145,2 @@
  unsigned int frame[MAX_WIDTH * MAX_HEIGHT];
 +uint16_t rg35xxFrame565[MAX_WIDTH * MAX_HEIGHT];
- unsigned char frameBuffer[MAX_WIDTH * MAX_HEIGHT * 3];
- unsigned char frameHeader[15]; // This is always frameHeader's length in Libretro.java -1 (we read the status byte separately)
- struct retro_game_info gameinfo;
 @@ -174,6 +175,20 @@
  bool fast_forwarding = false;
  int framesDropped = 0;
