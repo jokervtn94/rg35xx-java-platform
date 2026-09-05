@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Materialize the Golden asynchronous RGB565 transport into pinned Libretro.java.
 
-The transform is deliberately fail-closed. It only accepts the exact structural
-markers present in pinned FreeJ2ME commit 13ec186903087156c145268f8706eecfaf9f1e50.
+The transform is deliberately fail-closed. It only accepts structural markers
+from pinned FreeJ2ME commit 13ec186903087156c145268f8706eecfaf9f1e50.
 """
 import pathlib
 import sys
@@ -35,8 +35,8 @@ once(
 once(
     "\tpublic static void main(String args[])\n\t{\n\t\tMobile.clearOldLog();",
     "\tpublic static void main(String args[])\n\t{\n"
-    "\t\t/* stdout is the binary/video protocol. Preserve the original stream and\n"
-    "\t\t * prevent application/debug prints from corrupting frame transactions. */\n"
+    "\t\t/* stdout is binary IPC only on RG35XX. Preserve the original stream and\n"
+    "\t\t * sink ordinary System.out text so it cannot corrupt a frame header. */\n"
     "\t\tipcOut = System.out;\n"
     "\t\tSystem.setOut(new PrintStream(new OutputStream()\n"
     "\t\t{\n"
@@ -58,9 +58,24 @@ once(
     "\t\tipcOut.println(\"+READY\");\n\t\tipcOut.flush();",
     "ready stream")
 
-# The pinned source contains nested synchronized/for blocks inside the old
-# try/catch, so brace-based regex is intentionally avoided. Replace between two
-# stable comments that bracket exactly the synchronous frame serializer.
+# Character-encoding restart can happen inside LOAD before normal frame requests.
+# The pinned runtime used a synchronous old RGB888 frame here. Preserve the
+# required control ordering, but emit the same RGB565 protocol as normal G1 frames.
+old_restart = (
+    "\t\t\t\t\t\t\t\t\t\tframeHeader[14] = Mobile.libretroRestartRequested;\n"
+    "\t\t\t\t\t\t\t\t\t\tframeHeader[15] = Mobile.libretroEncodingRequested;\n\n"
+    "\t\t\t\t\t\t\t\t\t\tSystem.out.write(frameHeader, 0, 16);\n\n"
+    "\t\t\t\t\t\t\t\t\t\tSystem.out.write(frameBuffer, 0, lcdData.length*3);\n"
+    "\t\t\t\t\t\t\t\t\t\tSystem.out.flush();\n"
+)
+new_restart = (
+    "\t\t\t\t\t\t\t\t\t\trg35xxFrames.sendControlFrame(lcdWidth, lcdHeight, lcdData,\n"
+    "\t\t\t\t\t\t\t\t\t\t\tMobile.getPlatform().getLcdFrontbuffer());\n"
+)
+once(old_restart, new_restart, "restart control frame")
+
+# Replace the normal synchronous case-15 frame serializer between two stable
+# comments. Nested synchronized/for blocks make brace regex unsafe.
 start_marker = "\t\t\t\t\t\t\t\t/* Send Frame to Libretro */\n"
 end_marker = "\t\t\t\t\t\t\t\t// We are now ready to start monitoring for pauses, the first frame was requested and sent\n"
 if s.count(start_marker) != 1:
@@ -87,6 +102,7 @@ for forbidden in (
 for required in (
     "RG35XXGoldenFrameTransport",
     "rg35xxFrames.requestFrame",
+    "rg35xxFrames.sendControlFrame",
     "ipcOut.println(\"+READY\")",
     "new OutputStream()",
 ):
