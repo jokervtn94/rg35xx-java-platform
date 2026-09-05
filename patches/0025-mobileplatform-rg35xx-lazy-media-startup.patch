@@ -1,0 +1,27 @@
+From: RG35XX Java Platform
+Task: RGJ-RC1-011BY
+Subject: [PATCH] MobilePlatform: skip eager media engine on RG35XX
+
+Historical hardware traces from the previously stable RG35XX platform show
+runJar() skipped Manager.prepareMediaEngine() before loader.start(). The eager
+upstream call initializes JavaSound/ALSA and touches /dev/snd/seq, which is not
+present on the target and can prevent the MIDlet from reaching startApp().
+
+Preserve upstream eager preparation for desktop/non-RG35XX runs. Explicit
+RG35XX launches use the already-integrated lazy native MIDI/WAV bridge instead.
+
+--- a/src/org/recompile/mobile/MobilePlatform.java
++++ b/src/org/recompile/mobile/MobilePlatform.java
+@@ -819,7 +819,12 @@
+ 			 * Load up everything needed to play sound before the jar opens to minimize ingame stutters
+ 			 * this basically just loads up the synthesizers, as they're the biggest troublemakers.
+ 			 */
+-			javax.microedition.media.Manager.prepareMediaEngine();
++			if(!RG35XXPlatformProfile.isActive())
++			{
++				javax.microedition.media.Manager.prepareMediaEngine();
++			}
++			else { Mobile.log(Mobile.LOG_INFO, "RG35XX: SKIPPING prepareMediaEngine; native media is lazy-initialized"); }
+ 
+ 			loader.start();
+ 		}
