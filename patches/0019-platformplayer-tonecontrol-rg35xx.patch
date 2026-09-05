@@ -1,5 +1,5 @@
 From: RG35XX Java Platform
-Task: RGJ-RC1-011R / 010M / RGJ-RC1-011AP / RGJ-RC1-011AQ / RGJ-RC1-011AR
+Task: RGJ-RC1-011R / 010M / RGJ-RC1-011AP / RGJ-RC1-011AQ / RGJ-RC1-011AR / RGJ-RC1-011BZ
 Subject: [PATCH] media: materialize JavaSound-free RG35XX ToneControl and playTone
 
 This executable diff applies after 0018. It preserves the desktop JavaSound
@@ -8,8 +8,9 @@ RG35XXNativePlayer, and keeps device://midi unadvertised/safe on RG35XX because
 live short-message transport is not implemented. 0003 already owns/imports the
 RG35XX target-profile selector in Manager.
 
-The final ToneControl edit is one ordered minimal hunk so strict `--fuzz=0`
-assembly does not depend on post-insertion coordinates for follow-on edits.
+RC1-011BZ moves the RG35XX playTone branch ahead of the first upstream
+toneChannel access. This is required because RG35XX intentionally skips eager
+prepareMediaEngine(), so the desktop JavaSound toneChannel is null by design.
 
 --- a/src/org/recompile/mobile/PlatformPlayer.java
 +++ b/src/org/recompile/mobile/PlatformPlayer.java
@@ -103,7 +104,9 @@ assembly does not depend on post-insertion coordinates for follow-on edits.
  
  	public static synchronized Player createPlayer(InputStream stream, String type) throws IOException, MediaException
  	{
-@@ -173,0 +180,45 @@
+@@ -166,6 +172,51 @@
+ 		if (volume < 0) { volume = 0; } 
+ 		else if (volume > 100) { volume = 100; }
 +
 +		if(RG35XXPlatformProfile.isActive())
 +		{
@@ -149,3 +152,6 @@ assembly does not depend on post-insertion coordinates for follow-on edits.
 +				throw new MediaException("RG35XX tone setup failed: " + e.getMessage());
 +			}
 +		}
+ 
+ 		final int restoreBankMSB = toneChannel.getController(0);    // Bank MSB
+         final int restoreBankLSB = toneChannel.getController(32);   // Bank LSB
