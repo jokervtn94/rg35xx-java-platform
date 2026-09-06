@@ -33,6 +33,12 @@ cp "$ROOT/native/golden/rg35xx_golden_video.c" \
 python3 "$ROOT/scripts/g1_apply_native_overlay.py" \
    "$GOLDEN_ASSEMBLY/src/libretro/freej2me_libretro.c"
 
+# CV: boot Java only after retro_load_game() knows the exact JAR path.  This is
+# the lifecycle fix for non-240x320 games; do not replace it with Java-side
+# resizeLCD() patches after MobilePlatform has already been constructed.
+python3 "$ROOT/scripts/cv_apply_boot_resolution.py" \
+   "$GOLDEN_ASSEMBLY/src/libretro/freej2me_libretro.c"
+
 MC="$GOLDEN_ASSEMBLY/src/libretro/Makefile.common"
 grep -Fq 'SOURCES_C += freej2me_libretro.c' "$MC" || fail "unexpected Makefile.common baseline"
 cat >> "$MC" <<'EOF'
@@ -70,5 +76,12 @@ grep -Fq 'open("/mnt/mmc/freej2me-java-error.log"' "$CORE" || fail "Golden stder
 grep -Fq 'execv(cmd, params);' "$CORE" || fail "absolute execv missing"
 if grep -Fq 'execvp(cmd, params);' "$CORE"; then fail "PATH-dependent execvp survived"; fi
 if grep -Fq 'dup2(' "$CORE"; then :; else fail "pipe ownership unexpectedly absent"; fi
+
+# CV boot-resolution contract.
+grep -Fq 'RG35XX-CV: core ready; Java launch deferred to retro_load_game.' "$CORE" || fail "CV deferred Java launch missing"
+grep -Fq 'rg35xx_cv_launch_java(info->path)' "$CORE" || fail "CV load-game launch barrier missing"
+grep -Fq 'rg35xx_cv_resolution_from_path' "$CORE" || fail "CV filename resolution parser missing"
+grep -Fq 'rg35xx_cv_resolution_locked' "$CORE" || fail "CV resolution lock missing"
+[ "$(grep -Fc 'booted = javaOpen(params[0], params);' "$CORE")" -eq 1 ] || fail "CV javaOpen must have exactly one owner"
 
 note "PASS: $GOLDEN_ASSEMBLY"
