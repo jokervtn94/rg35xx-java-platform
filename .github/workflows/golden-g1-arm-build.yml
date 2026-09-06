@@ -9,6 +9,7 @@ on:
       - 'native/golden/**'
       - 'scripts/g1_apply_java_transport.py'
       - 'scripts/g1_apply_native_overlay.py'
+      - 'scripts/cv_apply_boot_resolution.py'
       - 'scripts/golden_g1_assemble.sh'
   workflow_dispatch:
 
@@ -56,7 +57,7 @@ jobs:
           test -x /opt/miyoo/bin/arm-miyoo-linux-uclibcgnueabi-gcc
           test "$(/opt/miyoo/bin/arm-miyoo-linux-uclibcgnueabi-gcc -dumpmachine)" = arm-miyoo-linux-uclibcgnueabi
 
-      - name: Assemble clean G1 source
+      - name: Assemble clean G1 + CV source
         run: |
           GOLDEN_UPSTREAM="$GITHUB_WORKSPACE/upstream" \
           GOLDEN_ASSEMBLY="$RUNNER_TEMP/golden-g1" \
@@ -78,13 +79,14 @@ jobs:
             CXX='/opt/miyoo/bin/arm-miyoo-linux-uclibcgnueabi-g++ -march=armv5te -mtune=arm926ej-s -mfloat-abi=soft' \
             LDFLAGS='-lm -lpthread'
 
-      - name: Verify device ABI and G1 ownership
+      - name: Verify device ABI and G1/CV ownership
         working-directory: ${{ runner.temp }}/golden-g1
         shell: bash
         run: |
           set -euo pipefail
           CORE=src/libretro/freej2me_plus_libretro.so
           JAR=build/freej2me_plus-lr.jar
+          SRC=src/libretro/freej2me_libretro.c
           file "$CORE"
           readelf -h "$CORE" | tee /tmp/g1-elf.txt
           grep -q 'Class:.*ELF32' /tmp/g1-elf.txt
@@ -97,6 +99,13 @@ jobs:
           /opt/miyoo/bin/arm-miyoo-linux-uclibcgnueabi-nm "$CORE" | grep rg35xx_golden_video_start
           javap -verbose build/classes/org/recompile/freej2me/Libretro.class | grep 'major version: 50'
           jar tf "$JAR" | grep 'RG35XXGoldenFrameTransport.class'
+
+          # CV lifecycle contract: the JVM has exactly one launch owner, and it
+          # is called from retro_load_game after the JAR path is known.
+          grep -Fq 'rg35xx_cv_launch_java(info->path)' "$SRC"
+          grep -Fq 'RG35XX-CV: core ready; Java launch deferred to retro_load_game.' "$SRC"
+          grep -Fq 'RG35XX-CV: launching Java at %lux%lu before MIDlet load.' "$SRC"
+          test "$(grep -Fc 'booted = javaOpen(params[0], params);' "$SRC")" -eq 1
 
       - name: Record device build evidence
         shell: bash
