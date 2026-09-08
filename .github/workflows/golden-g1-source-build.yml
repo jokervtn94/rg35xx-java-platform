@@ -36,16 +36,24 @@ jobs:
           GOLDEN_ASSEMBLY="$GITHUB_WORKSPACE/assembled" \
           sh scripts/golden_g1_assemble.sh
 
+      - name: N1 patch PNG iCCP compatibility
+        run: |
+          python3 scripts/n1_patch_platformimage_png_iccp.py assembled/src/org/recompile/mobile/PlatformImage.java
+          grep -q 'readImageCompat' assembled/src/org/recompile/mobile/PlatformImage.java
+          grep -q 'stripPngIccp' assembled/src/org/recompile/mobile/PlatformImage.java
+          ! grep -q 'ImageIO.read(stream)' assembled/src/org/recompile/mobile/PlatformImage.java
+
       - name: Compile Java 6 runtime
         working-directory: assembled
         run: ant
 
-      - name: Verify Java class version and frame worker
+      - name: Verify Java class version and N1 PNG patch
         working-directory: assembled
         run: |
-          javap -verbose build/classes/org/recompile/freej2me/Libretro.class | grep 'major version: 50'
-          javap -p build/classes/org/recompile/freej2me/RG35XXGoldenFrameTransport.class | grep 'requestFrame'
-          jar tf build/freej2me_plus-lr.jar | grep 'org/recompile/freej2me/RG35XXGoldenFrameTransport.class'
+          javap -verbose build/classes/org/recompile/mobile/PlatformImage.class | grep 'major version: 50'
+          javap -p build/classes/org/recompile/mobile/PlatformImage.class | grep 'readImageCompat'
+          javap -p build/classes/org/recompile/mobile/PlatformImage.class | grep 'stripPngIccp'
+          jar tf build/freej2me_plus-lr.jar | grep 'org/recompile/mobile/PlatformImage.class'
 
       - name: Compile native G1 host core
         working-directory: assembled/src/libretro
@@ -60,17 +68,18 @@ jobs:
           grep -q 'RETRO_PIXEL_FORMAT_RGB565' freej2me_libretro.c
           ! grep -q 'status = read_from_pipe(pRead\[0\], frameHeader, 15)' freej2me_libretro.c
 
-      - name: Package G1 host evidence
+      - name: Package N1 evidence
         run: |
           mkdir -p evidence
           cp assembled/build/freej2me_plus-lr.jar evidence/
           cp assembled/src/libretro/freej2me_plus_libretro.so evidence/
+          cp assembled/src/org/recompile/mobile/PlatformImage.java evidence/N1-PlatformImage.java
           cp assembled/src/org/recompile/freej2me/Libretro.java evidence/assembled-Libretro.java
           cp assembled/src/libretro/freej2me_libretro.c evidence/assembled-freej2me_libretro.c
           sha256sum evidence/* > evidence/SHA256SUMS
 
-      - name: Upload G1 source-build evidence
+      - name: Upload N1 source-build evidence
         uses: actions/upload-artifact@v4
         with:
-          name: rg35xx-golden-g1-source-build
+          name: rg35xx-n1-png-iccp-runtime
           path: evidence
