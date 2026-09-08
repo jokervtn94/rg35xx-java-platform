@@ -8,12 +8,22 @@
 /* RGJ-RC1-010F replacement worker.
  * TML/TSF allocation is confined to init/open/setup paths. The render path
  * uses fixed storage and the two slots already owned by rg35xx_midi_backend.
+ *
+ * M1 audio-quality policy:
+ * - keep TinySoundFont rendering directly at 44.1 kHz stereo;
+ * - retain the existing mixer headroom downstream;
+ * - apply a very mild one-pole high-frequency damping stage to MIDI only.
+ *   The filter is intentionally conservative: 7/8 current sample + 1/8
+ *   previous output.  This reduces the narrow metallic/ringing edge reported
+ *   on RG35XX speakers without changing PCM/WAV playback or MIDI timing.
  */
 #define RG35XX_TSF_SLOTS RG35XX_MEDIA_MAX_MIDI_CTX
 #define RG35XX_TSF_RATE 44100u
 #define RG35XX_TSF_CHANNELS 16
 #define RG35XX_TSF_MAX_VOICES 16
 #define RG35XX_TSF_RENDER_FRAMES 1024u
+#define RG35XX_MIDI_FILTER_NEW_NUM 7
+#define RG35XX_MIDI_FILTER_DEN 8
 
 struct rg35xx_tsf_slot {
     tml_message *first;
@@ -30,6 +40,9 @@ struct rg35xx_tsf_slot {
     int loops_left;
     int looped_pending;
     int volume;
+    int filter_ready;
+    int32_t filter_l;
+    int32_t filter_r;
 };
 
 static tsf *soundfont_base;
@@ -72,12 +85,21 @@ static int prepare_channels(tsf *synth)
     return 1;
 }
 
+static void reset_filter(struct rg35xx_tsf_slot *s)
+{
+    if(!s) return;
+    s->filter_ready = 0;
+    s->filter_l = 0;
+    s->filter_r = 0;
+}
+
 static void reset_synth(struct rg35xx_tsf_slot *s)
 {
     if(!s || !s->synth) return;
     tsf_reset(s->synth);
     prepare_channels(s->synth);
     tsf_set_volume(s->synth, (float)s->volume / 100.0f);
+    reset_filter(s);
 }
 
 static void apply_message(tsf *synth, const tml_message *m)
@@ -151,10 +173,28 @@ static int restart_loop(struct rg35xx_tsf_slot *s)
 
 static void render_frames(struct rg35xx_tsf_slot *s, int32_t *accum, size_t offset, size_t frames)
 {
-    size_t i;
+    size_t f;
     if(!frames) return;
     tsf_render_short(s->synth, render_pcm, (int)frames, 0);
-    for(i = 0; i < frames * 2u; ++i) accum[(offset * 2u) + i] += (int32_t)render_pcm[i];
+
+    for(f = 0; f < frames; ++f) {
+        int32_t left = (int32_t)render_pcm[f * 2u];
+        int32_t right = (int32_t)render_pcm[f * 2u + 1u];
+
+        if(!s->filter_ready) {
+            s->filter_l = left;
+            s->filter_r = right;
+            s->filter_ready = 1;
+        } else {
+            s->filter_l = (s->filter_l + left * RG35XX_MIDI_FILTER_NEW_NUM) /
+                          RG35XX_MIDI_FILTER_DEN;
+            s->filter_r = (s->filter_r + right * RG35XX_MIDI_FILTER_NEW_NUM) /
+                          RG35XX_MIDI_FILTER_DEN;
+        }
+
+        accum[(offset + f) * 2u] += s->filter_l;
+        accum[(offset + f) * 2u + 1u] += s->filter_r;
+    }
     s->frame_pos += frames;
 }
 
@@ -217,6 +257,7 @@ int rg35xx_tsf_open_memory(int slot, const uint8_t *midi, size_t size)
     s->next = s->first;
     s->volume = 100;
     s->opened = 1;
+    reset_filter(s);
     return 1;
 }
 
