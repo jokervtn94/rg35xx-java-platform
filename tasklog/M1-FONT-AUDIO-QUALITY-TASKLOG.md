@@ -1,6 +1,6 @@
 # M1 Font + Audio Quality Tasklog
 
-Status: SOURCE-PUSHED / BUILD-PENDING / DEVICE-TEST-PENDING
+Status: SOURCE-PUSHED / BUILD-PASS / DEVICE-TEST-PENDING
 Date: 2026-09-08
 Scope: RG35XX 320x240 Java ME presentation quality after JamVM L production crash fix.
 
@@ -111,6 +111,60 @@ Pinned inputs remain unchanged:
 - DejaVu Sans 2.37 archive SHA-256: `5c6e497a2f36552cb5ffb112c413a6af39c0f3c47653662b90b4fa6499822fd7`
 - GeneralUser-GS source commit: `684543d5e5efaef08d02be50dcda8d552478fa60`
 - Miyoo uClibc toolchain image digest: `sha256:6f6761867b4e4dcc27c99bf25fb91b2910264165f27bdd40b1c17e6f98cf751e`
+
+## Build evidence — PASS
+
+GitHub Actions workflow:
+`RC1 Consolidated ARM Build`
+
+Run ID:
+`34206307274`
+
+Built source head:
+`fd8fae8c8f25976449379bff807b7420bebd7e29`
+
+The head includes the preceding M1-A font commit `117b5a8afe8735f212a94db21b475d344473ca9a`.
+
+Job ID:
+`101996481591`
+
+Result:
+`success`
+
+Successful gates:
+
+- pinned external inputs materialized and verified;
+- pinned FreeJ2ME/runtime overlays assembled;
+- Java artifact compiled;
+- ARMv5TE/uClibc core compiled and linked;
+- RG35XX undefined-symbol scan passed;
+- build evidence artifact uploaded.
+
+GitHub Actions artifact ID:
+`10047933171`
+
+Artifact name:
+`rg35xx-rc1-consolidated-build-evidence`
+
+Artifact digest:
+`sha256:5318cc1e250b60a41797cb60e34a6d63ddf52ee8c8d6dc314ae5956cb6026b49`
+
+Produced binaries from the downloaded build evidence:
+
+- `freej2me_plus-lr.jar` SHA-256: `cae779a1ac2dfd7cd65e8893b30fee8196c1c6107f693c335701fe34fea4d322`
+- `freej2me_plus_libretro.so` SHA-256: `f409396d489cd2b1aca3ce43b3c60dba90aae5a0305f9428629c8e1d88a57e87`
+
+Runtime provenance emitted by the build:
+
+- DejaVuSans.ttf target: `/mnt/mmc/Java/runtime/DejaVuSans.ttf`
+- DejaVuSans.ttf SHA-256: `7da195a74c55bef988d0d48f9508bd5d849425c1770dba5d7bfc6ce9ed848954`
+- GeneralUser-GS.sf2 target: `/mnt/mmc/Java/runtime/GeneralUser-GS.sf2`
+- GeneralUser-GS.sf2 SHA-256: `9575028c7a1f589f5770fccc8cff2734566af40cd26ed836944e9a5152688cfe`
+- GeneralUser-GS.sf2 Git blob: `298b552d2e9d1307e03e5c5c99d2c046aaed9ec3`
+
+Compiler review note:
+
+The build completed successfully. Existing non-fatal warnings remain in upstream/project code (for example unused helper and misleading-indentation warnings in mixer setters); no M1 compile or link error occurred. These warnings are not DEVICE-TEST evidence and may be cleaned separately later.
 
 ## M1 device acceptance
 
