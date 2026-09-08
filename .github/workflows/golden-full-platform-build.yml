@@ -40,11 +40,14 @@ jobs:
           sudo docker cp "$cid:/opt/miyoo" /opt/miyoo
           sudo chown -R "$(id -u):$(id -g)" /opt/miyoo
           test "$(/opt/miyoo/bin/arm-miyoo-linux-uclibcgnueabi-gcc -dumpmachine)" = arm-miyoo-linux-uclibcgnueabi
-      - name: Assemble Golden source and inject black-screen diagnostics
+      - name: Assemble Golden source and inject Java/native diagnostics
         run: |
           set -euo pipefail
           GOLDEN_UPSTREAM="$GITHUB_WORKSPACE/upstream" GOLDEN_ASSEMBLY="$RUNNER_TEMP/golden" sh scripts/golden_g1_assemble.sh
+          python3 scripts/golden_java_path_diag.py "$RUNNER_TEMP/golden/src/org/recompile/freej2me/Libretro.java"
           python3 scripts/golden_black_screen_diag.py "$RUNNER_TEMP/golden/src/libretro/rg35xx/golden/rg35xx_golden_video.c"
+          grep -q 'RG35XX-JAVA-DIAG' "$RUNNER_TEMP/golden/src/org/recompile/freej2me/Libretro.java"
+          grep -q 'RG35XX-JAVA-DIAG' "$RUNNER_TEMP/golden/src/org/recompile/freej2me/RG35XXGoldenFrameTransport.java"
           grep -q 'RG35XX-GOLDEN-DIAG' "$RUNNER_TEMP/golden/src/libretro/rg35xx/golden/rg35xx_golden_video.c"
           echo "GOLDEN=$RUNNER_TEMP/golden" >> "$GITHUB_ENV"
       - name: Build runtime and ARM core
@@ -64,9 +67,12 @@ jobs:
           /opt/miyoo/bin/arm-miyoo-linux-uclibcgnueabi-nm "$CORE" | grep rg35xx_golden_video_present
           /opt/miyoo/bin/arm-miyoo-linux-uclibcgnueabi-nm "$CORE" | grep rg35xx_golden_video_start
           strings "$CORE" | grep 'RG35XX-GOLDEN-DIAG'
+          strings "$JAR" >/tmp/jar-strings.txt || true
           grep -Fq 'rg35xx_cv_launch_java(info->path)' "$SRC"
           test "$(grep -Fc 'booted = javaOpen(params[0], params);' "$SRC")" -eq 1
           jar tf "$JAR" | grep 'RG35XXGoldenFrameTransport.class'
+          javap -classpath "$GOLDEN/build/classes" -c org.recompile.freej2me.Libretro | grep -F 'RG35XX-JAVA-DIAG'
+          javap -classpath "$GOLDEN/build/classes" -c org.recompile.freej2me.RG35XXGoldenFrameTransport | grep -F 'RG35XX-JAVA-DIAG'
       - name: Stage diagnostic payload
         run: |
           set -euo pipefail
@@ -75,13 +81,15 @@ jobs:
           cp "$GOLDEN/src/libretro/freej2me_plus_libretro.so" "$OUT/CFW/retroarch/.retroarch/cores/"
           cp "$GOLDEN/src/libretro/freej2me_plus_libretro.so" "$OUT/payload/freej2me_plus_libretro.so"
           cmp "$OUT/CFW/retroarch/.retroarch/cores/freej2me_plus_libretro.so" "$OUT/payload/freej2me_plus_libretro.so"
+          cp "$GOLDEN/src/org/recompile/freej2me/Libretro.java" "$OUT/evidence/diagnostic-Libretro.java"
+          cp "$GOLDEN/src/org/recompile/freej2me/RG35XXGoldenFrameTransport.java" "$OUT/evidence/diagnostic-RG35XXGoldenFrameTransport.java"
           cp "$GOLDEN/src/libretro/rg35xx/golden/rg35xx_golden_video.c" "$OUT/evidence/diagnostic-video.c"
           readelf -d "$OUT/payload/freej2me_plus_libretro.so" > "$OUT/evidence/readelf-dynamic.txt"
           (cd "$OUT" && find . -type f -print0 | sort -z | xargs -0 sha256sum) > "$OUT/SHA256SUMS.txt"
-          printf '%s\n' 'BLACK-SCREEN-DIAGNOSTIC / DEVICE-TEST-PENDING' > "$OUT/STATUS.txt"
+          printf '%s\n' 'JAVA-CONTROL-PATH-DIAGNOSTIC / DEVICE-TEST-PENDING' > "$OUT/STATUS.txt"
       - uses: actions/upload-artifact@v4
         with:
-          name: rg35xx-golden-black-screen-diagnostic
+          name: rg35xx-golden-java-path-diagnostic
           path: ${{ runner.temp }}/atomic
           include-hidden-files: true
           retention-days: 30
