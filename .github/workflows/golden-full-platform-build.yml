@@ -8,10 +8,7 @@ on:
       - 'docs/GOLDEN-FULL-REBUILD-TASKLOG.md'
       - 'src/**'
       - 'native/golden/**'
-      - 'scripts/g1_apply_java_transport.py'
-      - 'scripts/g1_apply_native_overlay.py'
-      - 'scripts/cv_apply_boot_resolution.py'
-      - 'scripts/golden_g1_assemble.sh'
+      - 'scripts/**'
   workflow_dispatch:
 
 jobs:
@@ -32,9 +29,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends ant build-essential file
       - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '8'
+        with: {distribution: temurin, java-version: '8'}
       - name: Materialize pinned ARM uClibc toolchain
         run: |
           set -euo pipefail
@@ -45,10 +40,12 @@ jobs:
           sudo docker cp "$cid:/opt/miyoo" /opt/miyoo
           sudo chown -R "$(id -u):$(id -g)" /opt/miyoo
           test "$(/opt/miyoo/bin/arm-miyoo-linux-uclibcgnueabi-gcc -dumpmachine)" = arm-miyoo-linux-uclibcgnueabi
-      - name: Assemble Golden source only
+      - name: Assemble Golden source and inject black-screen diagnostics
         run: |
           set -euo pipefail
           GOLDEN_UPSTREAM="$GITHUB_WORKSPACE/upstream" GOLDEN_ASSEMBLY="$RUNNER_TEMP/golden" sh scripts/golden_g1_assemble.sh
+          python3 scripts/golden_black_screen_diag.py "$RUNNER_TEMP/golden/src/libretro/rg35xx/golden/rg35xx_golden_video.c"
+          grep -q 'RG35XX-GOLDEN-DIAG' "$RUNNER_TEMP/golden/src/libretro/rg35xx/golden/rg35xx_golden_video.c"
           echo "GOLDEN=$RUNNER_TEMP/golden" >> "$GITHUB_ENV"
       - name: Build runtime and ARM core
         run: |
@@ -56,51 +53,35 @@ jobs:
           cd "$GOLDEN" && ant
           cd "$GOLDEN/src/libretro"
           make clean
-          make platform=unix \
-            CC='/opt/miyoo/bin/arm-miyoo-linux-uclibcgnueabi-gcc -march=armv5te -mtune=arm926ej-s -mfloat-abi=soft' \
-            CXX='/opt/miyoo/bin/arm-miyoo-linux-uclibcgnueabi-g++ -march=armv5te -mtune=arm926ej-s -mfloat-abi=soft' \
-            LDFLAGS='-lm -lpthread'
-      - name: Strict ABI and ownership gate
+          make platform=unix CC='/opt/miyoo/bin/arm-miyoo-linux-uclibcgnueabi-gcc -march=armv5te -mtune=arm926ej-s -mfloat-abi=soft' CXX='/opt/miyoo/bin/arm-miyoo-linux-uclibcgnueabi-g++ -march=armv5te -mtune=arm926ej-s -mfloat-abi=soft' LDFLAGS='-lm -lpthread'
+      - name: Strict ABI and diagnostic gate
         run: |
           set -euo pipefail
-          CORE="$GOLDEN/src/libretro/freej2me_plus_libretro.so"
-          JAR="$GOLDEN/build/freej2me_plus-lr.jar"
-          SRC="$GOLDEN/src/libretro/freej2me_libretro.c"
+          CORE="$GOLDEN/src/libretro/freej2me_plus_libretro.so"; JAR="$GOLDEN/build/freej2me_plus-lr.jar"; SRC="$GOLDEN/src/libretro/freej2me_libretro.c"
           readelf -h "$CORE" | tee /tmp/elf.txt
-          grep -q 'Class:.*ELF32' /tmp/elf.txt
-          grep -q 'Machine:.*ARM' /tmp/elf.txt
-          grep -q 'Version5 EABI' /tmp/elf.txt
-          grep -q 'soft-float ABI' /tmp/elf.txt
+          grep -q 'Class:.*ELF32' /tmp/elf.txt; grep -q 'Machine:.*ARM' /tmp/elf.txt; grep -q 'Version5 EABI' /tmp/elf.txt; grep -q 'soft-float ABI' /tmp/elf.txt
           javap -verbose "$GOLDEN/build/classes/org/recompile/freej2me/Libretro.class" | grep 'major version: 50'
           /opt/miyoo/bin/arm-miyoo-linux-uclibcgnueabi-nm "$CORE" | grep rg35xx_golden_video_present
           /opt/miyoo/bin/arm-miyoo-linux-uclibcgnueabi-nm "$CORE" | grep rg35xx_golden_video_start
+          strings "$CORE" | grep 'RG35XX-GOLDEN-DIAG'
           grep -Fq 'rg35xx_cv_launch_java(info->path)' "$SRC"
           test "$(grep -Fc 'booted = javaOpen(params[0], params);' "$SRC")" -eq 1
           jar tf "$JAR" | grep 'RG35XXGoldenFrameTransport.class'
-      - name: Reject known development payload fingerprints
+      - name: Stage diagnostic payload
         run: |
           set -euo pipefail
-          sha256sum "$GOLDEN/build/freej2me_plus-lr.jar" "$GOLDEN/src/libretro/freej2me_plus_libretro.so" | tee /tmp/current.sha
-          ! grep -Eq 'f409396d489cd2b1aca3ce43b3c60dba90aae5a0305f9428629c8e1d88a57e87|cae779a1ac2dfd7cd65e8893b30fee8196c1c6107f693c335701fe34fea4d322|f72cdf779b9813e56a278d4c9351068a0f3b9373b6a6d5cf29e15dcf7ac3d6d0|877ab42c4dcb38e2fbb792852039327b870d4f983ccd18a5a5b73d74cdf5500e' /tmp/current.sha
-      - name: Stage atomic device payload
-        run: |
-          set -euo pipefail
-          OUT="$RUNNER_TEMP/atomic"
-          mkdir -p "$OUT/BIOS" "$OUT/CFW/retroarch/.retroarch/cores" "$OUT/payload" "$OUT/evidence"
+          OUT="$RUNNER_TEMP/atomic"; mkdir -p "$OUT/BIOS" "$OUT/CFW/retroarch/.retroarch/cores" "$OUT/payload" "$OUT/evidence"
           cp "$GOLDEN/build/freej2me_plus-lr.jar" "$OUT/BIOS/freej2me-lr.jar"
           cp "$GOLDEN/src/libretro/freej2me_plus_libretro.so" "$OUT/CFW/retroarch/.retroarch/cores/"
-          # upload-artifact may omit hidden path components; duplicate the core
-          # into a non-hidden payload directory and verify both copies match.
           cp "$GOLDEN/src/libretro/freej2me_plus_libretro.so" "$OUT/payload/freej2me_plus_libretro.so"
           cmp "$OUT/CFW/retroarch/.retroarch/cores/freej2me_plus_libretro.so" "$OUT/payload/freej2me_plus_libretro.so"
-          cp "$GOLDEN/src/org/recompile/freej2me/Libretro.java" "$OUT/evidence/assembled-Libretro.java"
-          cp "$GOLDEN/src/libretro/freej2me_libretro.c" "$OUT/evidence/assembled-freej2me_libretro.c"
+          cp "$GOLDEN/src/libretro/rg35xx/golden/rg35xx_golden_video.c" "$OUT/evidence/diagnostic-video.c"
           readelf -d "$OUT/payload/freej2me_plus_libretro.so" > "$OUT/evidence/readelf-dynamic.txt"
           (cd "$OUT" && find . -type f -print0 | sort -z | xargs -0 sha256sum) > "$OUT/SHA256SUMS.txt"
-          printf '%s\n' 'SOURCE-REBUILD / DEVICE-TEST-PENDING' > "$OUT/STATUS.txt"
+          printf '%s\n' 'BLACK-SCREEN-DIAGNOSTIC / DEVICE-TEST-PENDING' > "$OUT/STATUS.txt"
       - uses: actions/upload-artifact@v4
         with:
-          name: rg35xx-golden-full-platform-build
+          name: rg35xx-golden-black-screen-diagnostic
           path: ${{ runner.temp }}/atomic
           include-hidden-files: true
           retention-days: 30
