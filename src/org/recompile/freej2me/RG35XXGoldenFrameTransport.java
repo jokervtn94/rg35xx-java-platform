@@ -63,7 +63,22 @@ public final class RG35XXGoldenFrameTransport
         {
             public void run() { workerLoop(); }
         }, "RG35XX-FrameWorker");
-        worker.setDaemon(true);
+
+        /*
+         * This worker intentionally MUST be non-daemon on the RG35XX headless
+         * JamVM runtime. Libretro.main() returns immediately after construction,
+         * and the upstream Libretro-IO-Thread is itself daemon. If this worker is
+         * also daemon, JamVM is allowed to terminate as soon as the main thread
+         * returns. Native then observes EOF while waiting for the first 0xFE
+         * frame header (generation remains zero), producing a persistent black
+         * screen with no Java exception. The device diagnostic from 2026-09-08
+         * proved exactly that lifecycle: request sent -> stdout EOF -> gen=0.
+         *
+         * A live frame worker therefore doubles as the JVM lifetime anchor. It
+         * is stopped explicitly by shutdown()/process teardown, not by daemon
+         * thread semantics.
+         */
+        worker.setDaemon(false);
         try { worker.setPriority(Thread.MIN_PRIORITY); }
         catch(Throwable ignored) {}
         worker.start();
