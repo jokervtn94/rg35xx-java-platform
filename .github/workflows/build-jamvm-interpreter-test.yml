@@ -1,0 +1,89 @@
+name: Build JamVM Interpreter Tests
+
+on:
+  push:
+    branches: [ jamvm-interpreter-test ]
+    paths:
+      - '.github/workflows/build-jamvm-interpreter-test.yml'
+      - 'jamvm-test/**'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    container:
+      image: miyoocfw/toolchain-shared-uclibc:2.0.0-beta-2
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: A-no-cache
+            extra_flags: --disable-int-caching
+          - variant: B-no-inline-no-cache
+            extra_flags: --disable-int-caching --disable-int-inlining
+
+    steps:
+      - name: Toolchain fingerprint
+        shell: bash
+        run: |
+          set -euxo pipefail
+          echo "PATH=$PATH"
+          which arm-miyoo-linux-uclibcgnueabi-gcc
+          arm-miyoo-linux-uclibcgnueabi-gcc --version
+          arm-miyoo-linux-uclibcgnueabi-gcc -v 2>&1 | tee /tmp/gcc-version.txt
+
+      - name: Fetch JamVM 2.0.0
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cd /tmp
+          wget -O jamvm-2.0.0.tar.gz 'https://downloads.sourceforge.net/project/jamvm/jamvm/JamVM%202.0.0/jamvm-2.0.0.tar.gz'
+          tar xzf jamvm-2.0.0.tar.gz
+
+      - name: Configure ${{ matrix.variant }}
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cd /tmp/jamvm-2.0.0
+          export CC=arm-miyoo-linux-uclibcgnueabi-gcc
+          export AR=arm-miyoo-linux-uclibcgnueabi-ar
+          export RANLIB=arm-miyoo-linux-uclibcgnueabi-ranlib
+          export STRIP=arm-miyoo-linux-uclibcgnueabi-strip
+          export CFLAGS='-O2 -g -marm -mcpu=arm926ej-s -mfloat-abi=soft'
+          ./configure \
+            --host=arm-miyoo-linux-uclibcgnueabi \
+            --with-java-runtime-library=gnuclasspath \
+            --with-classpath-install-dir=/mnt/mmc/CFW/java \
+            --disable-shared \
+            --without-pic \
+            ${{ matrix.extra_flags }} \
+            | tee /tmp/configure-${{ matrix.variant }}.log
+          grep -E '^(#define (THREADED|DIRECT|INLINING|USE_CACHE)|/\* #undef (INLINING|USE_CACHE))' src/config.h || true
+          cp src/config.h /tmp/config-${{ matrix.variant }}.h
+
+      - name: Build ${{ matrix.variant }}
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cd /tmp/jamvm-2.0.0
+          make -j2 V=1 2>&1 | tee /tmp/build-${{ matrix.variant }}.log
+          test -x src/jamvm
+          mkdir -p /tmp/out/${{ matrix.variant }}
+          cp src/jamvm /tmp/out/${{ matrix.variant }}/jamvm
+          cp /tmp/config-${{ matrix.variant }}.h /tmp/out/${{ matrix.variant }}/config.h
+          cp /tmp/gcc-version.txt /tmp/out/${{ matrix.variant }}/gcc-version.txt
+          cp /tmp/configure-${{ matrix.variant }}.log /tmp/out/${{ matrix.variant }}/configure.log
+          cp /tmp/build-${{ matrix.variant }}.log /tmp/out/${{ matrix.variant }}/build.log
+          file src/jamvm | tee /tmp/out/${{ matrix.variant }}/file.txt
+          arm-miyoo-linux-uclibcgnueabi-readelf -h src/jamvm | tee /tmp/out/${{ matrix.variant }}/elf-header.txt
+          arm-miyoo-linux-uclibcgnueabi-readelf -A src/jamvm | tee /tmp/out/${{ matrix.variant }}/elf-attributes.txt
+          arm-miyoo-linux-uclibcgnueabi-readelf -d src/jamvm | tee /tmp/out/${{ matrix.variant }}/dynamic.txt
+          sha256sum src/jamvm | tee /tmp/out/${{ matrix.variant }}/SHA256SUMS.txt
+          strings src/jamvm | grep -E 'JamVM version|Execution Engine|stack-caching|inline-threaded' | head -30 > /tmp/out/${{ matrix.variant }}/strings-engine.txt || true
+
+      - name: Upload ${{ matrix.variant }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: jamvm-${{ matrix.variant }}
+          path: /tmp/out/${{ matrix.variant }}
+          if-no-files-found: error
