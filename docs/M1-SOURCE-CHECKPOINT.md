@@ -1,7 +1,7 @@
 # RG35XX Java Platform M1 — Authoritative Source Checkpoint
 
 Date: 2026-09-08
-Status: SOURCE-PUSHED / BUILD-PENDING / DEVICE-TEST-PENDING
+Status: SOURCE-PUSHED / BUILD-PASS / DEVICE-TEST-PENDING
 
 This checkpoint records the exact source boundary for the first post-crash-fix presentation-quality pass.
 
@@ -18,6 +18,10 @@ Font raster refinement:
 MIDI de-ringing filter:
 
 `fd8fae8c8f25976449379bff807b7420bebd7e29`
+
+Tasklog build-evidence update:
+
+`dec6633bf6999ce79d0d6c33856483fc16490864`
 
 Tasklog:
 
@@ -58,7 +62,37 @@ Final mixer headroom: unchanged at 3/4.
 
 The existing RC1 consolidated workflow retains its pinned inputs and toolchain. M1 does not change those pins.
 
+## Accepted M1 build identity
+
+Workflow: `RC1 Consolidated ARM Build`
+
+Run ID: `34206307274`
+
+Build source head: `fd8fae8c8f25976449379bff807b7420bebd7e29`
+
+Job ID: `101996481591`
+
+Result: `success`
+
+Artifact ID: `10047933171`
+
+Artifact name: `rg35xx-rc1-consolidated-build-evidence`
+
+Artifact digest: `sha256:5318cc1e250b60a41797cb60e34a6d63ddf52ee8c8d6dc314ae5956cb6026b49`
+
+Produced payload SHA-256:
+
+- `freej2me_plus-lr.jar`: `cae779a1ac2dfd7cd65e8893b30fee8196c1c6107f693c335701fe34fea4d322`
+- `freej2me_plus_libretro.so`: `f409396d489cd2b1aca3ce43b3c60dba90aae5a0305f9428629c8e1d88a57e87`
+
+Runtime assets remain the pinned RC1 identities:
+
+- DejaVuSans.ttf: `7da195a74c55bef988d0d48f9508bd5d849425c1770dba5d7bfc6ce9ed848954`
+- GeneralUser-GS.sf2: `9575028c7a1f589f5770fccc8cff2734566af40cd26ed836944e9a5152688cfe`
+
 ## Acceptance state
+
+BUILD-PASS means the pinned assembly, Java compile, ARMv5TE/uClibc compile/link and undefined-symbol scan completed successfully. It does not mean the font/audio changes are validated on hardware.
 
 This file MUST NOT be treated as DEVICE-TEST-PASS until the device evidence required by `tasklog/M1-FONT-AUDIO-QUALITY-TASKLOG.md` is attached/reported.
 
