@@ -22,7 +22,6 @@ public final class RG35XXGoldenFrameTransport
 
     private final PrintStream ipcOut;
     private final Object signal = new Object();
-    /* Worker frames and rare control/restart frames share these scratch buffers. */
     private final Object encodeLock = new Object();
     private final int[] argbSnapshot = new int[MAX_PIXELS];
     private final byte[] rgb565 = new byte[MAX_PIXELS * 2];
@@ -41,15 +40,16 @@ public final class RG35XXGoldenFrameTransport
 
     public RG35XXGoldenFrameTransport(PrintStream out)
     {
+        System.err.println("RG35XX-JAVA-DIAG: FrameTransport constructor ENTER");
         if(out == null) throw new NullPointerException("ipcOut");
         ipcOut = out;
         init565Tables();
+        System.err.println("RG35XX-JAVA-DIAG: FrameTransport LUT READY");
         startWorker();
     }
 
     private void init565Tables()
     {
-        /* Recovered from the device-proven freej2me-lr.jar bytecode. */
         for(int i = 0; i < 65536; i++)
         {
             high[i] = (byte)(((i >> 8) & 0xF8) | ((i >> 5) & 0x07));
@@ -63,32 +63,24 @@ public final class RG35XXGoldenFrameTransport
         {
             public void run() { workerLoop(); }
         }, "RG35XX-FrameWorker");
-
-        /*
-         * This worker intentionally MUST be non-daemon on the RG35XX headless
-         * JamVM runtime. Libretro.main() returns immediately after construction,
-         * and the upstream Libretro-IO-Thread is itself daemon. If this worker is
-         * also daemon, JamVM is allowed to terminate as soon as the main thread
-         * returns. Native then observes EOF while waiting for the first 0xFE
-         * frame header (generation remains zero), producing a persistent black
-         * screen with no Java exception. The device diagnostic from 2026-09-08
-         * proved exactly that lifecycle: request sent -> stdout EOF -> gen=0.
-         *
-         * A live frame worker therefore doubles as the JVM lifetime anchor. It
-         * is stopped explicitly by shutdown()/process teardown, not by daemon
-         * thread semantics.
-         */
         worker.setDaemon(false);
         try { worker.setPriority(Thread.MIN_PRIORITY); }
         catch(Throwable ignored) {}
         worker.start();
+        System.err.println("RG35XX-JAVA-DIAG: FrameWorker STARTED daemon=" + worker.isDaemon());
     }
 
-    /** Coalescing request: stale pending frames are never queued. */
     public void requestFrame(int sourceWidth, int sourceHeight,
                              int[] sourceData, Object sourceLock)
     {
-        if(!validSource(sourceWidth, sourceHeight, sourceData, sourceLock)) return;
+        System.err.println("RG35XX-JAVA-DIAG: requestFrame ENTER " + sourceWidth + "x" + sourceHeight +
+                           " data=" + (sourceData == null ? -1 : sourceData.length) +
+                           " lock=" + (sourceLock == null ? "null" : sourceLock.getClass().getName()));
+        if(!validSource(sourceWidth, sourceHeight, sourceData, sourceLock))
+        {
+            System.err.println("RG35XX-JAVA-DIAG: requestFrame REJECTED");
+            return;
+        }
         synchronized(signal)
         {
             width = sourceWidth;
@@ -98,18 +90,18 @@ public final class RG35XXGoldenFrameTransport
             pending = true;
             signal.notifyAll();
         }
+        System.err.println("RG35XX-JAVA-DIAG: requestFrame SIGNALED");
     }
 
-    /**
-     * Rare synchronous control transaction used by the character-encoding
-     * restart handshake. The old runtime sent a valid frame immediately before
-     * sleeping for the native core to restart it; preserving that ordering is
-     * required because no normal frame request may arrive before the restart.
-     */
     public void sendControlFrame(int sourceWidth, int sourceHeight,
                                  int[] sourceData, Object sourceLock)
     {
-        if(!validSource(sourceWidth, sourceHeight, sourceData, sourceLock)) return;
+        System.err.println("RG35XX-JAVA-DIAG: sendControlFrame ENTER");
+        if(!validSource(sourceWidth, sourceHeight, sourceData, sourceLock))
+        {
+            System.err.println("RG35XX-JAVA-DIAG: sendControlFrame REJECTED");
+            return;
+        }
         try
         {
             synchronized(encodeLock)
@@ -120,6 +112,7 @@ public final class RG35XXGoldenFrameTransport
         catch(Throwable t)
         {
             System.err.println("RG35XX-VIDEO JAVA control-frame error: " + t);
+            t.printStackTrace(System.err);
         }
     }
 
@@ -135,6 +128,7 @@ public final class RG35XXGoldenFrameTransport
 
     public void shutdown()
     {
+        System.err.println("RG35XX-JAVA-DIAG: FrameTransport shutdown");
         synchronized(signal)
         {
             running = false;
@@ -150,6 +144,7 @@ public final class RG35XXGoldenFrameTransport
 
     private void workerLoop()
     {
+        System.err.println("RG35XX-JAVA-DIAG: FrameWorker ENTER");
         while(running)
         {
             int w;
@@ -164,7 +159,11 @@ public final class RG35XXGoldenFrameTransport
                     try { signal.wait(); }
                     catch(InterruptedException ignored) {}
                 }
-                if(!running) return;
+                if(!running)
+                {
+                    System.err.println("RG35XX-JAVA-DIAG: FrameWorker STOP running=false");
+                    return;
+                }
                 pending = false;
                 w = width;
                 h = height;
@@ -172,6 +171,7 @@ public final class RG35XXGoldenFrameTransport
                 lock = frontbufferLock;
             }
 
+            System.err.println("RG35XX-JAVA-DIAG: FrameWorker WAKE " + w + "x" + h);
             try
             {
                 synchronized(encodeLock)
@@ -182,24 +182,28 @@ public final class RG35XXGoldenFrameTransport
             catch(Throwable t)
             {
                 System.err.println("RG35XX-VIDEO JAVA worker error: " + t);
+                t.printStackTrace(System.err);
             }
         }
+        System.err.println("RG35XX-JAVA-DIAG: FrameWorker EXIT");
     }
 
-    /* Caller owns encodeLock. */
     private void sendFrameLocked(int w, int h, int[] data, Object lock) throws Exception
     {
         final int pixels = w * h;
+        System.err.println("RG35XX-JAVA-DIAG: sendFrame START pixels=" + pixels);
         if(pixels <= 0 || pixels > MAX_PIXELS || data == null || data.length < pixels)
         {
             System.err.println("RG35XX-VIDEO JAVA invalid snapshot pixels=" + pixels);
             return;
         }
 
+        System.err.println("RG35XX-JAVA-DIAG: snapshot LOCK waiting");
         synchronized(lock)
         {
             System.arraycopy(data, 0, argbSnapshot, 0, pixels);
         }
+        System.err.println("RG35XX-JAVA-DIAG: snapshot COPIED");
 
         int src = 0;
         int dst = 0;
@@ -220,6 +224,7 @@ public final class RG35XXGoldenFrameTransport
             dst = put565(p6, dst); dst = put565(p7, dst);
         }
         while(src < pixels) dst = put565(argbSnapshot[src++], dst);
+        System.err.println("RG35XX-JAVA-DIAG: RGB565 ENCODED bytes=" + (pixels * 2));
 
         header[0] = (byte)0xFE;
         header[1] = (byte)((w >> 8) & 0xFF);
@@ -238,9 +243,12 @@ public final class RG35XXGoldenFrameTransport
 
         synchronized(ipcOut)
         {
+            System.err.println("RG35XX-JAVA-DIAG: IPC WRITE header");
             ipcOut.write(header, 0, FRAME_HEADER_BYTES);
+            System.err.println("RG35XX-JAVA-DIAG: IPC WRITE payload");
             ipcOut.write(rgb565, 0, pixels * 2);
             ipcOut.flush();
+            System.err.println("RG35XX-JAVA-DIAG: IPC FLUSH PASS error=" + ipcOut.checkError());
         }
     }
 
