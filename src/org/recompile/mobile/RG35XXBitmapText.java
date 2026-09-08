@@ -5,10 +5,11 @@ import javax.microedition.lcdui.Font;
 /**
  * RG35XX bitmap text producer.
  *
- * The fallback glyph seed is 5x7, but the output raster follows the active
- * MIDP Font metrics instead of imposing a fixed advance. CJ keeps this visual
- * contract while removing the old int[7] allocation for every glyph, which was
- * a hot GC path in text-heavy JARs on JamVM.
+ * M1 keeps MIDP Font metrics as the layout contract while making the fallback
+ * raster less blocky on the 320x240 RG35XX display.  The 5x7 seed is rendered
+ * inside explicit side/top/bottom bearings instead of stretching to almost the
+ * full metric cell.  This avoids merged glyph edges and produces cleaner 2x
+ * integer scaling to the 640x480 libretro output.
  */
 public final class RG35XXBitmapText
 {
@@ -60,11 +61,32 @@ public final class RG35XXBitmapText
                                   int x, int cellWidth, int argb)
     {
         if(ch == ' ' || cellWidth <= 0) return;
-        final long rows = glyph5x7(ch);
-        final int glyphWidth = cellWidth > 2 ? cellWidth - 1 : cellWidth;
-        final int glyphHeight = height > 3 ? height - 3 : height;
-        final int glyphY = height > glyphHeight ? (height - glyphHeight) / 2 : 0;
-        if(glyphWidth <= 0 || glyphHeight <= 0) return;
+
+        final char base = vietnameseBase(ch);
+        final long rows = glyph5x7(base);
+
+        /* M1 raster policy:
+         * - keep at least one pixel of horizontal separation for normal cells;
+         * - leave vertical breathing room for Vietnamese marks and descenders;
+         * - cap expansion so a 5x7 seed is not turned into a thick solid block.
+         */
+        final int sideBearing = cellWidth >= 6 ? 1 : 0;
+        int glyphWidth = cellWidth - sideBearing * 2;
+        if(glyphWidth > 6) glyphWidth = 6;
+        if(glyphWidth < 1) glyphWidth = 1;
+
+        final int topBearing = height >= 10 ? 2 : 1;
+        final int bottomBearing = height >= 10 ? 2 : 1;
+        int glyphHeight = height - topBearing - bottomBearing;
+        if(glyphHeight > 8) glyphHeight = 8;
+        if(glyphHeight < 1) glyphHeight = 1;
+
+        final int glyphX = x + sideBearing +
+            ((cellWidth - sideBearing * 2 - glyphWidth) > 0 ?
+             (cellWidth - sideBearing * 2 - glyphWidth) / 2 : 0);
+        final int glyphY = topBearing +
+            ((height - topBearing - bottomBearing - glyphHeight) > 0 ?
+             (height - topBearing - bottomBearing - glyphHeight) / 2 : 0);
 
         for(int dy = 0; dy < glyphHeight; dy++)
         {
@@ -76,11 +98,101 @@ public final class RG35XXBitmapText
             {
                 final int sx = (dx * 5) / glyphWidth;
                 if((bits & (1 << (4 - sx))) == 0) continue;
-                final int px = x + dx;
+                final int px = glyphX + dx;
                 if(px < 0 || px >= width) continue;
                 final int idx = row + px;
                 if(idx >= 0 && idx < pixels.length) pixels[idx] = argb;
             }
+        }
+
+        drawVietnameseMark(pixels, width, height, ch, glyphX, glyphWidth,
+                           glyphY, glyphHeight, argb);
+    }
+
+    private static char vietnameseBase(char c)
+    {
+        if("ÀÁẢÃẠĂẰẮẲẴẶÂẦẤẨẪẬàáảãạăằắẳẵặâầấẩẫậ".indexOf(c) >= 0) return 'A';
+        if("ÈÉẺẼẸÊỀẾỂỄỆèéẻẽẹêềếểễệ".indexOf(c) >= 0) return 'E';
+        if("ÌÍỈĨỊìíỉĩị".indexOf(c) >= 0) return 'I';
+        if("ÒÓỎÕỌÔỒỐỔỖỘƠỜỚỞỠỢòóỏõọôồốổỗộơờớởỡợ".indexOf(c) >= 0) return 'O';
+        if("ÙÚỦŨỤƯỪỨỬỮỰùúủũụưừứửữự".indexOf(c) >= 0) return 'U';
+        if("ỲÝỶỸỴỳýỷỹỵ".indexOf(c) >= 0) return 'Y';
+        if(c == 'Đ' || c == 'đ') return 'D';
+        return c;
+    }
+
+    private static int toneMark(char c)
+    {
+        if("ÁẮẤÉẾÍÓỐỚÚỨÝáắấéếíóốớúứý".indexOf(c) >= 0) return 1; /* acute */
+        if("ÀẰẦÈỀÌÒỒỜÙỪỲàằầèềìòồờùừỳ".indexOf(c) >= 0) return 2; /* grave */
+        if("ẢẲẨẺỂỈỎỔỞỦỬỶảẳẩẻểỉỏổởủửỷ".indexOf(c) >= 0) return 3; /* hook */
+        if("ÃẴẪẼỄĨÕỖỠŨỮỸãẵẫẽễĩõỗỡũữỹ".indexOf(c) >= 0) return 4; /* tilde */
+        if("ẠẶẬẸỆỊỌỘỢỤỰỴạặậẹệịọộợụựỵ".indexOf(c) >= 0) return 5; /* dot */
+        return 0;
+    }
+
+    private static int shapeMark(char c)
+    {
+        if("ĂẰẮẲẴẶăằắẳẵặ".indexOf(c) >= 0) return 1; /* breve */
+        if("ÂẦẤẨẪẬÊỀẾỂỄỆÔỒỐỔỖỘâầấẩẫậêềếểễệôồốổỗộ".indexOf(c) >= 0) return 2; /* circumflex */
+        if("ƠỜỚỞỠỢƯỪỨỬỮỰơờớởỡợưừứửữự".indexOf(c) >= 0) return 3; /* horn */
+        if(c == 'Đ' || c == 'đ') return 4; /* crossbar */
+        return 0;
+    }
+
+    private static void putPixel(int[] pixels, int width, int height,
+                                 int x, int y, int argb)
+    {
+        if(x < 0 || y < 0 || x >= width || y >= height) return;
+        final int idx = y * width + x;
+        if(idx >= 0 && idx < pixels.length) pixels[idx] = argb;
+    }
+
+    private static void drawVietnameseMark(int[] pixels, int width, int height,
+                                           char ch, int gx, int gw,
+                                           int gy, int gh, int argb)
+    {
+        final int shape = shapeMark(ch);
+        final int tone = toneMark(ch);
+        final int cx = gx + gw / 2;
+
+        if(shape == 4) {
+            final int y = gy + gh / 2;
+            for(int x = gx; x < gx + gw; x++) putPixel(pixels, width, height, x, y, argb);
+        } else if(shape == 1 && gy >= 1) {
+            putPixel(pixels, width, height, cx - 1, gy - 1, argb);
+            putPixel(pixels, width, height, cx, gy, argb);
+            putPixel(pixels, width, height, cx + 1, gy - 1, argb);
+        } else if(shape == 2 && gy >= 1) {
+            putPixel(pixels, width, height, cx - 1, gy, argb);
+            putPixel(pixels, width, height, cx, gy - 1, argb);
+            putPixel(pixels, width, height, cx + 1, gy, argb);
+        } else if(shape == 3) {
+            putPixel(pixels, width, height, gx + gw - 1, gy, argb);
+            putPixel(pixels, width, height, gx + gw - 1, gy + 1, argb);
+        }
+
+        if(tone == 0) return;
+        if(tone == 5) {
+            putPixel(pixels, width, height, cx, gy + gh + 1, argb);
+            return;
+        }
+
+        final int ty = gy >= 2 ? gy - 2 : 0;
+        if(tone == 1) {
+            putPixel(pixels, width, height, cx, ty + 1, argb);
+            putPixel(pixels, width, height, cx + 1, ty, argb);
+        } else if(tone == 2) {
+            putPixel(pixels, width, height, cx, ty + 1, argb);
+            putPixel(pixels, width, height, cx - 1, ty, argb);
+        } else if(tone == 3) {
+            putPixel(pixels, width, height, cx - 1, ty, argb);
+            putPixel(pixels, width, height, cx, ty, argb);
+            putPixel(pixels, width, height, cx, ty + 1, argb);
+        } else if(tone == 4) {
+            putPixel(pixels, width, height, cx - 1, ty + 1, argb);
+            putPixel(pixels, width, height, cx, ty, argb);
+            putPixel(pixels, width, height, cx + 1, ty + 1, argb);
         }
     }
 
