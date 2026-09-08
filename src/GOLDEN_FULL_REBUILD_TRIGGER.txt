@@ -1,0 +1,1 @@
+Trigger Golden full-platform source rebuild after workflow installation.
