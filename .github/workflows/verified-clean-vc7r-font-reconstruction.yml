@@ -1,0 +1,78 @@
+name: Verified Clean VC7R Font Reconstruction Gate
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - verified-clean-platform-v1
+    paths:
+      - scripts/vc7r_reconstruct_font.py
+      - docs/checkpoints/VC7R-RECONSTRUCTED-FONT.md
+      - .github/workflows/verified-clean-vc7r-font-reconstruction.yml
+
+jobs:
+  reconstruct-font-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install reconstruction dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fonts-dejavu-core fonts-noto-cjk python3-pil python3-fonttools
+
+      - name: Locate deterministic input fonts
+        id: fonts
+        shell: bash
+        run: |
+          set -euo pipefail
+          LATIN="/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+          CJK="$(fc-match -f '%{file}\n' 'Noto Sans CJK JP' | head -n1)"
+          test -f "$LATIN"
+          test -f "$CJK"
+          echo "latin=$LATIN" >> "$GITHUB_OUTPUT"
+          echo "cjk=$CJK" >> "$GITHUB_OUTPUT"
+          sha256sum "$LATIN" "$CJK"
+
+      - name: Generate reconstructed resource
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/vc7r
+          python3 scripts/vc7r_reconstruct_font.py \
+            --font '${{ steps.fonts.outputs.latin }}' \
+            --font '${{ steps.fonts.outputs.cjk }}#0' \
+            --out /tmp/vc7r/rg35xx-font-reconstructed.bin \
+            --manifest /tmp/vc7r/manifest.json | tee /tmp/vc7r/generator.log
+
+      - name: Verify fail-closed reconstruction contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          GOLDEN='7d835faaed37ae93d2bb783604453ad8d13d994f1c97074182ec040c6a29b99c'
+          test "$(stat -c%s /tmp/vc7r/rg35xx-font-reconstructed.bin)" = '727008'
+          GENERATED="$(sha256sum /tmp/vc7r/rg35xx-font-reconstructed.bin | awk '{print $1}')"
+          echo "VC7R_GENERATED_SHA256=$GENERATED"
+          if [ "$GENERATED" = "$GOLDEN" ]; then
+            echo 'Unexpected exact Golden hash match; manual provenance review required.' >&2
+            exit 2
+          fi
+          python3 - <<'PY'
+          import json
+          m=json.load(open('/tmp/vc7r/manifest.json','r',encoding='utf-8'))
+          assert m['status']=='RECONSTRUCTED-NOT-GOLDEN'
+          assert m['format']['glyph_records']==22719
+          assert m['format']['record_bytes']==32
+          assert m['format']['total_bytes']==727008
+          assert m['matches_exact_golden'] is False
+          print('VC7R_MANIFEST_GATE=PASS')
+          print('VC7R_FALLBACK_RECORDS=%d' % m['fallback_records'])
+          PY
+          echo 'VC7R_STATUS=SOURCE-GATE-PASS'
+          echo 'VC7R_DEVICE_TEST=PENDING'
+
+      - name: Do not publish reconstructed font binary
+        run: |
+          echo 'The reconstructed font binary is intentionally not uploaded as an artifact.'
+          echo 'Only source/provenance logic is retained in the repository.'
