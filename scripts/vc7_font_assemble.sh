@@ -17,9 +17,13 @@ IMAGE="$VC7_ASSEMBLY/src/org/recompile/mobile/PlatformGraphics.java"
 FONT_OUT="$VC7_ASSEMBLY/resources/org/recompile/mobile/rg35xx-font.bin"
 [ -f "$IMAGE" ] || fail "PlatformGraphics.java missing"
 
+# Materialize the exact Golden resource first. The preflight intentionally runs
+# BEFORE changing PlatformGraphics so the pinned AWT boundary is verified rather
+# than guessed after the fact.
 python3 "$ROOT/scripts/vc7_extract_golden_font.py" "$VC7_GOLDEN_RUNTIME" "$FONT_OUT"
+VC7_SOURCE="$VC7_ASSEMBLY" VC7_GOLDEN_FONT_BIN="$FONT_OUT" \
+  sh "$ROOT/scripts/vc7_golden_font_preflight.sh"
 python3 "$ROOT/scripts/vc7_apply_golden_font.py" "$IMAGE"
-sh "$ROOT/scripts/vc7_golden_font_preflight.sh" "$VC7_GOLDEN_RUNTIME" "$IMAGE"
 
 # Exact Golden resource must now be staged into the JAR resources tree.
 [ -f "$FONT_OUT" ] || fail "font resource not staged"
