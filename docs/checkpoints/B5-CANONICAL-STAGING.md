@@ -1,6 +1,6 @@
 # B5 — Canonical SD Staging
 
-Status: `SOURCE/GATE COMMITTED — STAGING/DEVICE ACCEPTANCE PENDING`
+Status: `STAGING-PASS — DEVICE ACCEPTANCE PENDING`
 
 ## Purpose
 
@@ -38,6 +38,17 @@ The two core aliases must be byte-identical. All five runtime aliases must be by
 
 The script never reads from or writes to `/mnt/mmc`; it only creates a disposable staging directory supplied through `B5_OUTPUT_DIR`.
 
+## Staging evidence
+
+The gate was executed against the exact four locked payloads. It returned `B5 PASS`, generated all nine canonical targets, and verified the generated SHA256 manifest successfully.
+
+Observed alias identities:
+
+- both core aliases: `56bb3b972337dd40b342c1881f6599c53eebf66a29f920a1aa2e2839eb29a07c`
+- all five runtime aliases: `e8706495bfaed6a9020b395cc65347c76ca3a3d1bd5a1880aed593379fa9f4ed`
+- JamVM: `eea1b97cebfaca67b69ed365e966d80cdac22d8ff245c7a556137cfb2898ea34`
+- glibj: `d7abe888d2980329434c30f18c0eec124be1f02284bf9ed28e88d7242a1f2bea`
+
 ## Foundation exclusions
 
 B5 does not admit PNG ICC compatibility, CV/CW resolution changes, CK font scaling, audio rework, old RC/CJ stacks, JamVM diagnostics, or patched GNU Classpath.
@@ -46,4 +57,4 @@ The early-native log introduced by B4 remains `/mnt/mmc/freej2me-vc3-early.log` 
 
 ## Acceptance rule
 
-B5 can become `STAGING-PASS` after the canonical tree is generated from the exact four locked payloads and its manifest verifies. It cannot become `DEVICE-PASS`; device acceptance belongs to the complete B6 atomic installer/foundation package running on real RG35XX hardware.
+B5 is now `STAGING-PASS`. It cannot become `DEVICE-PASS`; device acceptance belongs to the complete B6 atomic installer/foundation package running on real RG35XX hardware.
