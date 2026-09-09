@@ -12,12 +12,15 @@ note() { echo "B4 ASSEMBLY: $*"; }
 VC_UPSTREAM="$VC_UPSTREAM" VC_ASSEMBLY="$B4_ASSEMBLY" sh "$ROOT/scripts/vc0_vc3_assemble.sh"
 
 CORE="$B4_ASSEMBLY/src/libretro/freej2me_libretro.c"
+VIDEO="$B4_ASSEMBLY/src/libretro/rg35xx/golden/rg35xx_golden_video.c"
 [ -f "$CORE" ] || fail "assembled core source missing"
+[ -f "$VIDEO" ] || fail "assembled Golden video source missing"
 
 # B4 adds observability only.
 python3 "$ROOT/scripts/b4_apply_early_native_log.py" "$CORE"
+python3 "$ROOT/scripts/b4_apply_video_observability.py" "$VIDEO"
 
-# Positive observability contract.
+# Positive native lifecycle observability contract.
 for marker in \
   'RG35XX_B4_EARLY_LOG' \
   'B4 CORE_INIT' \
@@ -34,7 +37,18 @@ for marker in \
   'B4 IPC_RUN_SENT' \
   'B4 CORE_DEINIT'
 do
-  grep -Fq "$marker" "$CORE" || fail "missing marker: $marker"
+  grep -Fq "$marker" "$CORE" || fail "missing core marker: $marker"
+done
+
+# Positive Golden video evidence contract. These markers are one-shot per core
+# lifecycle and do not alter frame protocol/presentation behavior.
+for marker in \
+  'B4 FIRST_FRAME_HEADER' \
+  'B4 FIRST_FRAME_PUBLISH' \
+  'B4 FIRST_PRESENT' \
+  'B4 VIDEO_DEINIT'
+do
+  grep -Fq "$marker" "$VIDEO" || fail "missing video marker: $marker"
 done
 
 # Existing verified foundation must remain intact.
@@ -47,6 +61,11 @@ for marker in \
 do
   grep -Fq "$marker" "$CORE" || fail "foundation token lost: $marker"
 done
+
+grep -Fq 'read_header_resync' "$VIDEO" || fail "Golden exact/resync receiver lost"
+grep -Fq 'publish_back' "$VIDEO" || fail "Golden publish path lost"
+grep -Fq 'fit_geometry' "$VIDEO" || fail "Golden Smart-Fit path lost"
+grep -Fq 'blit_nearest' "$VIDEO" || fail "Golden presentation scaler lost"
 
 grep -Fq 'RG35XX-MEDIA-BOOT: eager prepare SKIPPED; lazy media enabled' \
   "$B4_ASSEMBLY/src/org/recompile/mobile/MobilePlatform.java" || fail "lazy media lost"
