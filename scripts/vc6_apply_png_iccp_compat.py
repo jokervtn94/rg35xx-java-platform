@@ -63,27 +63,20 @@ helper = r'''
 			long totalLong = chunkLength + 12L;
 			if(totalLong > Integer.MAX_VALUE || totalLong < 12L || pos + totalLong > raw.length)
 			{
-				// Malformed/truncated PNG: preserve original bytes and let ImageIO decide.
 				return new ByteArrayInputStream(raw);
 			}
 			int total = (int)totalLong;
 			boolean isIccp = raw[pos + 4] == 'i' && raw[pos + 5] == 'C' &&
 			                 raw[pos + 6] == 'C' && raw[pos + 7] == 'P';
-			if(isIccp)
-			{
-				stripped = true;
-			}
-			else
-			{
-				clean.write(raw, pos, total);
-			}
+			if(isIccp) stripped = true;
+			else clean.write(raw, pos, total);
 			boolean isIend = raw[pos + 4] == 'I' && raw[pos + 5] == 'E' &&
 			                 raw[pos + 6] == 'N' && raw[pos + 7] == 'D';
 			pos += total;
-			if(isIend) { break; }
+			if(isIend) break;
 		}
 
-		if(!stripped) { return new ByteArrayInputStream(raw); }
+		if(!stripped) return new ByteArrayInputStream(raw);
 		System.err.println("RG35XX-PNG-ICCP: stripped ancillary iCCP chunk");
 		return new ByteArrayInputStream(clean.toByteArray());
 	}
@@ -91,32 +84,20 @@ helper = r'''
 '''
 once(helper_marker, helper + helper_marker, "helper insertion")
 
-# Resource-name constructor.
+# Resource-name constructor has one extra indentation level and is unique.
 once(
     "\t\t\ttry { image = ImageIO.read(stream); } \n",
     "\t\t\ttry { image = ImageIO.read(rg35xxPngIccpCompat(stream)); } \n",
     "resource ImageIO boundary")
 
-# InputStream constructor.
-once(
-    "\t\ttry { image = ImageIO.read(stream); } \n",
-    "\t\ttry { image = ImageIO.read(rg35xxPngIccpCompat(stream)); } \n",
-    "stream ImageIO boundary")
-
-# Byte-array constructor uses the same source-level boundary.
-once(
-    "\t\tInputStream stream = new ByteArrayInputStream(imageData, imageOffset, imageLength);\n",
-    "\t\tInputStream stream = new ByteArrayInputStream(imageData, imageOffset, imageLength);\n",
-    "byte stream declaration")
-# There are now two remaining ImageIO.read(stream) occurrences? Require exactly
-# one in the byte-array constructor and patch it fail-closed.
-remaining = s.count("\t\ttry { image = ImageIO.read(stream); } \n")
-if remaining != 1:
-    raise SystemExit("VC6 PNG ICCP FAIL: byte-array ImageIO boundary count=%d" % remaining)
-s = s.replace(
-    "\t\ttry { image = ImageIO.read(stream); } \n",
-    "\t\ttry { image = ImageIO.read(rg35xxPngIccpCompat(stream)); } \n",
-    1)
+# The InputStream and byte-array constructors intentionally have the same
+# two-tab source line. Upstream pin 13ec186 must contain exactly two of them.
+plain = "\t\ttry { image = ImageIO.read(stream); } \n"
+guarded = "\t\ttry { image = ImageIO.read(rg35xxPngIccpCompat(stream)); } \n"
+remaining = s.count(plain)
+if remaining != 2:
+    raise SystemExit("VC6 PNG ICCP FAIL: two-tab ImageIO boundary count=%d" % remaining)
+s = s.replace(plain, guarded)
 
 required = (
     "rg35xxPngIccpCompat",
@@ -130,8 +111,9 @@ for token in required:
 
 if s.count("ImageIO.read(rg35xxPngIccpCompat(stream))") != 3:
     raise SystemExit("VC6 PNG ICCP FAIL: not all three image decode boundaries are guarded")
+if "ImageIO.read(stream)" in s:
+    raise SystemExit("VC6 PNG ICCP FAIL: unguarded ImageIO.read(stream) remains")
 
-# Explicitly reject older experiments and GNU Classpath mutation markers.
 for forbidden in (
     "rg35xxStripPngICCP",
     "RG35XX-PNG-COMPAT-V2",
