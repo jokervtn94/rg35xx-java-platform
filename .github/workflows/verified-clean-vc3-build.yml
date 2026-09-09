@@ -6,7 +6,11 @@ on:
     paths:
       - '.github/workflows/verified-clean-vc3-build.yml'
       - 'docs/VERIFIED-CLEAN-PLATFORM-V1.md'
+      - 'docs/VERIFIED-CLEAN-PLATFORM-MANIFEST-v1.md'
+      - 'docs/VERIFIED-FIX-AND-CLASS-INVENTORY-v1.md'
+      - 'docs/checkpoints/B3-JAVA-RUNTIME.md'
       - 'scripts/vc0_vc3_assemble.sh'
+      - 'scripts/b3_verified_runtime_gate.sh'
       - 'scripts/g1_apply_java_transport.py'
       - 'scripts/g1_apply_rg35xx_media_boot.py'
       - 'scripts/g1_apply_native_overlay.py'
@@ -49,61 +53,61 @@ jobs:
           set -euo pipefail
           VC_UPSTREAM="$GITHUB_WORKSPACE/upstream" VC_ASSEMBLY="$RUNNER_TEMP/vc3" sh scripts/vc0_vc3_assemble.sh
           echo "VC=$RUNNER_TEMP/vc3" >> "$GITHUB_ENV"
-      - name: Build Java runtime and ARM core
+      - name: Build Java runtime
         run: |
           set -euo pipefail
           cd "$VC" && ant
+      - name: B3 verified Java runtime gate
+        run: |
+          set -euo pipefail
+          B3_ASSEMBLY="$VC" B3_EVIDENCE="$RUNNER_TEMP/b3-evidence" sh scripts/b3_verified_runtime_gate.sh
+      - name: Build ARM core
+        run: |
+          set -euo pipefail
           cd "$VC/src/libretro"
           make clean
           make platform=unix \
             CC='/opt/miyoo/bin/arm-miyoo-linux-uclibcgnueabi-gcc -march=armv5te -mtune=arm926ej-s -mfloat-abi=soft' \
             CXX='/opt/miyoo/bin/arm-miyoo-linux-uclibcgnueabi-g++ -march=armv5te -mtune=arm926ej-s -mfloat-abi=soft' \
             LDFLAGS='-lm -lpthread'
-      - name: Strict clean-baseline gate
+      - name: Strict clean-baseline core gate
         run: |
           set -euo pipefail
           CORE="$VC/src/libretro/freej2me_plus_libretro.so"
-          JAR="$VC/build/freej2me_plus-lr.jar"
-          SRC="$VC/src/libretro/freej2me_libretro.c"
           IMG="$VC/src/org/recompile/mobile/PlatformImage.java"
           readelf -h "$CORE" | tee /tmp/elf.txt
           grep -q 'Class:.*ELF32' /tmp/elf.txt
           grep -q 'Machine:.*ARM' /tmp/elf.txt
           grep -q 'Version5 EABI' /tmp/elf.txt
           grep -q 'soft-float ABI' /tmp/elf.txt
-          javap -verbose "$VC/build/classes/org/recompile/freej2me/Libretro.class" | grep 'major version: 50'
           /opt/miyoo/bin/arm-miyoo-linux-uclibcgnueabi-nm "$CORE" | grep rg35xx_golden_video_present
           /opt/miyoo/bin/arm-miyoo-linux-uclibcgnueabi-nm "$CORE" | grep rg35xx_golden_video_start
-          jar tf "$JAR" | grep 'RG35XXGoldenFrameTransport.class'
-          ! grep -R -Fq 'RG35XX-PNG-COMPAT' "$VC/src"
-          ! grep -R -Fq 'rg35xxStripPngICCP' "$VC/src"
-          ! grep -R -Fq 'RG35XX-CV:' "$VC/src"
-          ! grep -R -Fq 'rg35xx_cv_launch_java' "$VC/src"
           ! grep -Fq 'rg35xx' "$IMG"
-          grep -Fq 'RG35XX-MEDIA-BOOT: eager prepare SKIPPED; lazy media enabled' "$VC/src/org/recompile/mobile/MobilePlatform.java"
           strings "$CORE" | grep -F '/mnt/mmc/CFW/java/bin/jamvm'
           strings "$CORE" | grep -F '/mnt/mmc/freej2me-java-error.log'
       - name: Stage VC3 checkpoint evidence
         run: |
           set -euo pipefail
           OUT="$RUNNER_TEMP/vc3-checkpoint"
-          mkdir -p "$OUT/BIOS" "$OUT/CFW/retroarch/.retroarch/cores" "$OUT/evidence"
+          mkdir -p "$OUT/BIOS" "$OUT/CFW/retroarch/.retroarch/cores" "$OUT/evidence" "$OUT/b3"
           cp "$VC/build/freej2me_plus-lr.jar" "$OUT/BIOS/freej2me-lr.jar"
           cp "$VC/src/libretro/freej2me_plus_libretro.so" "$OUT/CFW/retroarch/.retroarch/cores/freej2me_plus_libretro.so"
           cp "$VC/src/org/recompile/mobile/MobilePlatform.java" "$OUT/evidence/MobilePlatform.java"
           cp "$VC/src/org/recompile/freej2me/Libretro.java" "$OUT/evidence/Libretro.java"
           cp "$VC/src/org/recompile/freej2me/RG35XXGoldenFrameTransport.java" "$OUT/evidence/RG35XXGoldenFrameTransport.java"
           cp "$VC/src/libretro/rg35xx/golden/rg35xx_golden_video.c" "$OUT/evidence/rg35xx_golden_video.c"
+          cp -a "$RUNNER_TEMP/b3-evidence/." "$OUT/b3/"
           printf '%s\n' \
             'RG35XX VERIFIED CLEAN VC3 CHECKPOINT' \
             'STATUS=BUILD-PENDING-DEVICE-ACCEPTANCE' \
             "FREEJ2ME_PIN=$FREEJ2ME_PIN" \
             "JAMVM_L_REQUIRED_SHA256=$JAMVM_L_SHA256" \
+            'B3_RUNTIME_GATE=REQUIRED' \
             'PNG_COMPAT=NOT_ADMITTED' \
             'CV_CW_RESOLUTION=NOT_ADMITTED' \
             'FONT_REWORK=NOT_ADMITTED' \
             'AUDIO_REWORK=NOT_ADMITTED' > "$OUT/STATUS.txt"
-          (cd "$OUT" && find . -type f -print0 | sort -z | xargs -0 sha256sum) > "$OUT/SHA256SUMS.txt"
+          (cd "$OUT" && find . -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum) > "$OUT/SHA256SUMS.txt"
       - uses: actions/upload-artifact@v4
         with:
           name: rg35xx-verified-clean-vc3-checkpoint
