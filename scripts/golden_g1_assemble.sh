@@ -24,9 +24,8 @@ cp "$ROOT/src/org/recompile/freej2me/RG35XXGoldenFrameTransport.java" \
 python3 "$ROOT/scripts/g1_apply_java_transport.py" \
    "$GOLDEN_ASSEMBLY/src/org/recompile/freej2me/Libretro.java"
 
-# RG35XX device diagnostics proved MobilePlatform.runJar() could block forever
-# in eager Java Sound/MIDI prewarm before loader.start(). MIDlet startup must be
-# released first; media prewarm is opportunistic and must never gate video/IPC.
+# RG35XX device diagnostics proved that boot-time Java Sound/MIDI prewarm is
+# unsafe even when moved off-thread.  Keep runJar() lazy-media only.
 python3 "$ROOT/scripts/g1_apply_rg35xx_media_boot.py" \
    "$GOLDEN_ASSEMBLY/src/org/recompile/mobile/MobilePlatform.java"
 
@@ -39,9 +38,7 @@ cp "$ROOT/native/golden/rg35xx_golden_video.c" \
 python3 "$ROOT/scripts/g1_apply_native_overlay.py" \
    "$GOLDEN_ASSEMBLY/src/libretro/freej2me_libretro.c"
 
-# CV: boot Java only after retro_load_game() knows the exact JAR path.  This is
-# the lifecycle fix for non-240x320 games; do not replace it with Java-side
-# resizeLCD() patches after MobilePlatform has already been constructed.
+# CV: boot Java only after retro_load_game() knows the exact JAR path.
 python3 "$ROOT/scripts/cv_apply_boot_resolution.py" \
    "$GOLDEN_ASSEMBLY/src/libretro/freej2me_libretro.c"
 
@@ -72,17 +69,22 @@ if grep -Fq 'System.out.write(frameBuffer' "$JAVA"; then
     fail "synchronous Java frame write survived"
 fi
 
-# RG35XX boot/media contract: eager ALSA/MIDI warmup must never precede MIDlet start.
-grep -Fq 'RG35XX-MediaWarmup' "$MOBILE_PLATFORM" || fail "RG35XX async media warmup missing"
-grep -Fq 'RG35XX-MEDIA-BOOT: async prepare ENTER' "$MOBILE_PLATFORM" || fail "RG35XX media boot marker missing"
+# RG35XX boot/media contract: no eager or asynchronous warmup in runJar().
+grep -Fq 'RG35XX-MEDIA-BOOT: eager prepare SKIPPED; lazy media enabled' "$MOBILE_PLATFORM" || fail "lazy media boot marker missing"
 python3 - "$MOBILE_PLATFORM" <<'PY'
 import pathlib, sys
 s = pathlib.Path(sys.argv[1]).read_text(encoding='utf-8')
 r = s.index('public void runJar()')
-loader = s.index('loader.start();', r)
-prepare = s.index('Manager.prepareMediaEngine();', r)
-if not loader < prepare:
-    raise SystemExit('G1 ASSEMBLY FAIL: prepareMediaEngine still gates loader.start')
+end = s.find('\n\tpublic ', r + 1)
+if end < 0:
+    end = len(s)
+body = s[r:end]
+if 'loader.start();' not in body:
+    raise SystemExit('G1 ASSEMBLY FAIL: loader.start missing')
+if 'prepareMediaEngine();' in body:
+    raise SystemExit('G1 ASSEMBLY FAIL: boot-time prepareMediaEngine survived')
+if 'RG35XX-MediaWarmup' in body:
+    raise SystemExit('G1 ASSEMBLY FAIL: async media warmup survived')
 PY
 
 # Device-proven Golden runtime contract.
