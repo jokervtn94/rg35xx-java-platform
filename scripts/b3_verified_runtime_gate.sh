@@ -2,9 +2,7 @@
 set -eu
 
 # B3 — Verified Clean Java Runtime gate.
-# This gate deliberately checks only admitted Java-runtime behavior.
-# It does not admit PNG ICC, CV/CW resolution, font rework, audio rework,
-# lifecycle helpers, or any other compatibility experiment.
+# POSIX /bin/sh by design: GitHub and recovery builders must not depend on bash.
 
 : "${B3_ASSEMBLY:?set B3_ASSEMBLY to assembled FreeJ2ME tree}"
 
@@ -26,11 +24,19 @@ IMAGE="$ROOT/src/org/recompile/mobile/PlatformImage.java"
 [ -f "$TRANSPORT" ] || fail "Golden frame transport missing"
 [ -f "$IMAGE" ] || fail "PlatformImage.java missing"
 
-# Java 6 compatibility: every emitted class must remain major 50.
-find "$CLASSES" -name '*.class' -print0 | while IFS= read -r -d '' c; do
+# Java 6 compatibility. Avoid non-POSIX read -d.
+class_count=0
+bad_class=""
+for c in $(find "$CLASSES" -type f -name '*.class' -print | LC_ALL=C sort); do
+  class_count=$((class_count + 1))
   major=$(od -An -t u1 -j 7 -N 1 "$c" | tr -d ' ')
-  [ "$major" = "50" ] || fail "class major != 50: $c (major=$major)"
+  if [ "$major" != "50" ]; then
+    bad_class="$c:$major"
+    break
+  fi
 done
+[ "$class_count" -gt 0 ] || fail "no compiled classes found"
+[ -z "$bad_class" ] || fail "class major != 50: $bad_class"
 
 # Admitted lazy-media boot semantics.
 grep -Fq 'RG35XX-MEDIA-BOOT: eager prepare SKIPPED; lazy media enabled' "$MOBILE" || fail "lazy-media marker missing"
@@ -52,10 +58,11 @@ grep -Fq 'RG35XXGoldenFrameTransport' "$LIBRETRO" || fail "Libretro transport in
 grep -Fq 'rg35xxFrames.requestFrame' "$LIBRETRO" || fail "async frame request missing"
 grep -Fq 'RG35XX-FrameWorker' "$TRANSPORT" || fail "FrameWorker marker missing"
 grep -Fq 'setDaemon(false)' "$TRANSPORT" || fail "FrameWorker must remain non-daemon"
-grep -Fq 'writeShort' "$TRANSPORT" || fail "RGB565 framed transport writer missing"
+grep -Fq 'ipcOut.write(header, 0, FRAME_HEADER_BYTES);' "$TRANSPORT" || fail "framed header write missing"
+grep -Fq 'ipcOut.write(rgb565, 0, pixels * 2);' "$TRANSPORT" || fail "RGB565 payload write missing"
+grep -Fq 'ipcOut.flush();' "$TRANSPORT" || fail "IPC flush missing"
 jar tf "$JAR" | grep -Fq 'org/recompile/freej2me/RG35XXGoldenFrameTransport.class' || fail "transport class absent from JAR"
 
-# Foundation exclusions: fail closed if any unadmitted experiment returns.
 for bad in \
   'RG35XX-PNG-COMPAT' \
   'rg35xxStripPngICCP' \
@@ -69,12 +76,10 @@ do
   fi
 done
 
-# PlatformImage must be pristine with respect to RG35XX compatibility work.
 if grep -Fq 'rg35xx' "$IMAGE"; then
   fail "PlatformImage contains pre-admission RG35XX compatibility code"
 fi
 
-# Build evidence, intentionally excluding the manifest itself.
 OUT="${B3_EVIDENCE:-$ROOT/b3-evidence}"
 rm -rf "$OUT"
 mkdir -p "$OUT"
@@ -86,12 +91,14 @@ printf '%s\n' \
   'RG35XX VERIFIED CLEAN B3 JAVA RUNTIME' \
   'STATUS=BUILD-GATE-PASS-DEVICE-ACCEPTANCE-PENDING' \
   'FREEJ2ME_PIN=13ec186903087156c145268f8706eecfaf9f1e50' \
+  "CLASS_COUNT=$class_count" \
+  'JAVA_CLASS_MAJOR=50' \
   'LAZY_MEDIA=ADMITTED' \
   'GOLDEN_ASYNC_FRAME_TRANSPORT=ADMITTED' \
   'PNG_ICC_COMPAT=NOT_ADMITTED' \
   'CV_CW_RESOLUTION=NOT_ADMITTED' \
   'FONT_REWORK=NOT_ADMITTED' \
   'AUDIO_REWORK=NOT_ADMITTED' > "$OUT/STATUS.txt"
-( cd "$OUT" && find . -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum ) > "$OUT/SHA256SUMS.txt"
+( cd "$OUT" && find . -type f ! -name SHA256SUMS.txt -print0 | LC_ALL=C sort -z | xargs -0 sha256sum ) > "$OUT/SHA256SUMS.txt"
 
-pass "verified clean Java runtime gate; evidence=$OUT"
+pass "verified clean Java runtime gate; classes=$class_count evidence=$OUT"
