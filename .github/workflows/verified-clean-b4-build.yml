@@ -26,7 +26,8 @@ jobs:
       FREEJ2ME_PIN: 13ec186903087156c145268f8706eecfaf9f1e50
       JAMVM_L_SHA256: eea1b97cebfaca67b69ed365e966d80cdac22d8ff245c7a556137cfb2898ea34
       GLIBJ_SHA256: d7abe888d2980329434c30f18c0eec124be1f02284bf9ed28e88d7242a1f2bea
-      B3_RUNTIME_SHA256: d83febe95e08ebd4bb7e03ffb76359d8ea119bcacffdc6ec0c0e285591695529
+      B3_REFERENCE_JAR_SHA256: d83febe95e08ebd4bb7e03ffb76359d8ea119bcacffdc6ec0c0e285591695529
+      B3_RUNTIME_CONTENT_SHA256: 52e809ecf5d23f4c2c0989075270680248299bbc02e7cb8ca665bee002942783
     steps:
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4
@@ -36,7 +37,7 @@ jobs:
           path: upstream
       - run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends ant build-essential file unzip
+          sudo apt-get install -y --no-install-recommends ant build-essential file unzip python3
       - uses: actions/setup-java@v4
         with: {distribution: temurin, java-version: '8'}
       - name: Materialize pinned ARM uClibc toolchain
@@ -48,22 +49,37 @@ jobs:
           sudo rm -rf /opt/miyoo
           sudo docker cp "$cid:/opt/miyoo" /opt/miyoo
           sudo chown -R "$(id -u):$(id -g)" /opt/miyoo
-          test "$(/opt/miyoo/bin/arm-miyoo-linux-uclibcgnueabi-gcc -dumpmachine)" = arm-miyoo-linux-uclibgnueabi || true
           test "$(/opt/miyoo/bin/arm-miyoo-linux-uclibcgnueabi-gcc -dumpmachine)" = arm-miyoo-linux-uclibcgnueabi
       - name: Assemble B4 from verified clean foundation
         run: |
           set -euo pipefail
           VC_UPSTREAM="$GITHUB_WORKSPACE/upstream" B4_ASSEMBLY="$RUNNER_TEMP/b4" sh scripts/b4_verified_core_assemble.sh
           echo "B4=$RUNNER_TEMP/b4" >> "$GITHUB_ENV"
-      - name: Build and lock B3 Java runtime
+      - name: Build and lock B3 Java runtime content
         run: |
           set -euo pipefail
           cd "$B4" && ant
           B3_ASSEMBLY="$B4" B3_EVIDENCE="$RUNNER_TEMP/b3-evidence" sh "$GITHUB_WORKSPACE/scripts/b3_verified_runtime_gate.sh"
           JAR="$B4/build/freej2me_plus-lr.jar"
-          actual=$(sha256sum "$JAR" | awk '{print $1}')
-          echo "B4 runtime SHA=$actual"
-          test "$actual" = "$B3_RUNTIME_SHA256"
+          FILE_SHA=$(sha256sum "$JAR" | awk '{print $1}')
+          CONTENT_SHA=$(python3 - "$JAR" <<'PY'
+          import hashlib, sys, zipfile
+          jar=sys.argv[1]
+          h=hashlib.sha256()
+          with zipfile.ZipFile(jar) as z:
+              for name in sorted(z.namelist()):
+                  if name.endswith('/'):
+                      continue
+                  h.update(name.encode('utf-8'))
+                  h.update(b'\0')
+                  h.update(hashlib.sha256(z.read(name)).digest())
+          print(h.hexdigest())
+          PY
+          )
+          echo "B4 runtime file SHA=$FILE_SHA"
+          echo "B4 runtime content SHA=$CONTENT_SHA"
+          test "$CONTENT_SHA" = "$B3_RUNTIME_CONTENT_SHA256"
+          echo "B4_RUNTIME_FILE_SHA256=$FILE_SHA" >> "$GITHUB_ENV"
       - name: Build B4 ARM core
         run: |
           set -euo pipefail
@@ -77,7 +93,6 @@ jobs:
         run: |
           set -euo pipefail
           CORE="$B4/src/libretro/freej2me_plus_libretro.so"
-          SRC="$B4/src/libretro/freej2me_libretro.c"
           readelf -h "$CORE" | tee /tmp/elf.txt
           grep -q 'Class:.*ELF32' /tmp/elf.txt
           grep -q 'Machine:.*ARM' /tmp/elf.txt
@@ -111,7 +126,9 @@ jobs:
             "FREEJ2ME_PIN=$FREEJ2ME_PIN" \
             "JAMVM_L_REQUIRED_SHA256=$JAMVM_L_SHA256" \
             "GLIBJ_REQUIRED_SHA256=$GLIBJ_SHA256" \
-            "B3_RUNTIME_SHA256=$B3_RUNTIME_SHA256" \
+            "B3_REFERENCE_JAR_SHA256=$B3_REFERENCE_JAR_SHA256" \
+            "B3_RUNTIME_CONTENT_SHA256=$B3_RUNTIME_CONTENT_SHA256" \
+            "B4_RUNTIME_FILE_SHA256=$B4_RUNTIME_FILE_SHA256" \
             "B4_CORE_SHA256=$CORE_SHA" \
             'EARLY_NATIVE_LOG=/mnt/mmc/freej2me-vc3-early.log' \
             'PNG_COMPAT=NOT_ADMITTED' \
