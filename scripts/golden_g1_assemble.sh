@@ -25,9 +25,15 @@ python3 "$ROOT/scripts/g1_apply_java_transport.py" \
    "$GOLDEN_ASSEMBLY/src/org/recompile/freej2me/Libretro.java"
 
 # RG35XX device diagnostics proved that boot-time Java Sound/MIDI prewarm is
-# unsafe even when moved off-thread.  Keep runJar() lazy-media only.
+# unsafe even when moved off-thread. Keep runJar() lazy-media only.
 python3 "$ROOT/scripts/g1_apply_rg35xx_media_boot.py" \
    "$GOLDEN_ASSEMBLY/src/org/recompile/mobile/MobilePlatform.java"
+
+# Device evidence after the media fix reaches MIDlet execution and then fails
+# inside GNU Classpath ImageIO on PNG ICC profile v4. Keep glibj immutable and
+# implement compatibility at the J2ME PlatformImage source boundary instead.
+python3 "$ROOT/scripts/g1_apply_png_iccp_compat.py" \
+   "$GOLDEN_ASSEMBLY/src/org/recompile/mobile/PlatformImage.java"
 
 # Native receiver + Smart-Fit presenter reconstructed from the Golden core.
 mkdir -p "$GOLDEN_ASSEMBLY/src/libretro/rg35xx/golden"
@@ -54,6 +60,7 @@ EOF
 CORE="$GOLDEN_ASSEMBLY/src/libretro/freej2me_libretro.c"
 JAVA="$GOLDEN_ASSEMBLY/src/org/recompile/freej2me/Libretro.java"
 MOBILE_PLATFORM="$GOLDEN_ASSEMBLY/src/org/recompile/mobile/MobilePlatform.java"
+PLATFORM_IMAGE="$GOLDEN_ASSEMBLY/src/org/recompile/mobile/PlatformImage.java"
 
 # Video contract.
 grep -Fq 'RETRO_PIXEL_FORMAT_RGB565' "$CORE" || fail "RGB565 frontend contract missing"
@@ -62,30 +69,26 @@ grep -Fq 'rg35xx_golden_video_present(' "$CORE" || fail "present owner missing"
 grep -Fq 'RG35XXGoldenFrameTransport' "$JAVA" || fail "Java frame worker missing"
 grep -Fq 'rg35xxFrames.requestFrame' "$JAVA" || fail "async frame request missing"
 grep -Fq 'rg35xxFrames.sendControlFrame' "$JAVA" || fail "restart control frame missing"
-if grep -Fq 'status = read_from_pipe(pRead[0], frameHeader, 15)' "$CORE"; then
-    fail "synchronous frame-header read survived"
-fi
-if grep -Fq 'System.out.write(frameBuffer' "$JAVA"; then
-    fail "synchronous Java frame write survived"
-fi
+if grep -Fq 'status = read_from_pipe(pRead[0], frameHeader, 15)' "$CORE"; then fail "synchronous frame-header read survived"; fi
+if grep -Fq 'System.out.write(frameBuffer' "$JAVA"; then fail "synchronous Java frame write survived"; fi
 
-# RG35XX boot/media contract: no eager or asynchronous warmup in runJar().
+# RG35XX boot/media contract.
 grep -Fq 'RG35XX-MEDIA-BOOT: eager prepare SKIPPED; lazy media enabled' "$MOBILE_PLATFORM" || fail "lazy media boot marker missing"
 python3 - "$MOBILE_PLATFORM" <<'PY'
 import pathlib, sys
 s = pathlib.Path(sys.argv[1]).read_text(encoding='utf-8')
 r = s.index('public void runJar()')
 end = s.find('\n\tpublic ', r + 1)
-if end < 0:
-    end = len(s)
+if end < 0: end = len(s)
 body = s[r:end]
-if 'loader.start();' not in body:
-    raise SystemExit('G1 ASSEMBLY FAIL: loader.start missing')
-if 'prepareMediaEngine();' in body:
-    raise SystemExit('G1 ASSEMBLY FAIL: boot-time prepareMediaEngine survived')
-if 'RG35XX-MediaWarmup' in body:
-    raise SystemExit('G1 ASSEMBLY FAIL: async media warmup survived')
+if 'loader.start();' not in body: raise SystemExit('G1 ASSEMBLY FAIL: loader.start missing')
+if 'prepareMediaEngine();' in body: raise SystemExit('G1 ASSEMBLY FAIL: boot-time prepareMediaEngine survived')
+if 'RG35XX-MediaWarmup' in body: raise SystemExit('G1 ASSEMBLY FAIL: async media warmup survived')
 PY
+
+# PNG compatibility contract: source-level only; glibj remains untouched.
+grep -Fq 'rg35xxStripPngICCP' "$PLATFORM_IMAGE" || fail "PNG iCCP compatibility missing"
+grep -Fq 'RG35XX-PNG-COMPAT: stripped iCCP chunk' "$PLATFORM_IMAGE" || fail "PNG compatibility marker missing"
 
 # Device-proven Golden runtime contract.
 grep -Fq '#define NUM_ARGUMENTS 10' "$CORE" || fail "Golden argv count missing"
