@@ -9,6 +9,7 @@ on:
       - 'scripts/vc7_golden_font_preflight.sh'
       - 'scripts/vc7_extract_golden_font.py'
       - 'scripts/vc7_font_assemble.sh'
+      - 'scripts/installer/vc7_materialize_and_install.ps1'
       - 'scripts/vc6_png_iccp_assemble.sh'
       - 'scripts/vc6_apply_png_iccp_compat.py'
       - 'scripts/b4_verified_core_assemble.sh'
@@ -94,6 +95,7 @@ jobs:
           PG="$VC7/src/org/recompile/mobile/PlatformGraphics.java"
           PI="$VC7/src/org/recompile/mobile/PlatformImage.java"
           CLASS="$VC7/build/classes/org/recompile/mobile/PlatformGraphics.class"
+          JAR="$VC7/build/freej2me_plus-lr.jar"
           grep -Fq 'RG35XX-VC7-FONT: Golden Unicode bitmap renderer' "$PG"
           grep -Fq 'rg35xxEnsureBitmapFont' "$PG"
           grep -Fq 'rg35xxGlyphIndex' "$PG"
@@ -108,16 +110,45 @@ jobs:
           grep -Fq 'RG35XX-PNG-ICCP: stripped ancillary iCCP chunk' "$PI"
           strings "$CLASS" | grep -F 'RG35XX-VC7-FONT: Golden Unicode bitmap renderer'
           strings "$CLASS" | grep -F 'rg35xx-font.bin'
+          ! jar tf "$JAR" | grep -Fx 'org/recompile/mobile/rg35xx-font.bin'
           ! grep -R -Fq 'RG35XXMetricUnicodeText' "$VC7/src"
           ! grep -R -Fq 'RG35XXBitmapText' "$VC7/src"
           ! grep -R -Fq 'RG35XX-CV:' "$VC7/src"
           ! grep -R -Fq 'RG35XX-MediaWarmup' "$VC7/src"
+
+      - name: Stage materialization kit
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/vc7-materialization-kit"
+          mkdir -p "$OUT"
+          cp "$VC7/build/freej2me_plus-lr.jar" "$OUT/freej2me-lr-vc7-template.jar"
+          cp scripts/installer/vc7_materialize_and_install.ps1 "$OUT/VC7-MATERIALIZE-AND-INSTALL.ps1"
+          TEMPLATE_SHA=$(sha256sum "$OUT/freej2me-lr-vc7-template.jar" | awk '{print $1}')
+          printf '%s\n' \
+            'RG35XX VERIFIED CLEAN VC7 MATERIALIZATION KIT' \
+            'STATUS=SOURCE-GATE-PASS-GOLDEN-RESOURCE-INJECTION-REQUIRED' \
+            "FREEJ2ME_PIN=$FREEJ2ME_PIN" \
+            "VC7_TEMPLATE_SHA256=$TEMPLATE_SHA" \
+            'GOLDEN_RUNTIME_REQUIRED_SHA256=de510e978ee0b601ac25c496197197676f86725662c434316825e00a86b497b8' \
+            'GOLDEN_FONT_REQUIRED_SHA256=7d835faaed37ae93d2bb783604453ad8d13d994f1c97074182ec040c6a29b99c' \
+            'GOLDEN_FONT_REQUIRED_SIZE=727008' \
+            'VC6_CORE_REQUIRED_SHA256=fc574021ad34b0466cd7ffe4f2eb58438eb2104c47cc503405d9f8722c02d062' \
+            'JAMVM_L_REQUIRED_SHA256=eea1b97cebfaca67b69ed365e966d80cdac22d8ff245c7a556137cfb2898ea34' \
+            'GLIBJ_REQUIRED_SHA256=d7abe888d2980329434c30f18c0eec124be1f02284bf9ed28e88d7242a1f2bea' \
+            'DEVICE_TEST=PENDING' > "$OUT/STATUS.txt"
+          (cd "$OUT" && sha256sum freej2me-lr-vc7-template.jar VC7-MATERIALIZE-AND-INSTALL.ps1 STATUS.txt) > "$OUT/SHA256SUMS.txt"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rg35xx-vc7-golden-font-materialization-kit
+          path: ${{ runner.temp }}/vc7-materialization-kit
+          retention-days: 30
 
       - name: Source-gate status
         run: |
           printf '%s\n' \
             'VC7_SOURCE_GATE=PASS' \
             'JAVA_MAJOR=50' \
-            'GOLDEN_RESOURCE=NOT_STAGED_IN_SOURCE_GATE' \
-            'PRODUCTION_BUILD=REQUIRES_VERIFIED_GOLDEN_RUNTIME' \
+            'MATERIALIZATION_KIT=UPLOADED' \
+            'GOLDEN_RESOURCE=LOCAL_FAIL_CLOSED_INJECTION' \
             'DEVICE_TEST=PENDING'
