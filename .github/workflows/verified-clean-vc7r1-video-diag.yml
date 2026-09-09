@@ -1,0 +1,146 @@
+name: Verified Clean VC7R1 Video Diagnostic Build
+
+on:
+  push:
+    branches: [ verified-clean-platform-v1 ]
+    paths:
+      - '.github/workflows/verified-clean-vc7r1-video-diag.yml'
+      - 'scripts/vc7r1_apply_video_diag.py'
+      - 'scripts/vc7r_reconstruct_font.py'
+      - 'scripts/vc7_apply_golden_font.py'
+      - 'scripts/vc6_png_iccp_assemble.sh'
+      - 'scripts/vc6_apply_png_iccp_compat.py'
+      - 'scripts/vc0_vc3_assemble.sh'
+      - 'scripts/g1_apply_java_transport.py'
+      - 'scripts/g1_apply_rg35xx_media_boot.py'
+      - 'src/org/recompile/freej2me/RG35XXGoldenFrameTransport.java'
+  workflow_dispatch:
+
+jobs:
+  vc7r1-video-diag:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      FREEJ2ME_PIN: 13ec186903087156c145268f8706eecfaf9f1e50
+      LATIN_SHA256: ae7b7855e115a5966d8b1b3f80f254ccc117ec86f9965e202ee2940453837280
+      CJK_SHA256: b76b0433203017ca80401b2ee0dd69350349871c4b19d504c34dbdd80541690a
+      VC7R_FONT_SHA256: 20c2e59d063282d4b6a0d612dea3cba2c0b5bd7fafe85a05729951bd38902db9
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: TASEmulators/freej2me-plus
+          ref: 13ec186903087156c145268f8706eecfaf9f1e50
+          path: upstream
+      - name: Install pinned dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ant python3 python3-pil python3-fonttools fonts-dejavu-core fonts-noto-cjk
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: '8'}
+
+      - name: Resolve and verify font inputs
+        id: fonts
+        run: |
+          set -euo pipefail
+          LATIN='/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
+          CJK="$(fc-match -f '%{file}\n' 'Noto Sans CJK JP' | head -n1)"
+          test "$(sha256sum "$LATIN" | awk '{print $1}')" = "$LATIN_SHA256"
+          test "$(sha256sum "$CJK" | awk '{print $1}')" = "$CJK_SHA256"
+          echo "latin=$LATIN" >> "$GITHUB_OUTPUT"
+          echo "cjk=$CJK" >> "$GITHUB_OUTPUT"
+
+      - name: Assemble VC6 foundation
+        run: |
+          set -euo pipefail
+          VC_UPSTREAM="$GITHUB_WORKSPACE/upstream" VC6_ASSEMBLY="$RUNNER_TEMP/vc7r1" sh scripts/vc6_png_iccp_assemble.sh
+          echo "VC7R1=$RUNNER_TEMP/vc7r1" >> "$GITHUB_ENV"
+
+      - name: Apply VC7 safe text raster
+        run: |
+          set -euo pipefail
+          python3 scripts/vc7_apply_golden_font.py "$VC7R1/src/org/recompile/mobile/PlatformGraphics.java"
+
+      - name: Stage reconstructed font
+        run: |
+          set -euo pipefail
+          mkdir -p "$VC7R1/resources/org/recompile/mobile" "$RUNNER_TEMP/vc7r1-font"
+          python3 scripts/vc7r_reconstruct_font.py \
+            --font '${{ steps.fonts.outputs.latin }}' \
+            --font '${{ steps.fonts.outputs.cjk }}#0' \
+            --out "$RUNNER_TEMP/vc7r1-font/rg35xx-font.bin" \
+            --manifest "$RUNNER_TEMP/vc7r1-font/manifest.json"
+          test "$(stat -c%s "$RUNNER_TEMP/vc7r1-font/rg35xx-font.bin")" = 727008
+          test "$(sha256sum "$RUNNER_TEMP/vc7r1-font/rg35xx-font.bin" | awk '{print $1}')" = "$VC7R_FONT_SHA256"
+          cp "$RUNNER_TEMP/vc7r1-font/rg35xx-font.bin" "$VC7R1/resources/org/recompile/mobile/rg35xx-font.bin"
+
+      - name: Apply diagnostic-only color and size overlay
+        run: |
+          set -euo pipefail
+          python3 scripts/vc7r1_apply_video_diag.py \
+            "$VC7R1/src/org/recompile/freej2me/Libretro.java" \
+            "$VC7R1/src/org/recompile/freej2me/RG35XXGoldenFrameTransport.java"
+          grep -Fq 'RG35XX-VC7R1-CFG:' "$VC7R1/src/org/recompile/freej2me/Libretro.java"
+          grep -Fq 'RG35XX-VC7R1-SIZE:' "$VC7R1/src/org/recompile/freej2me/Libretro.java"
+          grep -Fq 'RG35XX-VC7R1-COLOR:' "$VC7R1/src/org/recompile/freej2me/RG35XXGoldenFrameTransport.java"
+
+      - name: Compile Java 6 diagnostic runtime
+        run: |
+          set -euo pipefail
+          cd "$VC7R1"
+          ant
+          python3 - "$VC7R1/build/classes" <<'PY'
+          import os, struct, sys
+          root=sys.argv[1]
+          count=0
+          for base, _, files in os.walk(root):
+              for name in files:
+                  if not name.endswith('.class'): continue
+                  count += 1
+                  p=os.path.join(base,name)
+                  h=open(p,'rb').read(8)
+                  if len(h)!=8 or h[:4]!=b'\xca\xfe\xba\xbe': raise SystemExit('bad class '+p)
+                  if struct.unpack('>H',h[6:8])[0] != 50: raise SystemExit('major != 50 '+p)
+          if not count: raise SystemExit('no classes')
+          print('VC7R1_CLASS_COUNT=%d' % count)
+          print('VC7R1_JAVA_MAJOR=50')
+          PY
+
+      - name: Contract gates
+        run: |
+          set -euo pipefail
+          JAR="$VC7R1/build/freej2me_plus-lr.jar"
+          jar tf "$JAR" | grep -Fx 'org/recompile/mobile/rg35xx-font.bin'
+          grep -Fq 'RG35XX-PNG-ICCP: stripped ancillary iCCP chunk' "$VC7R1/src/org/recompile/mobile/PlatformImage.java"
+          grep -Fq 'rg35xxDrawSafeText(str, x, y - ascent, anchor);' "$VC7R1/src/org/recompile/mobile/PlatformGraphics.java"
+          ! grep -Fq 'gc.drawString(str, x, y);' "$VC7R1/src/org/recompile/mobile/PlatformGraphics.java"
+          ! grep -R -Fq 'RG35XX-MediaWarmup' "$VC7R1/src"
+          # This checkpoint must remain diagnostic-only.
+          ! grep -Fq 'backlightcolor", "Disabled"' scripts/vc7r1_apply_video_diag.py
+          ! grep -Fq 'RETRO_PIXEL_FORMAT_' scripts/vc7r1_apply_video_diag.py
+
+      - name: Package diagnostic artifact
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/vc7r1-video-diag"
+          mkdir -p "$OUT"
+          cp "$VC7R1/build/freej2me_plus-lr.jar" "$OUT/freej2me-lr-vc7r1-video-diag.jar"
+          cp "$RUNNER_TEMP/vc7r1-font/manifest.json" "$OUT/VC7R1-FONT-MANIFEST.json"
+          RUNTIME_SHA=$(sha256sum "$OUT/freej2me-lr-vc7r1-video-diag.jar" | awk '{print $1}')
+          printf '%s\n' \
+            'RG35XX VC7R1 VIDEO DIAGNOSTIC' \
+            'STATUS=DIAGNOSTIC-BUILD-PASS-NOT-DEVICE-PASS' \
+            "FREEJ2ME_PIN=$FREEJ2ME_PIN" \
+            "VC7R1_RUNTIME_SHA256=$RUNTIME_SHA" \
+            "VC7R_FONT_SHA256=$VC7R_FONT_SHA256" \
+            'BEHAVIOR_CHANGE=NO-INTENTIONAL-RENDERING-CHANGE' \
+            'LOG_MARKERS=RG35XX-VC7R1-COLOR,RG35XX-VC7R1-CFG,RG35XX-VC7R1-SIZE' \
+            'DEVICE_TEST=PENDING' > "$OUT/STATUS.txt"
+          (cd "$OUT" && sha256sum *) > "$OUT/SHA256SUMS.txt"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rg35xx-vc7r1-video-diagnostic-runtime
+          path: ${{ runner.temp }}/vc7r1-video-diag
+          retention-days: 30
