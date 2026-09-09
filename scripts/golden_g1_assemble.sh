@@ -24,6 +24,12 @@ cp "$ROOT/src/org/recompile/freej2me/RG35XXGoldenFrameTransport.java" \
 python3 "$ROOT/scripts/g1_apply_java_transport.py" \
    "$GOLDEN_ASSEMBLY/src/org/recompile/freej2me/Libretro.java"
 
+# RG35XX device diagnostics proved MobilePlatform.runJar() could block forever
+# in eager Java Sound/MIDI prewarm before loader.start(). MIDlet startup must be
+# released first; media prewarm is opportunistic and must never gate video/IPC.
+python3 "$ROOT/scripts/g1_apply_rg35xx_media_boot.py" \
+   "$GOLDEN_ASSEMBLY/src/org/recompile/mobile/MobilePlatform.java"
+
 # Native receiver + Smart-Fit presenter reconstructed from the Golden core.
 mkdir -p "$GOLDEN_ASSEMBLY/src/libretro/rg35xx/golden"
 cp "$ROOT/native/golden/rg35xx_golden_video.h" \
@@ -50,6 +56,7 @@ EOF
 
 CORE="$GOLDEN_ASSEMBLY/src/libretro/freej2me_libretro.c"
 JAVA="$GOLDEN_ASSEMBLY/src/org/recompile/freej2me/Libretro.java"
+MOBILE_PLATFORM="$GOLDEN_ASSEMBLY/src/org/recompile/mobile/MobilePlatform.java"
 
 # Video contract.
 grep -Fq 'RETRO_PIXEL_FORMAT_RGB565' "$CORE" || fail "RGB565 frontend contract missing"
@@ -64,6 +71,19 @@ fi
 if grep -Fq 'System.out.write(frameBuffer' "$JAVA"; then
     fail "synchronous Java frame write survived"
 fi
+
+# RG35XX boot/media contract: eager ALSA/MIDI warmup must never precede MIDlet start.
+grep -Fq 'RG35XX-MediaWarmup' "$MOBILE_PLATFORM" || fail "RG35XX async media warmup missing"
+grep -Fq 'RG35XX-MEDIA-BOOT: async prepare ENTER' "$MOBILE_PLATFORM" || fail "RG35XX media boot marker missing"
+python3 - "$MOBILE_PLATFORM" <<'PY'
+import pathlib, sys
+s = pathlib.Path(sys.argv[1]).read_text(encoding='utf-8')
+r = s.index('public void runJar()')
+loader = s.index('loader.start();', r)
+prepare = s.index('Manager.prepareMediaEngine();', r)
+if not loader < prepare:
+    raise SystemExit('G1 ASSEMBLY FAIL: prepareMediaEngine still gates loader.start')
+PY
 
 # Device-proven Golden runtime contract.
 grep -Fq '#define NUM_ARGUMENTS 10' "$CORE" || fail "Golden argv count missing"
