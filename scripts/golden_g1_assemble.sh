@@ -31,7 +31,7 @@ python3 "$ROOT/scripts/g1_apply_rg35xx_media_boot.py" \
 
 # Device evidence after the media fix reaches MIDlet execution and then fails
 # inside GNU Classpath ImageIO on PNG ICC profile v4. Keep glibj immutable and
-# implement compatibility at the J2ME PlatformImage source boundary instead.
+# implement compatibility at every PlatformImage stream decode boundary.
 python3 "$ROOT/scripts/g1_apply_png_iccp_compat.py" \
    "$GOLDEN_ASSEMBLY/src/org/recompile/mobile/PlatformImage.java"
 
@@ -86,9 +86,13 @@ if 'prepareMediaEngine();' in body: raise SystemExit('G1 ASSEMBLY FAIL: boot-tim
 if 'RG35XX-MediaWarmup' in body: raise SystemExit('G1 ASSEMBLY FAIL: async media warmup survived')
 PY
 
-# PNG compatibility contract: source-level only; glibj remains untouched.
+# PNG compatibility contract: every PlatformImage stream decode is centralized;
+# glibj remains untouched.
+grep -Fq 'rg35xxReadImage' "$PLATFORM_IMAGE" || fail "PNG centralized decoder missing"
 grep -Fq 'rg35xxStripPngICCP' "$PLATFORM_IMAGE" || fail "PNG iCCP compatibility missing"
-grep -Fq 'RG35XX-PNG-COMPAT: stripped iCCP chunk' "$PLATFORM_IMAGE" || fail "PNG compatibility marker missing"
+grep -Fq 'RG35XX-PNG-COMPAT-V2: decode ENTER' "$PLATFORM_IMAGE" || fail "PNG V2 entry marker missing"
+grep -Fq 'RG35XX-PNG-COMPAT: stripped iCCP chunk' "$PLATFORM_IMAGE" || fail "PNG strip marker missing"
+if grep -Fq 'ImageIO.read(stream)' "$PLATFORM_IMAGE"; then fail "direct PlatformImage ImageIO.read(stream) survived"; fi
 
 # Device-proven Golden runtime contract.
 grep -Fq '#define NUM_ARGUMENTS 10' "$CORE" || fail "Golden argv count missing"
