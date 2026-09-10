@@ -5,7 +5,8 @@ on:
     branches: [ verified-clean-platform-v1 ]
     paths:
       - '.github/workflows/verified-clean-vc7r3-native-audio.yml'
-      - 'scripts/vc7r3_apply_media_pump.py'
+      - 'scripts/vc7r3_apply_native_audio.py'
+      - 'scripts/vc7r3_apply_java_media_events.py'
       - 'scripts/vc7r2_apply_proven_dynamic_view.py'
       - 'scripts/vc7r_reconstruct_font.py'
       - 'scripts/vc7_apply_golden_font.py'
@@ -42,7 +43,6 @@ jobs:
         with:
           ref: d79180df9ae8621f2ddcf00f4f0648e4a43dc374
           path: history
-
       - name: Install build dependencies
         run: |
           set -euo pipefail
@@ -57,7 +57,6 @@ jobs:
           test "$(/opt/miyoo/bin/arm-miyoo-linux-uclibcgnueabi-gcc -dumpmachine)" = arm-miyoo-linux-uclibcgnueabi
       - uses: actions/setup-java@v4
         with: {distribution: temurin, java-version: '8'}
-
       - name: Assemble VC7R2 proven-view Java/video foundation
         run: |
           set -euo pipefail
@@ -65,7 +64,6 @@ jobs:
           echo "VC7R3=$RUNNER_TEMP/vc7r3" >> "$GITHUB_ENV"
           python3 scripts/vc7r2_apply_proven_dynamic_view.py "$RUNNER_TEMP/vc7r3/src/org/recompile/freej2me/Libretro.java"
           python3 scripts/vc7_apply_golden_font.py "$RUNNER_TEMP/vc7r3/src/org/recompile/mobile/PlatformGraphics.java"
-
       - name: Generate same reconstructed VC7R font resource
         run: |
           set -euo pipefail
@@ -77,13 +75,12 @@ jobs:
           python3 scripts/vc7r_reconstruct_font.py --font "$LATIN" --font "$CJK#0" --out "$RUNNER_TEMP/vc7r3-font/rg35xx-font.bin" --manifest "$RUNNER_TEMP/vc7r3-font/manifest.json"
           test "$(sha256sum "$RUNNER_TEMP/vc7r3-font/rg35xx-font.bin" | awk '{print $1}')" = "$VC7R_FONT_SHA256"
           cp "$RUNNER_TEMP/vc7r3-font/rg35xx-font.bin" "$VC7R3/resources/org/recompile/mobile/rg35xx-font.bin"
-
       - name: Materialize pinned historical media implementation only
         run: |
           set -euo pipefail
           test "$(git -C history rev-parse HEAD)" = "$HISTORY_PIN"
           mkdir -p "$VC7R3/src/org/recompile/mobile" "$VC7R3/src/libretro/rg35xx/vendor/TinySoundFont"
-          for f in RG35XXAudioBootstrap.java RG35XXAudioProtocol.java RG35XXAudioTransport.java RG35XXLifecycle.java RG35XXMediaProfile.java RG35XXMediaRegistry.java RG35XXNativePlayer.java RG35XXToneSequenceEncoder.java RG35XXWavDecoder.java; do
+          for f in RG35XXAudioBootstrap.java RG35XXAudioProtocol.java RG35XXAudioTransport.java RG35XXMediaProfile.java RG35XXMediaRegistry.java RG35XXNativePlayer.java RG35XXPlatformProfile.java RG35XXToneSequenceEncoder.java RG35XXWavDecoder.java; do
             cp "history/src/org/recompile/mobile/$f" "$VC7R3/src/org/recompile/mobile/$f"
           done
           for f in rg35xx_audio_protocol.h rg35xx_media_cache.h rg35xx_media_cache.c rg35xx_media_events.h rg35xx_media_event_queue.h rg35xx_media_event_queue.c rg35xx_audio_dispatch.h rg35xx_audio_dispatch.c rg35xx_audio_pipe.h rg35xx_audio_pipe.c rg35xx_mixer.h rg35xx_mixer.c rg35xx_midi_backend.h rg35xx_midi_backend.c rg35xx_tsf_worker.h rg35xx_tsf_worker.c rg35xx_tsf_impl.c rg35xx_soundfont_source.h rg35xx_soundfont_source.c rg35xx_media_runtime.h rg35xx_media_runtime.c; do
@@ -92,23 +89,21 @@ jobs:
           sh history/native/vendor_tinysoundfont.sh
           cp history/native/vendor/TinySoundFont/tml.h "$VC7R3/src/libretro/rg35xx/vendor/TinySoundFont/tml.h"
           cp history/native/vendor/TinySoundFont/tsf.h "$VC7R3/src/libretro/rg35xx/vendor/TinySoundFont/tsf.h"
-
-      - name: Apply historical target-media facade and process-boundary patches
+      - name: Apply media facade then current-foundation native/event overlays
         run: |
           set -euo pipefail
-          # Normalize only patch targets. VC7R2 source remains otherwise intact.
-          for p in 0003-manager-rg35xx-media-profile.patch 0016-libretro-java-audio-fd-exact.patch 0017-libretro-media-process-boundary.patch 0015-libretro-native-media-runtime.patch 0018-manager-platformplayer-rg35xx-direct-media.patch 0019-platformplayer-tonecontrol-rg35xx.patch; do
+          for p in 0003-manager-rg35xx-media-profile.patch 0018-manager-platformplayer-rg35xx-direct-media.patch 0019-platformplayer-tonecontrol-rg35xx.patch; do
             echo "APPLY $p"
             patch -d "$VC7R3" -p1 --batch --forward --fuzz=0 < "history/patches/$p"
           done
-          python3 scripts/vc7r3_apply_media_pump.py "$VC7R3/src/libretro/freej2me_libretro.c"
-
+          python3 scripts/vc7r3_apply_native_audio.py "$VC7R3/src/libretro/freej2me_libretro.c"
+          python3 scripts/vc7r3_apply_java_media_events.py "$VC7R3/src/org/recompile/freej2me/Libretro.java" "$VC7R3/src/org/recompile/mobile/PlatformPlayer.java" "$VC7R3/src/javax/microedition/media/Manager.java"
       - name: Wire native media sources without replacing accepted video owner
         run: |
           set -euo pipefail
           cat >> "$VC7R3/src/libretro/Makefile.common" <<'EOF'
 
-          # VC7R3 target-native media only. Video remains the accepted Golden-style receiver/Smart-Fit owner.
+          # VC7R3 target-native media only. Video remains accepted Golden-style receiver/Smart-Fit.
           SOURCES_C += rg35xx/rg35xx_media_cache.c
           SOURCES_C += rg35xx/rg35xx_media_event_queue.c
           SOURCES_C += rg35xx/rg35xx_audio_dispatch.c
@@ -122,13 +117,12 @@ jobs:
           INCLUDES += -Irg35xx -Irg35xx/vendor/TinySoundFont
           CFLAGS += -DRG35XX_SOUNDFONT_PATH='"/mnt/mmc/BIOS/freej2me.sf2"'
           EOF
-
       - name: Java contract and Java 6 build
         run: |
           set -euo pipefail
           grep -Fq 'RG35XX-VC7R2-VIEW:' "$VC7R3/src/org/recompile/freej2me/Libretro.java"
-          grep -Fq 'RG35XX native LOOPED / END_OF_MEDIA event' "$VC7R3/src/org/recompile/freej2me/Libretro.java"
-          grep -Fq 'RG35XX media type:' "$VC7R3/src/org/recompile/mobile/PlatformPlayer.java"
+          grep -Fq 'RG35XX-VC7R3-MEDIA-EVENT' "$VC7R3/src/org/recompile/freej2me/Libretro.java"
+          grep -Fq 'VC7R3 lazy media bootstrap' "$VC7R3/src/org/recompile/mobile/PlatformPlayer.java"
           grep -Fq 'RG35XX tone transport unavailable' "$VC7R3/src/javax/microedition/media/Manager.java"
           ! grep -Rq 'RG35XX-CV' "$VC7R3/src"
           cd "$VC7R3" && ant
@@ -142,14 +136,12 @@ jobs:
               if len(h)!=8 or h[:4]!=b'\xca\xfe\xba\xbe' or struct.unpack('>H',h[6:8])[0]!=50: raise SystemExit('Java major gate failed: '+os.path.join(b,f))
           print('VC7R3_CLASS_COUNT=%d'%n)
           PY
-
       - name: Build ARM native core
         run: |
           set -euo pipefail
           cd "$VC7R3/src/libretro"
           make clean
           make platform=unix CC='/opt/miyoo/bin/arm-miyoo-linux-uclibcgnueabi-gcc -march=armv5te -mtune=arm926ej-s -mfloat-abi=soft' CXX='/opt/miyoo/bin/arm-miyoo-linux-uclibcgnueabi-g++ -march=armv5te -mtune=arm926ej-s -mfloat-abi=soft' LDFLAGS='-lm -lpthread'
-
       - name: Strict VC7R3 architecture gate
         run: |
           set -euo pipefail
@@ -162,15 +154,13 @@ jobs:
           grep -q 'soft-float ABI' /tmp/vc7r3-elf.txt
           grep -Fq 'RETRO_PIXEL_FORMAT_RGB565' "$C"
           grep -Fq 'rg35xx_golden_video_present(' "$C"
-          grep -Fq 'RG35XX-VC7R3-AUDIO: libretro media pump' "$C"
+          grep -Fq 'RG35XX-VC7R3-AUDIO-NATIVE' "$C"
           grep -Fq -- '-Dfreej2me.rg35xx.audio.fd=%d' "$C"
-          grep -Fq 'AudioBatch(rg35xx_audio_run_buffer, frames);' "$C"
+          grep -Fq 'AudioBatch(rg35xx_audio_run_buffer,frames);' "$C"
           grep -Fq 'rg35xx_mixer_render' "$C"
-          grep -Fq '/mnt/mmc/BIOS/freej2me.sf2' "$VC7R3/src/libretro/Makefile.common"
           ! grep -Rq 'RG35XX-CV' "$VC7R3/src"
           jar tf "$JAR" | grep -Fx 'org/recompile/mobile/rg35xx-font.bin'
           echo 'VC7R3_ARCHITECTURE_GATE=PASS'
-
       - name: Package device-test payload
         run: |
           set -euo pipefail
