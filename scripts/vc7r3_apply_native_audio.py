@@ -114,19 +114,9 @@ static void rg35xx_native_media_shutdown(void)
 s=s.replace(anchor,helpers+anchor,1)
 # initialize media at retro_init entry
 once('void retro_init(void)\n{\n', 'void retro_init(void)\n{\n#ifdef __linux__\n\trg35xx_native_media_init();\n#endif\n', 'retro init')
-# pump once per running retro_run before frame request ownership; unique G1 marker
-once('''\tif(isRunning())
-\t{
-
-\t\t/* frame requests are owned by RG35XX receiver thread */
-''','''\tif(isRunning())
-\t{
-#ifdef __linux__
-\t\trg35xx_pump_media_audio();
-#endif
-
-\t\t/* frame requests are owned by RG35XX receiver thread */
-''','retro_run pump')
+# Pump exactly once per libretro tick. Anchor to retro_run entry instead of
+# whitespace-sensitive G1 internals; pipe/mixer helpers are safe while idle.
+once('void retro_run(void)\n{\n', 'void retro_run(void)\n{\n#ifdef __linux__\n\trg35xx_pump_media_audio();\n#endif\n', 'retro_run entry pump')
 # create dedicated pipe immediately before fork in javaOpen
 needle='\tpid = fork();\n'
 if s.count(needle)!=1: raise SystemExit('VC7R3 NATIVE AUDIO FAIL: fork anchor')
