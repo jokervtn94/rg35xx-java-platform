@@ -2,7 +2,7 @@
 
 Date: 2026-09-10
 Branch: `verified-clean-platform-v1`
-Status: **BUILD-PASS / DEVICE-TEST-PENDING**
+Status: **BUILD-PASS / PARTIAL DEVICE EVIDENCE / NOT DEVICE-PASS**
 
 This checkpoint exists so the RG35XX platform can be reconstructed after a bad experiment or lost local installer. It deliberately separates tasklog-proven foundations from reconstructed components and from items still awaiting device acceptance.
 
@@ -91,40 +91,94 @@ To remove a previously selected Green/etc display tint, the installer changes an
 
 Rollback helper restores the newest VC7R2 backup. Evidence collector copies install result and known Java/core/early logs for analysis.
 
-## 6. Device acceptance plan
+## 6. First real-device evidence — 2026-09-10
 
-Do not mark VC7R2 DEVICE-PASS until a real RG35XX run supplies evidence.
+Installer result from the user's RG35XX SD:
 
-Test at least:
+- `RESULT=PASS`.
+- Installed runtime SHA matched `8aca7ef0bb2909ca8e500d439359110b7d2199263c4fcef58814b22339aa4bbc`.
+- Accepted native core SHA remained `fc574021ad34b0466cd7ffe4f2eb58438eb2104c47cc503405d9f8722c02d062`.
+- JamVM L and immutable GNU Classpath were preserved.
+- `BACKLIGHT_OPTION_FILES_UPDATED=0`; therefore the installer did not find an existing `freej2me_backlightcolor` line to change. Do not claim the previous green tint was fixed by this installer setting rewrite.
+- Backup created at `g:\RG35XX_VC7R2_Backup\20260910-182901`.
 
-- KDTT filename containing `320x240`;
-- Qix filename containing `352x416`;
-- Barman filename containing `360x640`;
-- Zombie filename containing `240x320`;
-- a text-heavy/Vietnamese game for font visibility.
+### Dynamic logical LCD evidence
 
-Acceptance checks:
+The new VC7R2 Java log explicitly shows for `KDTT-Tam_Quoc_Chi_320x240_vh_by_zeplaovn.jar`:
 
-- logical source dimensions match the filename/game rather than all becoming 240x320;
-- native Smart-Fit produces correct aspect/centering on 640x480;
-- no unwanted Green backlight tint;
-- no `AbstractGraphics2D.renderScanline` NPE;
-- no `Zone.combineWithSubGlyph` AIOOBE;
-- PNG ICC v4 blocker remains absent;
-- frame transport remains healthy;
-- no media boot regression;
-- Unicode text is visible and usable.
+- `RG35XX-VC7R2-VIEW: filename logical size 320x240`;
+- `filename resize 240x320 -> 320x240`;
+- `after-load keep 320x240`;
+- `settings update keep runtime size 320x240`;
+- `before-run keep 320x240`;
+- frame requests and FrameWorker wake at `320x240`;
+- RGB565 payload remains `153600` bytes, which is exactly `320*240*2`.
 
-After testing, run the evidence collector and preserve `RG35XX-VC7R2-INSTALL-RESULT.txt`, `freej2me-java-error.log`, `freej2me-core.log`, and `freej2me-vc3-early.log` when present.
+The corresponding native early log confirms:
 
-## 7. Status vocabulary
+- `FIRST_FRAME_HEADER src=320x240 rot=0 payload=153600`;
+- `FIRST_PRESENT ... src=320x240 dst=640x480 x=0 y=0 output=640x480`.
+
+This is a **real-device confirmation that the VC7R2 filename-token logical-size restoration works for the 320x240 KDTT case** and that native Smart-Fit handles that logical frame correctly.
+
+Other observed current-session behavior:
+
+- `NinjaSchool1.jar` has no filename `WxH` token, so VC7R2 logs `no filename size; keep runtime size 240x320` and remains 240x320.
+- `Asphalt_4_-_Elite_Racing_240x320...jar` is correctly recognized as 240x320.
+- `240x320-zombie_infection-s60.jar` remains 240x320 as expected.
+- Qix 352x416 and Barman 360x640 were not present in this evidence set, so those VC7R2 paths remain device-pending.
+
+### RGB565 / frame transport evidence
+
+Java repeatedly records snapshot copy, `RGB565 ENCODED bytes=153600`, IPC header/payload writes and `IPC FLUSH PASS error=false`. Native receives/publishes/presents sustained frames, including hundreds of generations per game. Therefore the asynchronous frame transport remains alive after VC7R2 logical-size restoration.
+
+This proves transport liveness and correct payload sizing, but by itself does **not** prove visual color correctness. Color/tint still requires screenshots or explicit device observation.
+
+### PNG compatibility evidence
+
+`RG35XX-PNG-ICCP: stripped ancillary iCCP chunk` appears in the current Java log. The old `Wrong major version number:4` failure was not observed in this evidence set. Keep status conservative: compatibility path exercised successfully in this run.
+
+### Font path evidence
+
+`RG35XX-VC7-FONT: ready bytes=727008` appears, proving the reconstructed bitmap resource is loaded. This does not promote the font to Golden or prove acceptable visual glyph quality.
+
+### New separate media compatibility failure
+
+The current Java log contains:
+
+`java.lang.NoSuchMethodError: getSequencer`
+
+from `org.recompile.mobile.PlatformPlayer$midiPlayer.prefetch(...)`, reached from a game event thread. This is a **separate MIDI/media compatibility blocker**, not evidence that Lazy Media Boot regressed. Lazy boot still logs `eager prepare SKIPPED; lazy media enabled` and frame transport continues. Do not reintroduce eager media warmup. Investigate the runtime/JamVM GNU Classpath MIDI API compatibility separately after display/font acceptance, unless the failing game requires it for basic execution.
+
+### Old AWT/OpenType font crash status
+
+No new `AbstractGraphics2D.renderScanline` NPE or `Zone.combineWithSubGlyph` AIOOBE was identified in the current VC7R2 evidence. Keep this as **not observed in this test**, not a global proof until broader game coverage.
+
+## 7. Remaining device acceptance plan
+
+VC7R2 is not DEVICE-PASS yet. Remaining evidence required:
+
+- Qix filename containing `352x416` -> expect source 352x416 and Smart-Fit 406x480, x=117;
+- Barman filename containing `360x640` -> expect source 360x640 and Smart-Fit 270x480, x=185;
+- screenshots/visual confirmation that the previous green tint is gone or still present;
+- text-heavy/Vietnamese screenshots to judge reconstructed font quality;
+- verify no old AWT/OpenType crash across representative text-heavy games;
+- isolate the `getSequencer` MIDI compatibility error from display/font work.
+
+After testing, preserve `RG35XX-VC7R2-INSTALL-RESULT.txt`, `freej2me-java-error.log`, `freej2me-core.log`, and `freej2me-vc3-early.log` when present.
+
+## 8. Status vocabulary
 
 - JamVM L: DEVICE-PASS.
 - B2 GNU Classpath: IMMUTABLE.
 - VC6 native/video foundation: accepted/device-proven through first-frame and sustained presentation evidence.
 - VC7R2 source/runtime: BUILD-PASS.
-- VC7R2 dynamic-view implementation: reconstructed from tasklog-proven behavior; device acceptance pending.
-- VC7R2 font: RECONSTRUCTED-NOT-GOLDEN.
-- VC7R2 overall: DEVICE-TEST-PENDING.
+- VC7R2 logical-size restoration, KDTT 320x240 case: **DEVICE-PROVEN**.
+- VC7R2 Qix/Barman non-240x320 coverage: DEVICE-PENDING.
+- RGB565 transport liveness/payload sizing after VC7R2: DEVICE-PROVEN; visual color correctness still pending.
+- PNG iCCP source compatibility path: exercised on device; old ICC v4 blocker not observed in this run.
+- VC7R2 reconstructed font resource load: DEVICE-PROVEN; visual font quality pending; still RECONSTRUCTED-NOT-GOLDEN.
+- MIDI `getSequencer` compatibility: DEVICE-FAIL for at least one tested game path; separate from Lazy Media Boot.
+- VC7R2 overall: **PARTIAL DEVICE EVIDENCE / NOT DEVICE-PASS**.
 
-Never label VC7R2 stable or DEVICE-PASS before the device acceptance above succeeds.
+Never label VC7R2 stable or DEVICE-PASS before the remaining device acceptance above succeeds.
