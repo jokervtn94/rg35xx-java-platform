@@ -67,7 +67,9 @@ once('void retro_init(void)\n{\n','void retro_init(void)\n{\n#ifdef __linux__\n\
 once('void retro_run(void)\n{\n','void retro_run(void)\n{\n#ifdef __linux__\n\trg35xx_pump_media_audio();\n#endif\n','retro_run entry pump')
 needle='\tpid = fork();\n'
 if s.count(needle)!=1: raise SystemExit('VC7R3 NATIVE AUDIO FAIL: fork anchor')
-pre=r'''\t/* VC7R3 dedicated Java->native media FD; stdout remains video IPC. */
+# This must be a normal Python string, not a raw string: the generated C needs
+# actual tab characters rather than literal backslash-t byte pairs.
+pre='''\t/* VC7R3 dedicated Java->native media FD; stdout remains video IPC. */
 \trg35xx_audio_pipe_init(&rg35xx_java_audio_pipe);
 \tif(rg35xx_audio_pipe_create(&rg35xx_java_audio_pipe))
 \t{
@@ -86,8 +88,6 @@ once('''\tif(pid==0) /* child */
 
 \t\tdup2(pWrite[0], fd_stdin);''','child fd')
 once('\t\tclose(pRead[1]);\n','\t\tif(rg35xx_java_audio_pipe.read_fd >= 0) rg35xx_audio_pipe_parent_after_fork(&rg35xx_java_audio_pipe);\n\t\tclose(pRead[1]);\n','parent fd close anchor')
-# Anchor shutdown to the libretro lifecycle function itself rather than to the
-# exact first video teardown statement, whose layout varies across G1/B4 overlays.
 once('void retro_deinit(void)\n{\n','void retro_deinit(void)\n{\n#ifdef __linux__\n\trg35xx_native_media_shutdown();\n#endif\n','retro_deinit entry shutdown')
 for req in ('RG35XX-VC7R3-AUDIO-NATIVE','-Dfreej2me.rg35xx=true','-Dfreej2me.rg35xx.audio.fd=%d','rg35xx_pump_media_audio();','rg35xx_native_media_shutdown();','AudioBatch(rg35xx_audio_run_buffer,frames)','rg35xx_golden_video_present(','RETRO_PIXEL_FORMAT_RGB565'):
  if req not in s: raise SystemExit('VC7R3 NATIVE AUDIO FAIL missing '+req)
