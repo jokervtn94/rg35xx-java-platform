@@ -92,6 +92,17 @@ jobs:
       - name: Apply media facade then current-foundation native/event overlays
         run: |
           set -euo pipefail
+          # The pinned FreeJ2ME Java sources use CRLF in some files. Historical
+          # executable diffs are LF. Normalize only these disposable assembly
+          # patch targets; this is not a semantic source mutation.
+          python3 - "$VC7R3/src/org/recompile/mobile/PlatformPlayer.java" "$VC7R3/src/javax/microedition/media/Manager.java" <<'PY'
+          import pathlib,sys
+          for name in sys.argv[1:]:
+              p=pathlib.Path(name)
+              b=p.read_bytes().replace(b'\r\n',b'\n').replace(b'\r',b'\n')
+              p.write_bytes(b)
+              print('VC7R3 LINE-ENDINGS=NORMALIZED', name)
+          PY
           for p in 0003-manager-rg35xx-media-profile.patch 0018-manager-platformplayer-rg35xx-direct-media.patch 0019-platformplayer-tonecontrol-rg35xx.patch; do
             echo "APPLY $p"
             patch -d "$VC7R3" -p1 --batch --forward --fuzz=0 < "history/patches/$p"
