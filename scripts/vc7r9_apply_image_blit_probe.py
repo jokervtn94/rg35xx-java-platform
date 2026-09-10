@@ -22,7 +22,7 @@ once('''\tprivate static int frameCount = 0;\n\tprivate static long lastFpsTime 
      '''\tprivate static int frameCount = 0;\n\n\t/* RG35XX-VC7R9-IMAGE-BLIT: diagnostic only; no rendering mutation. */\n\tprivate static int vc7r9ImageBlitCount = 0;\n\n\tprivate static long lastFpsTime = System.nanoTime();''',
      'probe counter')
 
-helper = r'''
+helper = '''
 \tprivate static String vc7r9Hex8(int v)
 \t{
 \t\tString h = Integer.toHexString(v).toUpperCase();
