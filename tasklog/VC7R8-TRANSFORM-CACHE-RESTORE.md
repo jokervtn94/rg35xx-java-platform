@@ -14,7 +14,7 @@ KEEP:
 - immutable GNU Classpath / glibj.zip
 - VC7R2 filename-token dynamic logical view
 - VC7R3 native media bridge
-- VC7R4 native RGB565 reference strip
+- VC7R4 native RGB565 reference-strip implementation
 - VC7R5 Java framebuffer color probe
 - VC7R7 audited drawRGB patch 0007
 - PNG iCCP compatibility path
@@ -31,6 +31,16 @@ DO NOT CHANGE:
 - font ownership
 - media warmup/lazy boot semantics
 
+## Diagnostic log naming correction
+Device evidence from VC7R7 exposed a packaging/diagnostic naming defect: the reusable VC7R4 color-strip overlay still hard-coded `/mnt/mmc/freej2me-vc7r4-color.log`, so newer checkpoints produced stale/misleading filenames.
+
+Correction before any VC7R8 installer is allowed:
+- `scripts/vc7r4_apply_video_color_diag.py` now derives the checkpoint token from the disposable assembly directory (`vc7r8`, etc.).
+- For VC7R8 the native color diagnostic MUST compile with `/mnt/mmc/freej2me-vc7r8-color.log`.
+- `/mnt/mmc/freej2me-vc7r4-color.log` MUST NOT remain in the assembled VC7R8 native source.
+- Installer/collector for VC7R8 must collect `freej2me-vc7r8-color.log`, not any older checkpoint name.
+- No installer may be issued from the earlier VC7R8 artifact built before this correction.
+
 ## Acceptance
 - 0007 and 0008 both apply with `--fuzz=0` against the disposable pinned assembly.
 - exact historical transform helper is materialized from the pinned history commit, not recreated from memory.
@@ -38,5 +48,7 @@ DO NOT CHANGE:
 - ARM core remains ELF32 ARM EABI5 soft-float.
 - no CV/CW markers.
 - native RGB565/reference strip and VC7R5 framebuffer probes remain present.
+- assembled native source contains `/mnt/mmc/freej2me-vc7r8-color.log` exactly once.
+- assembled native source contains no `/mnt/mmc/freej2me-vc7r4-color.log` path.
 
 No DEVICE-PASS claim until RG35XX evidence shows representative transformed sprite/image rendering correctly.
