@@ -1,0 +1,159 @@
+name: Verified Clean VC7R2 Proven View Build
+
+on:
+  push:
+    branches: [ verified-clean-platform-v1 ]
+    paths:
+      - '.github/workflows/verified-clean-vc7r2-proven-view-build.yml'
+      - 'scripts/vc7r2_apply_proven_dynamic_view.py'
+      - 'scripts/vc7r_reconstruct_font.py'
+      - 'scripts/vc7_apply_golden_font.py'
+      - 'scripts/vc6_png_iccp_assemble.sh'
+      - 'scripts/vc6_apply_png_iccp_compat.py'
+      - 'scripts/vc0_vc3_assemble.sh'
+      - 'scripts/g1_apply_java_transport.py'
+      - 'scripts/g1_apply_rg35xx_media_boot.py'
+      - 'scripts/g1_apply_native_overlay.py'
+      - 'src/org/recompile/freej2me/RG35XXGoldenFrameTransport.java'
+      - 'native/golden/**'
+  workflow_dispatch:
+
+jobs:
+  vc7r2-runtime:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      FREEJ2ME_PIN: 13ec186903087156c145268f8706eecfaf9f1e50
+      LATIN_SHA256: ae7b7855e115a5966d8b1b3f80f254ccc117ec86f9965e202ee2940453837280
+      CJK_SHA256: b76b0433203017ca80401b2ee0dd69350349871c4b19d504c34dbdd80541690a
+      VC7R_FONT_SHA256: 20c2e59d063282d4b6a0d612dea3cba2c0b5bd7fafe85a05729951bd38902db9
+      GOLDEN_FONT_SHA256: 7d835faaed37ae93d2bb783604453ad8d13d994f1c97074182ec040c6a29b99c
+      HISTORICAL_CQ_RUNTIME_SHA256: 45853d13376fd17d176a8296c247adcf2e14065cd44f171b1aaacf2387ec14a8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: TASEmulators/freej2me-plus
+          ref: 13ec186903087156c145268f8706eecfaf9f1e50
+          path: upstream
+      - name: Install pinned dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ant python3 python3-pil python3-fonttools fonts-dejavu-core fonts-noto-cjk
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: '8'}
+
+      - name: Resolve and verify reconstruction font inputs
+        id: fonts
+        run: |
+          set -euo pipefail
+          LATIN='/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
+          CJK="$(fc-match -f '%{file}\n' 'Noto Sans CJK JP' | head -n1)"
+          test "$(sha256sum "$LATIN" | awk '{print $1}')" = "$LATIN_SHA256"
+          test "$(sha256sum "$CJK" | awk '{print $1}')" = "$CJK_SHA256"
+          echo "latin=$LATIN" >> "$GITHUB_OUTPUT"
+          echo "cjk=$CJK" >> "$GITHUB_OUTPUT"
+
+      - name: Assemble accepted VC6 foundation
+        run: |
+          set -euo pipefail
+          VC_UPSTREAM="$GITHUB_WORKSPACE/upstream" VC6_ASSEMBLY="$RUNNER_TEMP/vc7r2" sh scripts/vc6_png_iccp_assemble.sh
+          echo "VC7R2=$RUNNER_TEMP/vc7r2" >> "$GITHUB_ENV"
+
+      - name: Restore tasklog-proven dynamic logical view behavior
+        run: |
+          set -euo pipefail
+          python3 scripts/vc7r2_apply_proven_dynamic_view.py "$VC7R2/src/org/recompile/freej2me/Libretro.java"
+          grep -Fq 'RG35XX-VC7R2-VIEW: filename logical size' "$VC7R2/src/org/recompile/freej2me/Libretro.java"
+          grep -Fq 'settings update keep runtime size' "$VC7R2/src/org/recompile/freej2me/Libretro.java"
+          ! grep -Rq 'RG35XX-CV' "$VC7R2/src" || { echo 'Forbidden CV marker found'; exit 1; }
+
+      - name: Apply safe bitmap text path
+        run: |
+          set -euo pipefail
+          python3 scripts/vc7_apply_golden_font.py "$VC7R2/src/org/recompile/mobile/PlatformGraphics.java"
+
+      - name: Generate reconstructed Unicode resource
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/vc7r2-font" "$VC7R2/resources/org/recompile/mobile"
+          python3 scripts/vc7r_reconstruct_font.py \
+            --font '${{ steps.fonts.outputs.latin }}' \
+            --font '${{ steps.fonts.outputs.cjk }}#0' \
+            --out "$RUNNER_TEMP/vc7r2-font/rg35xx-font.bin" \
+            --manifest "$RUNNER_TEMP/vc7r2-font/manifest.json" \
+            | tee "$RUNNER_TEMP/vc7r2-font/generator.log"
+          test "$(stat -c%s "$RUNNER_TEMP/vc7r2-font/rg35xx-font.bin")" = 727008
+          test "$(sha256sum "$RUNNER_TEMP/vc7r2-font/rg35xx-font.bin" | awk '{print $1}')" = "$VC7R_FONT_SHA256"
+          test "$VC7R_FONT_SHA256" != "$GOLDEN_FONT_SHA256"
+          cp "$RUNNER_TEMP/vc7r2-font/rg35xx-font.bin" "$VC7R2/resources/org/recompile/mobile/rg35xx-font.bin"
+
+      - name: Compile Java 6 runtime
+        run: |
+          set -euo pipefail
+          cd "$VC7R2"
+          ant
+          python3 - "$VC7R2/build/classes" <<'PY'
+          import os, struct, sys
+          root=sys.argv[1]; count=0
+          for base, _, files in os.walk(root):
+              for name in files:
+                  if not name.endswith('.class'): continue
+                  count += 1
+                  p=os.path.join(base,name); h=open(p,'rb').read(8)
+                  if len(h)!=8 or h[:4]!=b'\xca\xfe\xba\xbe': raise SystemExit('bad class '+p)
+                  major=struct.unpack('>H',h[6:8])[0]
+                  if major != 50: raise SystemExit('major != 50 %s:%d' % (p,major))
+          if count == 0: raise SystemExit('no classes')
+          print('VC7R2_CLASS_COUNT=%d' % count)
+          print('VC7R2_JAVA_MAJOR=50')
+          PY
+
+      - name: Contract gates
+        run: |
+          set -euo pipefail
+          JAR="$VC7R2/build/freej2me_plus-lr.jar"
+          PG="$VC7R2/src/org/recompile/mobile/PlatformGraphics.java"
+          LI="$VC7R2/src/org/recompile/freej2me/Libretro.java"
+          TR="$VC7R2/src/org/recompile/freej2me/RG35XXGoldenFrameTransport.java"
+          jar tf "$JAR" | grep -Fx 'org/recompile/mobile/rg35xx-font.bin'
+          grep -Fq 'RG35XX-VC7R2-VIEW:' "$LI"
+          grep -Fq 'rg35xxFrames.requestFrame(lcdWidth, lcdHeight' "$LI"
+          grep -Fq 'RG35XX-JAVA-DIAG: RGB565 ENCODED bytes=' "$TR"
+          grep -Fq 'rg35xxDrawSafeText(str, x, y - ascent, anchor);' "$PG"
+          ! grep -Fq 'gc.drawString(str, x, y);' "$PG"
+          grep -Fq 'RG35XX-PNG-ICCP: stripped ancillary iCCP chunk' "$VC7R2/src/org/recompile/mobile/PlatformImage.java"
+          ! grep -Rq 'RG35XX-MediaWarmup' "$VC7R2/src"
+          ! grep -Rq 'RG35XX-CV' "$VC7R2/src"
+          echo 'VC7R2_CONTRACT_GATE=PASS'
+
+      - name: Package runtime artifact
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/vc7r2-artifact"
+          mkdir -p "$OUT"
+          cp "$VC7R2/build/freej2me_plus-lr.jar" "$OUT/freej2me-lr-vc7r2.jar"
+          cp "$RUNNER_TEMP/vc7r2-font/manifest.json" "$OUT/VC7R2-FONT-MANIFEST.json"
+          RUNTIME_SHA=$(sha256sum "$OUT/freej2me-lr-vc7r2.jar" | awk '{print $1}')
+          printf '%s\n' \
+            'RG35XX VC7R2 TASKLOG-PROVEN VIEW RECONSTRUCTION' \
+            'STATUS=BUILD-PASS-RECONSTRUCTED-FROM-PROVEN-BEHAVIOR' \
+            "FREEJ2ME_PIN=$FREEJ2ME_PIN" \
+            "RUNTIME_SHA256=$RUNTIME_SHA" \
+            "HISTORICAL_CQ_RUNTIME_SHA256=$HISTORICAL_CQ_RUNTIME_SHA256" \
+            'BINARY_IDENTICAL_TO_CQ=NO' \
+            'DYNAMIC_VIEW=CQ_CR_BEHAVIOR_RECONSTRUCTED' \
+            'CV_CW_BOOT_RESOLUTION=NOT_USED' \
+            'RGB565_TRANSPORT=PRESERVED' \
+            'NATIVE_SMART_FIT=PRESERVED' \
+            "FONT_SHA256=$VC7R_FONT_SHA256" \
+            'FONT_STATUS=RECONSTRUCTED-NOT-GOLDEN' \
+            'DEVICE_TEST=PENDING' > "$OUT/STATUS.txt"
+          (cd "$OUT" && sha256sum *) > "$OUT/SHA256SUMS.txt"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rg35xx-vc7r2-proven-view-runtime
+          path: ${{ runner.temp }}/vc7r2-artifact
+          retention-days: 30
