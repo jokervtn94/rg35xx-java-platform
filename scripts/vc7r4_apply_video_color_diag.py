@@ -1,9 +1,20 @@
 #!/usr/bin/env python3
-import pathlib, sys
+import pathlib, re, sys
 
 p = pathlib.Path(sys.argv[1])
 s = p.read_text(encoding='utf-8')
 orig = s
+
+# Keep the VC7R4 diagnostic implementation/marker as the reusable component,
+# but name its device log after the checkpoint being assembled. The assembly
+# path is deterministic in CI (for example .../vc7r8/...). This prevents a
+# VC7R7/VC7R8 install from creating a misleading freej2me-vc7r4-color.log.
+checkpoint = 'vc7r4'
+for part in p.parts:
+    m = re.fullmatch(r'(vc7r\d+)', part.lower())
+    if m:
+        checkpoint = m.group(1)
+log_path = '/mnt/mmc/freej2me-%s-color.log' % checkpoint
 
 if 'RG35XX-VC7R4-COLOR-DIAG' in s:
     raise SystemExit('VC7R4 color diagnostic already applied')
@@ -32,7 +43,7 @@ static void rg35xx_vc7r4_open_log(void)
 {
     if(!rg35xx_vc7r4_log)
     {
-        rg35xx_vc7r4_log = fopen("/mnt/mmc/freej2me-vc7r4-color.log", "a");
+        rg35xx_vc7r4_log = fopen("__RG35XX_COLOR_LOG_PATH__", "a");
         if(rg35xx_vc7r4_log)
         {
             fprintf(rg35xx_vc7r4_log,
@@ -96,7 +107,7 @@ static void rg35xx_vc7r4_log_present(size_t pitch)
     fflush(rg35xx_vc7r4_log);
 }
 
-'''
+'''.replace('__RG35XX_COLOR_LOG_PATH__', log_path)
 once(anchor, anchor + helpers, 'helpers')
 
 once('''        decode_wire_rgb565(g.back, g.wire_payload, pixels);\n        publish_back(w, h, rotation, header);''',
@@ -107,8 +118,6 @@ once('''    if(geometry_cb) geometry_cb(g.output_width, g.output_height);\n    v
      '''    rg35xx_vc7r4_overlay_reference_strip();\n    if(geometry_cb) geometry_cb(g.output_width, g.output_height);\n    rg35xx_vc7r4_log_present((size_t)g.output_width * sizeof(uint16_t));\n    video_cb(g.canvas, g.output_width, g.output_height,\n             (size_t)g.output_width * sizeof(uint16_t));''',
      'final-stage strip')
 
-# Anchor only to the unique lifecycle function entry. Internal teardown order can
-# vary across assembled G1/B4 sources, but logging must close before state reset.
 once('void rg35xx_golden_video_deinit(void)\n{\n',
      '''void rg35xx_golden_video_deinit(void)\n{\n    if(rg35xx_vc7r4_log)\n    {\n        fprintf(rg35xx_vc7r4_log, "VC7R4 STOP generations=%lu presented=%lu\\n", g.generation, g.presented_generation);\n        fclose(rg35xx_vc7r4_log);\n        rg35xx_vc7r4_log = NULL;\n    }\n''',
      'video deinit entry')
@@ -116,7 +125,7 @@ once('void rg35xx_golden_video_deinit(void)\n{\n',
 for req in ('RG35XX-VC7R4-COLOR-DIAG', '0xF800u', '0x07E0u', '0x001Fu',
             'rg35xx_vc7r4_log_rx', 'rg35xx_vc7r4_overlay_reference_strip',
             'video_cb(g.canvas', '(size_t)g.output_width * sizeof(uint16_t)',
-            'VC7R4 STOP generations='):
+            'VC7R4 STOP generations=', log_path):
     if req not in s:
         raise SystemExit('VC7R4 COLOR DIAG FAIL missing ' + req)
 if s == orig:
@@ -124,5 +133,6 @@ if s == orig:
 
 p.write_text(s, encoding='utf-8', newline='\n')
 print('VC7R4 COLOR DIAGNOSTIC OVERLAY=PASS')
+print('CHECKPOINT=' + checkpoint.upper())
 print('REFERENCE_STRIP=BLACK,WHITE,RED,GREEN,BLUE')
-print('LOG=/mnt/mmc/freej2me-vc7r4-color.log')
+print('LOG=' + log_path)
