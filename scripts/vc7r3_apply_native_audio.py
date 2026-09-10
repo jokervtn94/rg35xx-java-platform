@@ -85,18 +85,11 @@ once('''\tif(pid==0) /* child */
 \t\tif(rg35xx_java_audio_pipe.write_fd >= 0) rg35xx_audio_pipe_child_after_fork(&rg35xx_java_audio_pipe);
 
 \t\tdup2(pWrite[0], fd_stdin);''','child fd')
-# Parent formatting differs between historical/upstream revisions. The first close
-# of the child stdout write-end is the stable ownership point after fork.
 once('\t\tclose(pRead[1]);\n','\t\tif(rg35xx_java_audio_pipe.read_fd >= 0) rg35xx_audio_pipe_parent_after_fork(&rg35xx_java_audio_pipe);\n\t\tclose(pRead[1]);\n','parent fd close anchor')
-once('''void retro_deinit(void)
-{
-\trg35xx_golden_video_deinit();''','''void retro_deinit(void)
-{
-#ifdef __linux__
-\trg35xx_native_media_shutdown();
-#endif
-\trg35xx_golden_video_deinit();''','deinit')
-for req in ('RG35XX-VC7R3-AUDIO-NATIVE','-Dfreej2me.rg35xx=true','-Dfreej2me.rg35xx.audio.fd=%d','rg35xx_pump_media_audio();','AudioBatch(rg35xx_audio_run_buffer,frames)','rg35xx_golden_video_present(','RETRO_PIXEL_FORMAT_RGB565'):
+# Anchor shutdown to the libretro lifecycle function itself rather than to the
+# exact first video teardown statement, whose layout varies across G1/B4 overlays.
+once('void retro_deinit(void)\n{\n','void retro_deinit(void)\n{\n#ifdef __linux__\n\trg35xx_native_media_shutdown();\n#endif\n','retro_deinit entry shutdown')
+for req in ('RG35XX-VC7R3-AUDIO-NATIVE','-Dfreej2me.rg35xx=true','-Dfreej2me.rg35xx.audio.fd=%d','rg35xx_pump_media_audio();','rg35xx_native_media_shutdown();','AudioBatch(rg35xx_audio_run_buffer,frames)','rg35xx_golden_video_present(','RETRO_PIXEL_FORMAT_RGB565'):
  if req not in s: raise SystemExit('VC7R3 NATIVE AUDIO FAIL missing '+req)
 if s==orig: raise SystemExit('VC7R3 NATIVE AUDIO FAIL no mutation')
 p.write_text(s,encoding='utf-8',newline='\n');print('VC7R3 NATIVE AUDIO OVERLAY=PASS')
