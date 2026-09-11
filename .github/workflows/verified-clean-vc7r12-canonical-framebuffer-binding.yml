@@ -1,0 +1,157 @@
+name: Verified Clean VC7R12 Canonical Framebuffer Binding
+
+on:
+  push:
+    branches: [ verified-clean-platform-v1 ]
+    paths:
+      - '.github/workflows/verified-clean-vc7r12-canonical-framebuffer-binding.yml'
+      - 'scripts/vc7r12_apply_canonical_framebuffer_binding.py'
+      - 'scripts/vc7r11_apply_graphics_state_probe.py'
+      - 'scripts/vc7r10_apply_headless_image_normalize.py'
+      - 'scripts/vc7r9_apply_image_blit_probe.py'
+      - 'tasklog/VC7R12-CANONICAL-FRAMEBUFFER-BINDING.md'
+  workflow_dispatch:
+
+jobs:
+  vc7r12-runtime:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      FREEJ2ME_PIN: 13ec186903087156c145268f8706eecfaf9f1e50
+      HISTORY_PIN: d79180df9ae8621f2ddcf00f4f0648e4a43dc374
+      LATIN_SHA256: ae7b7855e115a5966d8b1b3f80f254ccc117ec86f9965e202ee2940453837280
+      CJK_SHA256: b76b0433203017ca80401b2ee0dd69350349871c4b19d504c34dbdd80541690a
+      VC7R_FONT_SHA256: 20c2e59d063282d4b6a0d612dea3cba2c0b5bd7fafe85a05729951bd38902db9
+      TRANSFORM_CACHE_SHA256: 98ad54d7f36413d800972708047a955bb055c607
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: TASEmulators/freej2me-plus
+          ref: 13ec186903087156c145268f8706eecfaf9f1e50
+          path: upstream
+      - uses: actions/checkout@v4
+        with:
+          ref: d79180df9ae8621f2ddcf00f4f0648e4a43dc374
+          path: history
+
+      - name: Install build dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ant python3 python3-pil python3-fonttools fonts-dejavu-core fonts-noto-cjk patch
+
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: '8'}
+
+      - name: Assemble VC7R10 Java foundation
+        run: |
+          set -euo pipefail
+          VC_UPSTREAM="$GITHUB_WORKSPACE/upstream" VC6_ASSEMBLY="$RUNNER_TEMP/vc7r12" sh scripts/vc6_png_iccp_assemble.sh
+          echo "VC7R12=$RUNNER_TEMP/vc7r12" >> "$GITHUB_ENV"
+          python3 scripts/vc7r2_apply_proven_dynamic_view.py "$RUNNER_TEMP/vc7r12/src/org/recompile/freej2me/Libretro.java"
+          python3 scripts/vc7_apply_golden_font.py "$RUNNER_TEMP/vc7r12/src/org/recompile/mobile/PlatformGraphics.java"
+
+      - name: Generate reconstructed font resource
+        run: |
+          set -euo pipefail
+          LATIN='/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
+          CJK="$(fc-match -f '%{file}\n' 'Noto Sans CJK JP' | head -n1)"
+          test "$(sha256sum "$LATIN" | awk '{print $1}')" = "$LATIN_SHA256"
+          test "$(sha256sum "$CJK" | awk '{print $1}')" = "$CJK_SHA256"
+          mkdir -p "$RUNNER_TEMP/vc7r12-font" "$VC7R12/resources/org/recompile/mobile"
+          python3 scripts/vc7r_reconstruct_font.py --font "$LATIN" --font "$CJK#0" --out "$RUNNER_TEMP/vc7r12-font/rg35xx-font.bin" --manifest "$RUNNER_TEMP/vc7r12-font/manifest.json"
+          test "$(sha256sum "$RUNNER_TEMP/vc7r12-font/rg35xx-font.bin" | awk '{print $1}')" = "$VC7R_FONT_SHA256"
+          cp "$RUNNER_TEMP/vc7r12-font/rg35xx-font.bin" "$VC7R12/resources/org/recompile/mobile/rg35xx-font.bin"
+
+      - name: Materialize preserved Java media and transform helper
+        run: |
+          set -euo pipefail
+          test "$(git -C history rev-parse HEAD)" = "$HISTORY_PIN"
+          mkdir -p "$VC7R12/src/org/recompile/mobile"
+          for f in RG35XXAudioBootstrap.java RG35XXAudioProtocol.java RG35XXAudioTransport.java RG35XXMediaProfile.java RG35XXMediaRegistry.java RG35XXNativePlayer.java RG35XXPlatformProfile.java RG35XXToneSequenceEncoder.java RG35XXWavDecoder.java; do cp "history/src/org/recompile/mobile/$f" "$VC7R12/src/org/recompile/mobile/$f"; done
+          cp history/src/org/recompile/mobile/RG35XXTransformCache.java "$VC7R12/src/org/recompile/mobile/RG35XXTransformCache.java"
+          test "$(git -C history hash-object src/org/recompile/mobile/RG35XXTransformCache.java)" = "$TRANSFORM_CACHE_SHA256"
+
+      - name: Apply preserved overlays and VC7R12 fix
+        run: |
+          set -euo pipefail
+          python3 - "$VC7R12/src/org/recompile/mobile/PlatformPlayer.java" "$VC7R12/src/javax/microedition/media/Manager.java" "$VC7R12/src/org/recompile/mobile/PlatformGraphics.java" "$VC7R12/src/org/recompile/mobile/PlatformImage.java" "$VC7R12/src/org/recompile/freej2me/RG35XXGoldenFrameTransport.java" "$VC7R12/src/org/recompile/freej2me/Libretro.java" <<'PY'
+          import pathlib,sys
+          for name in sys.argv[1:]:
+              p=pathlib.Path(name); p.write_bytes(p.read_bytes().replace(b'\r\n',b'\n').replace(b'\r',b'\n'))
+          PY
+          for p in 0003-manager-rg35xx-media-profile.patch 0018-manager-platformplayer-rg35xx-direct-media.patch 0019-platformplayer-tonecontrol-rg35xx.patch; do patch -d "$VC7R12" -p1 --batch --forward --fuzz=0 < "history/patches/$p"; done
+          python3 scripts/vc7r3_apply_java_media_events.py "$VC7R12/src/org/recompile/freej2me/Libretro.java" "$VC7R12/src/org/recompile/mobile/PlatformPlayer.java" "$VC7R12/src/javax/microedition/media/Manager.java"
+          patch -d "$VC7R12" -p1 --batch --forward --fuzz=0 < patches/0007-platformgraphics-rg35xx-fast-drawrgb.patch
+          patch -d "$VC7R12" -p1 --batch --forward --fuzz=0 < patches/0008-platformgraphics-transform-cache.patch
+          python3 scripts/vc7r9_apply_image_blit_probe.py "$VC7R12/src/org/recompile/mobile/PlatformGraphics.java"
+          python3 scripts/vc7r10_apply_headless_image_normalize.py "$VC7R12/src/org/recompile/mobile/PlatformImage.java"
+          python3 scripts/vc7r11_apply_graphics_state_probe.py "$VC7R12/src/org/recompile/mobile/PlatformGraphics.java" "$VC7R12/src/org/recompile/freej2me/RG35XXGoldenFrameTransport.java"
+          python3 scripts/vc7r12_apply_canonical_framebuffer_binding.py "$VC7R12/src/org/recompile/freej2me/Libretro.java"
+
+      - name: Strict source gate
+        run: |
+          set -euo pipefail
+          L="$VC7R12/src/org/recompile/freej2me/Libretro.java"
+          G="$VC7R12/src/org/recompile/mobile/PlatformGraphics.java"
+          P="$VC7R12/src/org/recompile/mobile/PlatformImage.java"
+          T="$VC7R12/src/org/recompile/freej2me/RG35XXGoldenFrameTransport.java"
+          grep -Fq 'RG35XX-VC7R12-FRAME-BIND: REQUEST' "$L"
+          grep -Fq 'rg35xxFrames.requestFrame(lcdWidth, lcdHeight, current, front)' "$L"
+          grep -Fq 'rg35xxRebindCurrentFrontbuffer("view-" + phase)' "$L"
+          ! grep -Fq 'requestFrame(lcdWidth, lcdHeight, lcdData' "$L"
+          ! grep -Fq 'sendControlFrame(lcdWidth, lcdHeight, lcdData' "$L"
+          grep -Fq 'RG35XX-VC7R11-GFXSTATE' "$G"
+          grep -Fq 'RG35XX-VC7R10-IMAGE-NORMALIZE' "$P"
+          grep -Fq 'RG35XX-VC7R11-FRAME-BIND' "$T"
+          grep -Fq 'RG35XXTransformCache.get(origSwidth, origSheight, cacheTransform)' "$G"
+          ! grep -Rq 'RG35XX-CV' "$VC7R12/src"
+          echo 'VC7R12_SOURCE_GATE=PASS'
+
+      - name: Java 6 build
+        run: |
+          set -euo pipefail
+          cd "$VC7R12" && ant
+          python3 - "$VC7R12/build/classes" <<'PY'
+          import os,struct,sys
+          n=0
+          for b,_,fs in os.walk(sys.argv[1]):
+            for f in fs:
+              if f.endswith('.class'):
+                n+=1
+                h=open(os.path.join(b,f),'rb').read(8)
+                if len(h)!=8 or h[:4]!=b'\xca\xfe\xba\xbe' or struct.unpack('>H',h[6:8])[0]!=50:
+                    raise SystemExit('Java major gate failed: '+os.path.join(b,f))
+          print('VC7R12_CLASS_COUNT=%d'%n)
+          PY
+
+      - name: Package runtime-only device test
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/vc7r12-out"
+          mkdir -p "$OUT"
+          cp "$VC7R12/build/freej2me_plus-lr.jar" "$OUT/freej2me-lr-vc7r12.jar"
+          cp "$RUNNER_TEMP/vc7r12-font/manifest.json" "$OUT/VC7R12-FONT-MANIFEST.json"
+          cat > "$OUT/STATUS.txt" <<'EOF'
+          STATUS=BUILD-PASS-RUNTIME-ONLY-DEVICE-TEST-PENDING
+          VC7R12_CANONICAL_FRAMEBUFFER_BINDING=ENABLED
+          VC7R11_GRAPHICS_STATE_BINDING_PROBE=PRESERVED
+          VC7R10_IMAGE_NORMALIZE=PRESERVED
+          VC7R9_IMAGE_BLIT_PROBE=PRESERVED
+          VC7R8_TRANSFORM_PATCH=PRESERVED
+          VC7R7_DRAWRGB_PATCH=PRESERVED
+          VC7R3_NATIVE_AUDIO_JAVA=PRESERVED
+          VC7R2_DYNAMIC_VIEW=PRESERVED
+          RGB565_NATIVE_CORE=UNCHANGED_USE_CURRENT_VC7R9_CORE
+          FONT_STATUS=RECONSTRUCTED-NOT-GOLDEN
+          DEVICE_TEST=PENDING
+          EOF
+          (cd "$OUT" && sha256sum * > SHA256SUMS.txt)
+          echo "VC7R12_OUT=$OUT" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rg35xx-vc7r12-canonical-framebuffer-binding-runtime
+          path: ${{ env.VC7R12_OUT }}
+          if-no-files-found: error
