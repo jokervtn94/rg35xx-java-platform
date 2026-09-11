@@ -1,0 +1,27 @@
+name: Verified Clean VC7R19 Transparency Stability
+on:
+  push:
+    branches: [ verified-clean-platform-v1 ]
+    paths:
+      - '.github/workflows/verified-clean-vc7r19-transparency-stability.yml'
+      - 'scripts/vc7r19_apply_transparency_stability_fix.py'
+      - 'scripts/vc7r19_ci.sh'
+      - 'scripts/vc7r18_ci.sh'
+      - 'scripts/vc7r18_apply_alpha_stability_fix.py'
+  workflow_dispatch:
+
+jobs:
+  vc7r19-runtime:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: '8'}
+      - name: Build VC7R19
+        run: bash scripts/vc7r19_ci.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rg35xx-vc7r19-transparency-stability
+          path: /tmp/vc7r19-out
+          if-no-files-found: error
