@@ -1,0 +1,27 @@
+name: Verified Clean VC7R21 Legacy White-Key
+on:
+  push:
+    branches: [ verified-clean-platform-v1 ]
+    paths:
+      - '.github/workflows/verified-clean-vc7r21-legacy-whitekey.yml'
+      - 'scripts/vc7r21_apply_legacy_whitekey.py'
+      - 'scripts/vc7r21_ci.sh'
+      - 'scripts/vc7r20_ci.sh'
+      - 'scripts/vc7r20_apply_png_trns_semantics.py'
+  workflow_dispatch:
+
+jobs:
+  vc7r21-runtime:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: '8'}
+      - name: Build VC7R21
+        run: bash scripts/vc7r21_ci.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rg35xx-vc7r21-legacy-whitekey
+          path: /tmp/vc7r21-out
+          if-no-files-found: error
