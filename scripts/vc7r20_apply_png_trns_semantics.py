@@ -16,7 +16,7 @@ helper_anchor='\tprivate static InputStream rg35xxPngIccpCompat(InputStream inpu
 if s.count(helper_anchor)!=1:
     raise SystemExit('VC7R20: PNG compatibility helper anchor count=%d'%s.count(helper_anchor))
 
-helper=r'''\tprivate static final ThreadLocal rg35xxVC7R20PngTransparency = new ThreadLocal();
+helper='''\tprivate static final ThreadLocal rg35xxVC7R20PngTransparency = new ThreadLocal();
 \tprivate static int rg35xxVC7R20TrnsLogCount;
 
 \tprivate static final class RG35XXPngTransparency
@@ -125,7 +125,7 @@ pat=re.compile(r'\tprivate static BufferedImage rg35xxNormalizeDecodedImage\(Buf
 m=pat.search(s)
 if not m:
     raise SystemExit('VC7R20: normalization method not found')
-method=r'''\tprivate static BufferedImage rg35xxNormalizeDecodedImage(BufferedImage image)
+method='''\tprivate static BufferedImage rg35xxNormalizeDecodedImage(BufferedImage image)
 \t{
 \t\tfinal int w=image.getWidth();
 \t\tfinal int h=image.getHeight();
