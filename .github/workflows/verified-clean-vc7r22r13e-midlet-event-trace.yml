@@ -1,0 +1,127 @@
+name: Verified Clean VC7R22-R1.3E MIDlet Event Trace Runtime
+
+on:
+  push:
+    branches: [ verified-clean-platform-v1 ]
+    paths:
+      - '.github/workflows/verified-clean-vc7r22r13e-midlet-event-trace.yml'
+      - 'scripts/vc7r22r13e_apply_midlet_event_trace.py'
+      - 'scripts/vc7r22r13c_apply_sparse_frame_trace.py'
+  workflow_dispatch:
+
+jobs:
+  runtime:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Build accepted VC7R22 runtime foundation
+        run: |
+          set -euo pipefail
+          bash scripts/vc7r22_ci.sh
+
+      - name: Apply proven R1.2a source patch
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/vc7r18"
+          I="$OUT/src/org/recompile/mobile/PlatformImage.java"
+          F="$OUT/src/org/recompile/freej2me/RG35XXGoldenFrameTransport.java"
+          cp scripts/vc7r22r12_apply_lock_transparency_fix.py "$RUNNER_TEMP/r12.py"
+          python3 - <<'PY'
+          from pathlib import Path
+          import os
+          p=Path(os.environ['RUNNER_TEMP'])/'r12.py'
+          s=p.read_text(encoding='utf-8')
+          a=s.index("remaining_calls=len(re.findall")
+          b=s.index("if orig_i==i or orig_f==f",a)
+          replacement="""remaining_calls=len(re.findall(r'\\brg35xxVC7R18Diag\\s*\\(',f))\nif remaining_calls>1:\n    raise SystemExit('R1.2 multiple diagnostic occurrences survived: %d'%remaining_calls)\nif 'System.err.println(\"RG35XX-JAVA-DIAG:' in f:\n    raise SystemExit('R1.2 direct JAVA-DIAG println survived')\nif helper_calls_before>remaining_calls and helper_removed<1:\n    raise SystemExit('R1.2 expected helper diagnostic call removal did not occur')\n"""
+          p.write_text(s[:a]+replacement+s[b:],encoding='utf-8')
+          PY
+          python3 "$RUNNER_TEMP/r12.py" "$I" "$F"
+
+      - name: Apply R1.3C sparse frame trace foundation
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/vc7r18"
+          F="$OUT/src/org/recompile/freej2me/RG35XXGoldenFrameTransport.java"
+          python3 scripts/vc7r22r13c_apply_sparse_frame_trace.py "$F"
+
+      - name: Apply R1.3E MIDlet/input/event trace
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/vc7r18"
+          python3 scripts/vc7r22r13e_apply_midlet_event_trace.py \
+            "$OUT/src/org/recompile/freej2me/Libretro.java" \
+            "$OUT/src/org/recompile/mobile/MobilePlatform.java" \
+            "$OUT/src/javax/microedition/lcdui/Display.java"
+          for t in LR_RX_DOWN LR_RX_UP MP_POST_DOWN MP_POST_UP MP_DELIVER_DOWN_BEGIN MP_DELIVER_DOWN_DONE MP_DELIVER_UP_BEGIN MP_DELIVER_UP_DONE DISPLAY_ENQUEUE_INPUT DISPLAY_DISPATCH_INPUT_BEGIN DISPLAY_DISPATCH_INPUT_DONE DISPLAY_PAINT_BEGIN DISPLAY_PAINT_DONE SETCURRENT_REQUEST SETCURRENT_RUN_BEGIN SETCURRENT_RUN_DONE; do
+            grep -R -Fq "$t" "$OUT/src"
+          done
+
+      - name: Clean rebuild and bytecode gates
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/vc7r18"
+          rm -rf "$OUT/build/classes"
+          (cd "$OUT" && ant)
+          JAR="$OUT/build/freej2me_plus-lr.jar"
+          python3 - "$JAR" <<'PY'
+          import zipfile,sys,hashlib,struct
+          jar=sys.argv[1]
+          with zipfile.ZipFile(jar) as z:
+              names=['org/recompile/freej2me/Libretro.class','org/recompile/mobile/MobilePlatform.class','javax/microedition/lcdui/Display.class','org/recompile/freej2me/RG35XXGoldenFrameTransport.class','org/recompile/mobile/PlatformImage.class']
+              data={n:z.read(n) for n in names}
+          for n in names:
+              b=data[n]
+              if b[:4]!=b'\xca\xfe\xba\xbe' or struct.unpack('>H',b[6:8])[0]!=50:
+                  raise SystemExit('FAIL Java6 class gate '+n)
+          required={
+            'org/recompile/freej2me/Libretro.class':[b'RG35XX-R13E-EVENT',b'LR_RX_DOWN',b'LR_RX_UP'],
+            'org/recompile/mobile/MobilePlatform.class':[b'MP_POST_DOWN',b'MP_POST_UP',b'MP_DELIVER_DOWN_BEGIN',b'MP_DELIVER_DOWN_DONE',b'MP_DELIVER_UP_BEGIN',b'MP_DELIVER_UP_DONE'],
+            'javax/microedition/lcdui/Display.class':[b'DISPLAY_ENQUEUE_INPUT',b'DISPLAY_DISPATCH_INPUT_BEGIN',b'DISPLAY_DISPATCH_INPUT_DONE',b'DISPLAY_PAINT_BEGIN',b'DISPLAY_PAINT_DONE',b'SETCURRENT_REQUEST',b'SETCURRENT_RUN_BEGIN',b'SETCURRENT_RUN_DONE'],
+            'org/recompile/freej2me/RG35XXGoldenFrameTransport.class':[b'RG35XX-R13C-FRAME',b'IPC_FLUSH_DONE'],
+            'org/recompile/mobile/PlatformImage.class':[b'rg35xxVC7R20ApplyPngTransparency']}
+          for n,toks in required.items():
+              for tok in toks:
+                  if tok not in data[n]: raise SystemExit('FAIL missing '+repr(tok)+' in '+n)
+          for tok in (b'argbSnapshot',b'sendFrameLocked',b'RG35XX-JAVA-DIAG:'):
+              if tok in data['org/recompile/freej2me/RG35XXGoldenFrameTransport.class']:
+                  raise SystemExit('FAIL stale transport '+repr(tok))
+          for n in names:
+              print(n+' SHA256='+hashlib.sha256(data[n]).hexdigest())
+          print('R13E_BYTECODE_GATE=PASS')
+          PY
+
+      - name: Package runtime only
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/vc7r18"
+          P="$RUNNER_TEMP/vc7r22r13e-out"
+          mkdir -p "$P"
+          cp "$OUT/build/freej2me_plus-lr.jar" "$P/freej2me-lr-vc7r22r13e.jar"
+          J=$(sha256sum "$P/freej2me-lr-vc7r22r13e.jar" | awk '{print $1}')
+          cat > "$P/STATUS.txt" <<EOF
+          STATUS=BUILD-PASS-DEVICE-TRACE-PENDING
+          CHECKPOINT=VC7R22-R1.3E-MIDLET-EVENT-TRACE
+          CORE_AUDIO=UNCHANGED_R1_WORKER_RING
+          CORE_VIDEO=RETURN_TO_STABLE_R1_CORE
+          RUNTIME_BASE=R1.3C_SPARSE_FRAME_TRACE
+          RUNTIME_SHA256=$J
+          TRACE_POLICY=FIRST_16_THEN_EVERY_120
+          EVENT_TRACE=LR_RX,MP_POST,DISPLAY_ENQUEUE,DISPLAY_DISPATCH,MP_DELIVER,DISPLAY_PAINT,SETCURRENT
+          FRAME_TRACE=R1.3C_PRESERVED
+          TRANSPARENCY_POLICY=UNCHANGED_FROM_R1.2A
+          DEVICE_TRACE=PENDING
+          EOF
+          (cd "$P" && sha256sum * > SHA256SUMS.txt)
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rg35xx-vc7r22r13e-midlet-event-trace-runtime
+          path: ${{ runner.temp }}/vc7r22r13e-out
+          retention-days: 90
