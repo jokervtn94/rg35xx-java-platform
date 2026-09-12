@@ -72,11 +72,12 @@ jobs:
               if tok not in t: raise SystemExit('FAIL missing '+repr(tok))
           for tok in (b'argbSnapshot',b'sendFrameLocked',b'RG35XX-JAVA-DIAG:'):
               if tok in t: raise SystemExit('FAIL stale token '+repr(tok))
-          if b'hasMeaningfulAlpha' not in i:
-              raise SystemExit('FAIL R1.2 transparency bytecode missing')
+          for tok in (b'rg35xxVC7R20ApplyPngTransparency',b'rg35xxVC7R21ApplyLegacyBorderWhiteKey'):
+              if tok not in i: raise SystemExit('FAIL transparency method missing '+repr(tok))
           print('R13A_TRANSPORT_CLASS_SHA256='+hashlib.sha256(t).hexdigest())
           print('R13A_PLATFORMIMAGE_CLASS_SHA256='+hashlib.sha256(i).hexdigest())
           print('R13A_IMAGE_CREATE_BYTECODE=ABSENT')
+          print('R13A_TRANSPARENCY_METHODS=PRESENT')
           PY
 
           javap -classpath "$JAR" -private -c org.recompile.freej2me.RG35XXGoldenFrameTransport > "$RUNNER_TEMP/r13a.javap"
