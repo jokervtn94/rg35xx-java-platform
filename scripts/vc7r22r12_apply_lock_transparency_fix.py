@@ -22,24 +22,32 @@ i=re.sub(r'\n\t\tif\(rg35xxVC7R20TrnsLogCount\+\+<16\)\n\t\t\tSystem\.err\.print
 # Two fixed snapshots avoid races without per-frame allocation.
 f=f.replace('''    private final int[] argbSnapshot = new int[MAX_PIXELS];\n''','''    private final int[] workerSnapshot = new int[MAX_PIXELS];\n    private final int[] controlSnapshot = new int[MAX_PIXELS];\n''',1)
 
-# VC7R22 foundation already removes executable JAVA-DIAG println statements.
-# Historical comments/string remnants are harmless; gate executable statements only.
-def assert_no_executable_java_diag(text):
-    lines=text.splitlines(True)
-    k=0
-    while k < len(lines):
-        line=lines[k]
-        if 'System.err.println(' in line and not line.lstrip().startswith('//'):
-            stmt=line
-            j=k
-            while ');' not in stmt and j+1 < len(lines):
-                j+=1
-                stmt+=lines[j]
-            if 'RG35XX-JAVA-DIAG:' in stmt:
-                raise SystemExit('R1.2 executable JAVA-DIAG survived frame transport')
-            k=j+1
-            continue
-        k+=1
+# VC7R18 diagnostics are routed through rg35xxVC7R18Diag(...), not directly
+# through System.err.println at each callsite. Previous cleanup only gated direct
+# println statements, so the helper calls remained executable and expensive.
+# Remove every helper call statement, including multiline StringBuilder-style
+# concatenations, then make the helper itself a no-op as a fail-safe.
+helper_calls_before=len(re.findall(r'\brg35xxVC7R18Diag\s*\(',f))
+f=re.sub(r'\n\s*rg35xxVC7R18Diag\s*\(.*?\);\s*', '\n', f, flags=re.S)
+helper_sig='    private static void rg35xxVC7R18Diag(String msg)'
+start=f.find(helper_sig)
+if start>=0:
+    brace=f.find('{',start+len(helper_sig))
+    if brace<0: raise SystemExit('R1.2 diag helper opening brace not found')
+    depth=0; p=brace
+    while p<len(f):
+        if f[p]=='{': depth+=1
+        elif f[p]=='}':
+            depth-=1
+            if depth==0:
+                f=f[:brace]+'{\n        /* VC7R22-R1.2a: production no-op; diagnostics removed from hot path. */\n    }'+f[p+1:]
+                break
+        p+=1
+    else:
+        raise SystemExit('R1.2 diag helper closing brace not found')
+
+# Remove any remaining direct JAVA-DIAG println statements if formatting differs.
+f=re.sub(r'\n\s*System\.err\.println\(\"RG35XX-JAVA-DIAG:.*?\);\s*', '\n', f, flags=re.S)
 
 old_control='''        try\n        {\n            synchronized(encodeLock)\n            {\n                sendFrameLocked(sourceWidth, sourceHeight, sourceData, sourceLock);\n            }\n        }\n'''
 new_control='''        try\n        {\n            if(snapshotFrame(sourceWidth, sourceHeight, sourceData, sourceLock, controlSnapshot))\n            {\n                synchronized(encodeLock)\n                {\n                    encodeAndWriteFrame(sourceWidth, sourceHeight, controlSnapshot);\n                }\n            }\n        }\n'''
@@ -64,11 +72,18 @@ f=f.replace('worker.setDaemon(false);','worker.setDaemon(true);',1)
 for tok in ('hasMeaningfulAlpha','if(!hasMeaningfulAlpha && !hasTrns)','workerSnapshot','controlSnapshot','snapshotFrame(','encodeAndWriteFrame(','worker.setDaemon(true)'):
     if tok not in i+f: raise SystemExit('R1.2 missing '+tok)
 if 'sendFrameLocked(' in f: raise SystemExit('R1.2 old sendFrameLocked survived')
-assert_no_executable_java_diag(f)
+# No executable callsite may remain. The no-op helper declaration itself is allowed.
+remaining_calls=len(re.findall(r'\brg35xxVC7R18Diag\s*\(',f))
+allowed_decl=1 if helper_sig in f else 0
+if remaining_calls!=allowed_decl:
+    raise SystemExit('R1.2 helper diagnostic callsites survived: %d'%remaining_calls)
+if 'System.err.println("RG35XX-JAVA-DIAG:' in f:
+    raise SystemExit('R1.2 direct JAVA-DIAG println survived')
 if orig_i==i or orig_f==f: raise SystemExit('R1.2 no mutation')
 pi.write_text(i,encoding='utf-8',newline='\n')
 ft.write_text(f,encoding='utf-8',newline='\n')
 print('VC7R22-R1.2 LOCK_TRANSPARENCY_FIX=PASS')
+print('JAVA_DIAG_HELPER_CALLS_BEFORE=%d'%helper_calls_before)
 print('JAVA_DIAG_EXECUTABLE_SURVIVORS=0')
 print('LOCK_ORDER=FRONTBUFFER_SNAPSHOT_THEN_ENCODE')
 print('TRANSPARENCY=MEANINGFUL_PIXEL_ALPHA_THEN_TRNS_THEN_LEGACY_WHITEKEY')
