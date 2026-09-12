@@ -1,0 +1,79 @@
+name: Verified Clean VC7R22-R1.2 Lock + Transparency Runtime
+
+on:
+  push:
+    branches: [ verified-clean-platform-v1 ]
+    paths:
+      - '.github/workflows/verified-clean-vc7r22r12-lock-transparency.yml'
+      - 'scripts/vc7r22r12_apply_lock_transparency_fix.py'
+  workflow_dispatch:
+
+jobs:
+  runtime:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build accepted VC7R22 runtime foundation
+        run: |
+          set -euo pipefail
+          bash scripts/vc7r22_ci.sh
+      - name: Apply R1.2 lock/transparency runtime patch
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/vc7r18"
+          I="$OUT/src/org/recompile/mobile/PlatformImage.java"
+          F="$OUT/src/org/recompile/freej2me/RG35XXGoldenFrameTransport.java"
+          python3 scripts/vc7r22r12_apply_lock_transparency_fix.py "$I" "$F"
+          grep -Fq 'hasMeaningfulAlpha' "$I"
+          grep -Fq 'if(!hasMeaningfulAlpha && !hasTrns)' "$I"
+          grep -Fq 'workerSnapshot' "$F"
+          grep -Fq 'controlSnapshot' "$F"
+          grep -Fq 'snapshotFrame(' "$F"
+          grep -Fq 'encodeAndWriteFrame(' "$F"
+          grep -Fq 'worker.setDaemon(true)' "$F"
+          ! grep -Fq 'sendFrameLocked(' "$F"
+          ! grep -Fq 'RG35XX-JAVA-DIAG:' "$F"
+      - name: Rebuild Java 6 runtime
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/vc7r18"
+          (cd "$OUT" && ant)
+          python3 - "$OUT/build/classes" <<'PY'
+          import os,struct,sys
+          n=0
+          for b,_,fs in os.walk(sys.argv[1]):
+            for f in fs:
+              if f.endswith('.class'):
+                n+=1
+                h=open(os.path.join(b,f),'rb').read(8)
+                if len(h)!=8 or h[:4]!=b'\xca\xfe\xba\xbe' or struct.unpack('>H',h[6:8])[0]!=50:
+                  raise SystemExit('Java major gate failed: '+os.path.join(b,f))
+          print('VC7R22R12_CLASS_COUNT=%d'%n)
+          PY
+      - name: Package runtime only
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/vc7r18"
+          P="$RUNNER_TEMP/vc7r22r12-out"
+          mkdir -p "$P"
+          cp "$OUT/build/freej2me_plus-lr.jar" "$P/freej2me-lr-vc7r22r12.jar"
+          J=$(sha256sum "$P/freej2me-lr-vc7r22r12.jar" | awk '{print $1}')
+          cat > "$P/STATUS.txt" <<EOF
+          STATUS=BUILD-PASS-DEVICE-TEST-PENDING
+          CHECKPOINT=VC7R22-R1.2
+          CORE_AUDIO=UNCHANGED_R1_WORKER_RING
+          RUNTIME_SHA256=$J
+          FRAME_LOCK_ORDER=FRONTBUFFER_SNAPSHOT_THEN_ENCODE
+          FRAME_WORKER_DAEMON=TRUE
+          JAVA_DIAG_TRANSPORT=REMOVED
+          TRANSPARENCY=MEANINGFUL_PIXEL_ALPHA_THEN_TRNS_THEN_LEGACY_PURE_WHITE_BORDER_KEY
+          GLOBAL_WHITE_TRANSPARENCY=FORBIDDEN
+          DEVICE_TEST=PENDING
+          EOF
+          (cd "$P" && sha256sum * > SHA256SUMS.txt)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rg35xx-vc7r22r12-runtime
+          path: ${{ runner.temp }}/vc7r22r12-out
+          retention-days: 90
