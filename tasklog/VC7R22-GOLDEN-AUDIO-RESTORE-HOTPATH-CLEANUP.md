@@ -1,6 +1,6 @@
 # VC7R22 — Golden Audio Restore + Hotpath Cleanup
 
-Status: BUILD-GATE-IN-PROGRESS / DEVICE-TEST-PENDING
+Status: CI-PASS / DEVICE-TEST-PENDING
 Date: 2026-09-12
 
 ## Device evidence that triggered this checkpoint
@@ -9,12 +9,50 @@ Current KDTT/Ninja logs continue producing frames and cleanly deinitialize the n
 
 ## Confirmed hot-path gate defect
 
-VC7R19 removed direct statements matching `System.err.println("RG35XX-...")`, but two diagnostic families bypassed that gate:
+VC7R19 removed direct statements matching `System.err.println("RG35XX-...")`, but diagnostic families bypassed that gate:
 
-1. VC7R9 image sampling builds a `StringBuffer` and prints with `System.err.println(b.toString())`. It samples up to 256 source pixels for BEFORE/AFTER phases across many image operations.
-2. `RG35XXGoldenFrameTransport` contains per-request/per-frame `RG35XX-JAVA-DIAG` writes around worker wake, snapshot, RGB565 encoding, IPC header/payload and flush.
+1. VC7R9 image sampling builds a `StringBuffer` and prints with `System.err.println(b.toString())` while sampling source pixels around image operations.
+2. VC7R13 fullscreen composition probe samples up to 512 pixels, builds a stack trace/StringBuffer, and writes stderr on qualifying full-screen blits.
+3. `RG35XXGoldenFrameTransport` historically contained per-request/per-frame `RG35XX-JAVA-DIAG` writes around worker wake, snapshot, RGB565 encoding, IPC header/payload and flush.
+4. VC7R5 frame color sampling also used StringBuffer-based stderr diagnostics.
 
-VC7R22 disables the VC7R9/VC7R5 sampling helpers and removes frame-transport `RG35XX-JAVA-DIAG` writes while preserving `RG35XX-VIDEO JAVA ... error` diagnostics and stack traces.
+VC7R22 now replaces VC7R9, VC7R13 and VC7R5 diagnostic helper bodies with production no-ops, removes executable frame-transport `RG35XX-JAVA-DIAG` writes, and preserves `RG35XX-VIDEO JAVA ... error` diagnostics and stack traces.
+
+## CI result
+
+GitHub Actions run `34695957733` for commit `dfc48d971725c3aeca90730e08e44eabac2c98f0` passed all build and artifact gates.
+
+Confirmed markers:
+
+- `VC7R22_HOTPATH_CLEANUP=PASS`
+- `FRAME_JAVA_DIAG_EXECUTABLE_SURVIVORS=0`
+- `VC7R9_IMAGE_SAMPLER=NOOP`
+- `VC7R13_FULLSCREEN_SAMPLER=NOOP`
+- `VC7R5_COLOR_SAMPLER=NOOP_OR_ABSENT`
+- `ERROR_DIAGNOSTICS=PRESERVED`
+- `VC7R22_BUILD=PASS`
+- `VC7R22_CORE_PACKAGED=NO`
+- `VC7R22_ARTIFACT_POLICY_GATE=PASS`
+
+Uploaded artifact:
+
+- name: `rg35xx-vc7r22-hotpath-clean-runtime`
+- artifact id: `10298303783`
+- archive SHA256: `6ca07e1ace086e767c40f0c7d618762b56417dcb066e7329e83922518ac983d4`
+
+Artifact audit contents:
+
+- `freej2me-lr-vc7r22.jar`
+- `VC7R22-FONT-MANIFEST.json`
+- `STATUS.txt`
+- `CORE-POLICY.txt`
+- `SHA256SUMS.txt`
+
+Audited JAR SHA256:
+
+- `cb8926539749535a53cb4a627e814e198aaa0eba3cce8cac1bb213957e37189b`
+
+No `.so` file is present in the artifact. This is intentional and confirms that VC7R22 did not silently substitute the source-built VC7R3 audio core.
 
 ## Audio forensic result
 
