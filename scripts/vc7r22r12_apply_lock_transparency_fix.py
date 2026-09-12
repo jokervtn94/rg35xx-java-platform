@@ -22,9 +22,25 @@ i=re.sub(r'\n\t\tif\(rg35xxVC7R20TrnsLogCount\+\+<16\)\n\t\t\tSystem\.err\.print
 # Two fixed snapshots avoid races without per-frame allocation.
 f=f.replace('''    private final int[] argbSnapshot = new int[MAX_PIXELS];\n''','''    private final int[] workerSnapshot = new int[MAX_PIXELS];\n    private final int[] controlSnapshot = new int[MAX_PIXELS];\n''',1)
 
-# Remove every old JAVA-DIAG println, including multiline concatenations.
-# Preserve RG35XX-VIDEO real error diagnostics.
-f=re.sub(r'\n\s*System\.err\.println\(\"RG35XX-JAVA-DIAG:.*?\);\s*', '\n', f, flags=re.S)
+# Remove every old JAVA-DIAG println statement, including multiline concatenations.
+# Do not depend on line shape: locate the println owning the token, then delete
+# exactly through that Java statement's semicolon. Real RG35XX-VIDEO errors stay.
+def strip_diag_prints(text):
+    token='RG35XX-JAVA-DIAG:'
+    removed=0
+    while token in text:
+        pos=text.find(token)
+        start=text.rfind('System.err.println(',0,pos)
+        if start<0:
+            raise SystemExit('R1.2 orphan JAVA-DIAG token near offset %d'%pos)
+        end=text.find(';',pos)
+        if end<0:
+            raise SystemExit('R1.2 unterminated JAVA-DIAG println near offset %d'%pos)
+        # Keep surrounding control-flow/braces intact; remove only the println.
+        text=text[:start]+text[end+1:]
+        removed+=1
+    return text,removed
+f,diag_removed=strip_diag_prints(f)
 
 old_control='''        try\n        {\n            synchronized(encodeLock)\n            {\n                sendFrameLocked(sourceWidth, sourceHeight, sourceData, sourceLock);\n            }\n        }\n'''
 new_control='''        try\n        {\n            if(snapshotFrame(sourceWidth, sourceHeight, sourceData, sourceLock, controlSnapshot))\n            {\n                synchronized(encodeLock)\n                {\n                    encodeAndWriteFrame(sourceWidth, sourceHeight, controlSnapshot);\n                }\n            }\n        }\n'''
@@ -54,6 +70,7 @@ if orig_i==i or orig_f==f: raise SystemExit('R1.2 no mutation')
 pi.write_text(i,encoding='utf-8',newline='\n')
 ft.write_text(f,encoding='utf-8',newline='\n')
 print('VC7R22-R1.2 LOCK_TRANSPARENCY_FIX=PASS')
+print('JAVA_DIAG_PRINTS_REMOVED=%d'%diag_removed)
 print('LOCK_ORDER=FRONTBUFFER_SNAPSHOT_THEN_ENCODE')
 print('TRANSPARENCY=MEANINGFUL_PIXEL_ALPHA_THEN_TRNS_THEN_LEGACY_WHITEKEY')
 print('FRAME_WORKER_DAEMON=TRUE')
