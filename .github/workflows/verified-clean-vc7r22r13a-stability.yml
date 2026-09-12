@@ -1,0 +1,127 @@
+name: Verified Clean VC7R22-R1.3A Stability Runtime
+
+on:
+  push:
+    branches: [ verified-clean-platform-v1 ]
+    paths:
+      - '.github/workflows/verified-clean-vc7r22r13a-stability.yml'
+      - 'scripts/vc7r22r13a_apply_stability_fix.py'
+  workflow_dispatch:
+
+jobs:
+  runtime:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Build accepted VC7R22 runtime foundation
+        run: |
+          set -euo pipefail
+          bash scripts/vc7r22_ci.sh
+
+      - name: Apply proven R1.2a source patch
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/vc7r18"
+          I="$OUT/src/org/recompile/mobile/PlatformImage.java"
+          F="$OUT/src/org/recompile/freej2me/RG35XXGoldenFrameTransport.java"
+          cp scripts/vc7r22r12_apply_lock_transparency_fix.py "$RUNNER_TEMP/r12.py"
+          python3 - <<'PY'
+          from pathlib import Path
+          import os
+          p=Path(os.environ['RUNNER_TEMP'])/'r12.py'
+          s=p.read_text(encoding='utf-8')
+          a=s.index("remaining_calls=len(re.findall")
+          b=s.index("if orig_i==i or orig_f==f",a)
+          replacement="""remaining_calls=len(re.findall(r'\\brg35xxVC7R18Diag\\s*\\(',f))\nif remaining_calls>1:\n    raise SystemExit('R1.2 multiple diagnostic occurrences survived: %d'%remaining_calls)\nif 'System.err.println(\"RG35XX-JAVA-DIAG:' in f:\n    raise SystemExit('R1.2 direct JAVA-DIAG println survived')\nif helper_calls_before>remaining_calls and helper_removed<1:\n    raise SystemExit('R1.2 expected helper diagnostic call removal did not occur')\n"""
+          p.write_text(s[:a]+replacement+s[b:],encoding='utf-8')
+          PY
+          python3 "$RUNNER_TEMP/r12.py" "$I" "$F"
+
+      - name: Apply R1.3A stabilization
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/vc7r18"
+          python3 scripts/vc7r22r13a_apply_stability_fix.py "$OUT/src"
+          F="$OUT/src/org/recompile/freej2me/RG35XXGoldenFrameTransport.java"
+          ! grep -Fq 'synchronized(lock)' "$F"
+          grep -Fq 'System.arraycopy(data, 0, snapshot, 0, pixels);' "$F"
+          ! grep -R -Fq 'RG35XX-VC7R13-IMAGE-CREATE' "$OUT/src"
+
+      - name: Clean rebuild and bytecode gates
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/vc7r18"
+          rm -rf "$OUT/build/classes"
+          (cd "$OUT" && ant)
+          JAR="$OUT/build/freej2me_plus-lr.jar"
+          python3 - "$JAR" <<'PY'
+          import zipfile,sys,hashlib
+          jar=sys.argv[1]
+          with zipfile.ZipFile(jar) as z:
+              t=z.read('org/recompile/freej2me/RG35XXGoldenFrameTransport.class')
+              i=z.read('org/recompile/mobile/PlatformImage.class')
+              for n in z.namelist():
+                  if n.endswith('.class') and b'RG35XX-VC7R13-IMAGE-CREATE' in z.read(n):
+                      raise SystemExit('FAIL: image-create bytecode survived in '+n)
+          for tok in (b'workerSnapshot',b'controlSnapshot',b'snapshotFrame',b'encodeAndWriteFrame'):
+              if tok not in t: raise SystemExit('FAIL missing '+repr(tok))
+          for tok in (b'argbSnapshot',b'sendFrameLocked',b'RG35XX-JAVA-DIAG:'):
+              if tok in t: raise SystemExit('FAIL stale token '+repr(tok))
+          if b'hasMeaningfulAlpha' not in i:
+              raise SystemExit('FAIL R1.2 transparency bytecode missing')
+          print('R13A_TRANSPORT_CLASS_SHA256='+hashlib.sha256(t).hexdigest())
+          print('R13A_PLATFORMIMAGE_CLASS_SHA256='+hashlib.sha256(i).hexdigest())
+          print('R13A_IMAGE_CREATE_BYTECODE=ABSENT')
+          PY
+
+          javap -classpath "$JAR" -private -c org.recompile.freej2me.RG35XXGoldenFrameTransport > "$RUNNER_TEMP/r13a.javap"
+          python3 - "$RUNNER_TEMP/r13a.javap" <<'PY'
+          import re,sys
+          s=open(sys.argv[1],encoding='utf-8',errors='replace').read()
+          m=re.search(r'private boolean snapshotFrame\(.*?\);(.*?)(?=\n  private |\n  public |\n  protected |\Z)',s,re.S)
+          if not m: raise SystemExit('FAIL snapshotFrame javap section missing')
+          if 'monitorenter' in m.group(1): raise SystemExit('FAIL snapshotFrame still uses monitorenter')
+          if not re.search(r'iconst_1\s+\d+: invokevirtual\s+#\d+\s+// Method java/lang/Thread\.setDaemon:\(Z\)V',s):
+              raise SystemExit('FAIL daemon=true bytecode not proven')
+          print('R13A_SNAPSHOT_MONITORENTER=0')
+          print('R13A_DAEMON_BYTECODE=TRUE')
+          PY
+
+      - name: Package runtime only
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/vc7r18"
+          P="$RUNNER_TEMP/vc7r22r13a-out"
+          mkdir -p "$P"
+          cp "$OUT/build/freej2me_plus-lr.jar" "$P/freej2me-lr-vc7r22r13a.jar"
+          J=$(sha256sum "$P/freej2me-lr-vc7r22r13a.jar" | awk '{print $1}')
+          T=$(unzip -p "$P/freej2me-lr-vc7r22r13a.jar" org/recompile/freej2me/RG35XXGoldenFrameTransport.class | sha256sum | awk '{print $1}')
+          I=$(unzip -p "$P/freej2me-lr-vc7r22r13a.jar" org/recompile/mobile/PlatformImage.class | sha256sum | awk '{print $1}')
+          cat > "$P/STATUS.txt" <<EOF
+          STATUS=BUILD-PASS-DEVICE-TEST-PENDING
+          CHECKPOINT=VC7R22-R1.3A-STABILITY
+          CORE_AUDIO=UNCHANGED_R1_WORKER_RING
+          RUNTIME_SHA256=$J
+          TRANSPORT_CLASS_SHA256=$T
+          PLATFORMIMAGE_CLASS_SHA256=$I
+          FRAME_SNAPSHOT=LOCK_FREE_BEST_EFFORT
+          FRAME_SNAPSHOT_MONITORENTER=0
+          FRAME_WORKER_DAEMON=TRUE
+          VC7R13_IMAGE_CREATE_BYTECODE=ABSENT
+          TRANSPARENCY_POLICY=UNCHANGED_FROM_R1.2A
+          TRANSPARENCY_REPAIR=DEFERRED_UNTIL_STABILITY_CONFIRMED
+          DEVICE_TEST=PENDING
+          EOF
+          (cd "$P" && sha256sum * > SHA256SUMS.txt)
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rg35xx-vc7r22r13a-stability-runtime
+          path: ${{ runner.temp }}/vc7r22r13a-out
+          retention-days: 90
