@@ -22,10 +22,9 @@ i=re.sub(r'\n\t\tif\(rg35xxVC7R20TrnsLogCount\+\+<16\)\n\t\t\tSystem\.err\.print
 # Two fixed snapshots avoid races without per-frame allocation.
 f=f.replace('''    private final int[] argbSnapshot = new int[MAX_PIXELS];\n''','''    private final int[] workerSnapshot = new int[MAX_PIXELS];\n    private final int[] controlSnapshot = new int[MAX_PIXELS];\n''',1)
 
-# Remove all old JAVA-DIAG prints, preserving real VIDEO errors.
-f=re.sub(r'^\s*System\.err\.println\("RG35XX-JAVA-DIAG:.*?;\s*$', '', f, flags=re.M)
-# Handle multiline requestFrame ENTER diagnostic specially.
-f=re.sub(r'\n\s*System\.err\.println\("RG35XX-JAVA-DIAG: requestFrame ENTER.*?\);\n', '\n', f, flags=re.S)
+# Remove every old JAVA-DIAG println, including multiline concatenations.
+# Preserve RG35XX-VIDEO real error diagnostics.
+f=re.sub(r'\n\s*System\.err\.println\(\"RG35XX-JAVA-DIAG:.*?\);\s*', '\n', f, flags=re.S)
 
 old_control='''        try\n        {\n            synchronized(encodeLock)\n            {\n                sendFrameLocked(sourceWidth, sourceHeight, sourceData, sourceLock);\n            }\n        }\n'''
 new_control='''        try\n        {\n            if(snapshotFrame(sourceWidth, sourceHeight, sourceData, sourceLock, controlSnapshot))\n            {\n                synchronized(encodeLock)\n                {\n                    encodeAndWriteFrame(sourceWidth, sourceHeight, controlSnapshot);\n                }\n            }\n        }\n'''
