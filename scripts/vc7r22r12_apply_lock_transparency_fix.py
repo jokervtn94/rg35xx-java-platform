@@ -39,9 +39,6 @@ f=f[:m.start()]+replacement+f[m.end():]
 f=f.replace('worker.setDaemon(false);','worker.setDaemon(true);',1)
 
 # ---- Strip VC7R18 diagnostic CALLS only after structural patching. ----
-# Do not use DOTALL regex here: some calls are multiline and regex can consume
-# neighboring control-flow. Parse one standalone Java call statement at a time,
-# balancing parentheses and respecting string/char literals.
 def strip_standalone_calls(text, token):
     removed=0
     search_from=0
@@ -50,15 +47,13 @@ def strip_standalone_calls(text, token):
         if pos<0: break
         line_start=text.rfind('\n',0,pos)+1
         prefix=text[line_start:pos]
-        # Method declaration/reference is not a standalone call statement.
+        # Only remove standalone call statements. Declarations have a non-empty prefix.
         if prefix.strip()!='':
             search_from=pos+len(token)
             continue
         paren=text.find('(',pos+len(token))
-        if paren<0:
-            raise SystemExit('R1.2 malformed diagnostic call')
-        depth=0; p=paren; in_str=False; in_char=False; esc=False
-        close=-1
+        if paren<0: raise SystemExit('R1.2 malformed diagnostic call')
+        depth=0; p=paren; in_str=False; in_char=False; esc=False; close=-1
         while p<len(text):
             c=text[p]
             if in_str:
@@ -96,14 +91,13 @@ helper_token='rg35xxVC7R18Diag'
 helper_calls_before=len(re.findall(r'\brg35xxVC7R18Diag\s*\(',f))
 f,helper_removed=strip_standalone_calls(f,helper_token)
 
-# Make the helper itself a no-op so even a future accidental call cannot write.
-helper_sig='    private static void rg35xxVC7R18Diag(String msg)'
-start=f.find(helper_sig)
-if start>=0:
-    brace=f.find('{',start+len(helper_sig))
+# Match the actual Java helper declaration independent of visibility/static spelling.
+helper_decl_re=re.compile(r'(?m)^[ \t]*(?:(?:public|protected|private)[ \t]+)?(?:static[ \t]+)?void[ \t]+rg35xxVC7R18Diag[ \t]*\([^)]*\)[ \t]*(?:throws[^{\n]+)?\{')
+helper_match=helper_decl_re.search(f)
+if helper_match:
+    brace=f.find('{',helper_match.start(),helper_match.end()+1)
     if brace<0: raise SystemExit('R1.2 diag helper opening brace not found')
-    depth=0; p=brace; in_str=False; in_char=False; esc=False
-    close=-1
+    depth=0; p=brace; in_str=False; in_char=False; esc=False; close=-1
     while p<len(f):
         c=f[p]
         if in_str:
@@ -134,13 +128,15 @@ for tok in ('hasMeaningfulAlpha','if(!hasMeaningfulAlpha && !hasTrns)','workerSn
     if tok not in i+f: raise SystemExit('R1.2 missing '+tok)
 if 'sendFrameLocked(' in f: raise SystemExit('R1.2 old sendFrameLocked survived')
 remaining_calls=len(re.findall(r'\brg35xxVC7R18Diag\s*\(',f))
-allowed_decl=1 if helper_sig in f else 0
+allowed_decl=1 if helper_decl_re.search(f) else 0
 if remaining_calls!=allowed_decl:
     raise SystemExit('R1.2 helper diagnostic callsites survived: %d (allowed declaration=%d)'%(remaining_calls,allowed_decl))
 if 'System.err.println("RG35XX-JAVA-DIAG:' in f:
     raise SystemExit('R1.2 direct JAVA-DIAG println survived')
 if helper_calls_before>allowed_decl and helper_removed<1:
     raise SystemExit('R1.2 expected helper diagnostic call removal did not occur')
+if helper_calls_before and not helper_match:
+    raise SystemExit('R1.2 diagnostic helper declaration not found')
 if orig_i==i or orig_f==f: raise SystemExit('R1.2 no mutation')
 pi.write_text(i,encoding='utf-8',newline='\n')
 ft.write_text(f,encoding='utf-8',newline='\n')
