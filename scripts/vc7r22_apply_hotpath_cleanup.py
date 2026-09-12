@@ -10,16 +10,94 @@ ft = pathlib.Path(sys.argv[2])
 g = pg.read_text(encoding='utf-8')
 f = ft.read_text(encoding='utf-8')
 
-# VC7R9 was a diagnostic probe, not runtime behavior. Its helper samples up to
-# 256 pixels twice per image operation and prints a large StringBuffer to stderr.
-# Keep call sites/source markers so the historical assembly chain remains
-# compatible, but turn the helper itself into a production no-op.
-start = g.find('\tprivate void vc7r9ProbeImage(String phase, Image image, int x, int y)')
-end = g.find('\n\tpublic void drawImage(Image image, int x, int y, int anchor)', start)
-if start < 0 or end < 0:
-    raise SystemExit('VC7R22: VC7R9 image probe helper not found')
-replacement = '''\tprivate void vc7r9ProbeImage(String phase, Image image, int x, int y)\n\t{\n\t\t/* RG35XX-VC7R22-HOTPATH-CLEAN: production no-op. */\n\t}\n'''
-g = g[:start] + replacement + g[end:]
+
+def replace_method_body(text, signature, replacement_body, label):
+    """Replace exactly one Java method body without touching adjacent helpers."""
+    start = text.find(signature)
+    if start < 0:
+        raise SystemExit('VC7R22: %s helper not found' % label)
+    brace = text.find('{', start + len(signature))
+    if brace < 0:
+        raise SystemExit('VC7R22: %s opening brace not found' % label)
+
+    depth = 0
+    i = brace
+    in_string = False
+    in_char = False
+    escaped = False
+    line_comment = False
+    block_comment = False
+    while i < len(text):
+        c = text[i]
+        n = text[i + 1] if i + 1 < len(text) else ''
+
+        if line_comment:
+            if c == '\n':
+                line_comment = False
+            i += 1
+            continue
+        if block_comment:
+            if c == '*' and n == '/':
+                block_comment = False
+                i += 2
+                continue
+            i += 1
+            continue
+        if in_string:
+            if escaped:
+                escaped = False
+            elif c == '\\':
+                escaped = True
+            elif c == '"':
+                in_string = False
+            i += 1
+            continue
+        if in_char:
+            if escaped:
+                escaped = False
+            elif c == '\\':
+                escaped = True
+            elif c == "'":
+                in_char = False
+            i += 1
+            continue
+
+        if c == '/' and n == '/':
+            line_comment = True
+            i += 2
+            continue
+        if c == '/' and n == '*':
+            block_comment = True
+            i += 2
+            continue
+        if c == '"':
+            in_string = True
+            i += 1
+            continue
+        if c == "'":
+            in_char = True
+            i += 1
+            continue
+        if c == '{':
+            depth += 1
+        elif c == '}':
+            depth -= 1
+            if depth == 0:
+                end = i + 1
+                return text[:brace] + replacement_body + text[end:]
+        i += 1
+
+    raise SystemExit('VC7R22: %s closing brace not found' % label)
+
+
+# VC7R9 was a diagnostic probe, not runtime behavior. Replace only this method's
+# body. Do not slice to drawImage(): later revisions add helpers such as
+# vc7r13ProbeFullscreen between these methods and those must remain intact.
+g = replace_method_body(
+    g,
+    '\tprivate void vc7r9ProbeImage(String phase, Image image, int x, int y)',
+    '{\n\t\t/* RG35XX-VC7R22-HOTPATH-CLEAN: production no-op. */\n\t}',
+    'VC7R9 image probe')
 
 # Remove executable RG35XX-JAVA-DIAG println statements, including multiline
 # concatenations. VC7R19 may already have removed some or all of them, so this
@@ -44,14 +122,15 @@ while i < len(lines):
     i += 1
 f = ''.join(out)
 
-# VC7R5 uses StringBuffer + System.err.println(b.toString()), so it bypassed the
-# VC7R19 string-prefix gate. Make that sampling helper a no-op as well.
-p5s = f.find('    private void vc7r5LogSamples(String phase, int w, int h, int pixels, boolean encoded)')
-if p5s >= 0:
-    p5e = f.find('\n    private void sendFrameLocked(', p5s)
-    if p5e < 0:
-        raise SystemExit('VC7R22: VC7R5 helper end not found')
-    f = f[:p5s] + '''    private void vc7r5LogSamples(String phase, int w, int h, int pixels, boolean encoded)\n    {\n        /* RG35XX-VC7R22-HOTPATH-CLEAN: production no-op. */\n    }\n''' + f[p5e:]
+# VC7R5 uses StringBuffer + System.err.println(b.toString()). Replace exactly the
+# helper body so any methods inserted after it by later revisions are preserved.
+p5sig = '    private void vc7r5LogSamples(String phase, int w, int h, int pixels, boolean encoded)'
+if p5sig in f:
+    f = replace_method_body(
+        f,
+        p5sig,
+        '{\n        /* RG35XX-VC7R22-HOTPATH-CLEAN: production no-op. */\n    }',
+        'VC7R5 color sampler')
 
 # Fail closed on executable diagnostics, not historical comments or inert text.
 for name, text in [('PlatformGraphics', g), ('FrameTransport', f)]:
@@ -77,6 +156,8 @@ while i < len(scan_lines):
 
 if 'RG35XX-VC7R22-HOTPATH-CLEAN' not in g:
     raise SystemExit('VC7R22: graphics cleanup marker missing')
+if 'vc7r13ProbeFullscreen(' not in g:
+    raise SystemExit('VC7R22: VC7R13 fullscreen helper/call chain was accidentally removed')
 if 'RG35XX-VIDEO JAVA worker error' not in f or 'RG35XX-VIDEO JAVA control-frame error' not in f:
     raise SystemExit('VC7R22: required error diagnostics were removed')
 
@@ -87,4 +168,5 @@ print('FRAME_JAVA_DIAG_WRITES_REMOVED=%d' % removed)
 print('FRAME_JAVA_DIAG_EXECUTABLE_SURVIVORS=0')
 print('VC7R9_IMAGE_SAMPLER=NOOP')
 print('VC7R5_COLOR_SAMPLER=NOOP_OR_ABSENT')
+print('VC7R13_FULLSCREEN_HELPER=PRESERVED')
 print('ERROR_DIAGNOSTICS=PRESERVED')
