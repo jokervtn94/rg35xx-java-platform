@@ -74,26 +74,41 @@ jobs:
           import zipfile,sys,hashlib,struct
           jar=sys.argv[1]
           with zipfile.ZipFile(jar) as z:
-              names=['org/recompile/freej2me/Libretro.class','org/recompile/mobile/MobilePlatform.class','javax/microedition/lcdui/Display.class','org/recompile/freej2me/RG35XXGoldenFrameTransport.class','org/recompile/mobile/PlatformImage.class']
-              data={n:z.read(n) for n in names}
-          for n in names:
-              b=data[n]
+              all_classes={n:z.read(n) for n in z.namelist() if n.endswith('.class')}
+          must_java6=[
+              'org/recompile/freej2me/Libretro.class',
+              'org/recompile/mobile/MobilePlatform.class',
+              'javax/microedition/lcdui/Display.class',
+              'org/recompile/freej2me/RG35XXGoldenFrameTransport.class',
+              'org/recompile/mobile/PlatformImage.class']
+          for n in must_java6:
+              b=all_classes[n]
               if b[:4]!=b'\xca\xfe\xba\xbe' or struct.unpack('>H',b[6:8])[0]!=50:
                   raise SystemExit('FAIL Java6 class gate '+n)
+
+          def family(prefix):
+              return b'\n'.join(v for n,v in all_classes.items() if n==prefix+'.class' or n.startswith(prefix+'$'))
+          lib=family('org/recompile/freej2me/Libretro')
+          mp=family('org/recompile/mobile/MobilePlatform')
+          disp=family('javax/microedition/lcdui/Display')
+          ft=all_classes['org/recompile/freej2me/RG35XXGoldenFrameTransport.class']
+          pi=all_classes['org/recompile/mobile/PlatformImage.class']
+
           required={
-            'org/recompile/freej2me/Libretro.class':[b'RG35XX-R13E-EVENT',b'LR_RX_DOWN',b'LR_RX_UP'],
-            'org/recompile/mobile/MobilePlatform.class':[b'MP_POST_DOWN',b'MP_POST_UP',b'MP_DELIVER_DOWN_BEGIN',b'MP_DELIVER_DOWN_DONE',b'MP_DELIVER_UP_BEGIN',b'MP_DELIVER_UP_DONE'],
-            'javax/microedition/lcdui/Display.class':[b'DISPLAY_ENQUEUE_INPUT',b'DISPLAY_DISPATCH_INPUT_BEGIN',b'DISPLAY_DISPATCH_INPUT_DONE',b'DISPLAY_PAINT_BEGIN',b'DISPLAY_PAINT_DONE',b'SETCURRENT_REQUEST',b'SETCURRENT_RUN_BEGIN',b'SETCURRENT_RUN_DONE'],
-            'org/recompile/freej2me/RG35XXGoldenFrameTransport.class':[b'RG35XX-R13C-FRAME',b'IPC_FLUSH_DONE'],
-            'org/recompile/mobile/PlatformImage.class':[b'rg35xxVC7R20ApplyPngTransparency']}
-          for n,toks in required.items():
+            'Libretro-family':(lib,[b'RG35XX-R13E-EVENT',b'LR_RX_DOWN',b'LR_RX_UP']),
+            'MobilePlatform-family':(mp,[b'MP_POST_DOWN',b'MP_POST_UP',b'MP_DELIVER_DOWN_BEGIN',b'MP_DELIVER_DOWN_DONE',b'MP_DELIVER_UP_BEGIN',b'MP_DELIVER_UP_DONE']),
+            'Display-family':(disp,[b'DISPLAY_ENQUEUE_INPUT',b'DISPLAY_DISPATCH_INPUT_BEGIN',b'DISPLAY_DISPATCH_INPUT_DONE',b'DISPLAY_PAINT_BEGIN',b'DISPLAY_PAINT_DONE',b'SETCURRENT_REQUEST',b'SETCURRENT_RUN_BEGIN',b'SETCURRENT_RUN_DONE']),
+            'FrameTransport':(ft,[b'RG35XX-R13C-FRAME',b'IPC_FLUSH_DONE']),
+            'PlatformImage':(pi,[b'rg35xxVC7R20ApplyPngTransparency'])}
+          for label,(blob,toks) in required.items():
               for tok in toks:
-                  if tok not in data[n]: raise SystemExit('FAIL missing '+repr(tok)+' in '+n)
+                  if tok not in blob: raise SystemExit('FAIL missing '+repr(tok)+' in '+label)
           for tok in (b'argbSnapshot',b'sendFrameLocked',b'RG35XX-JAVA-DIAG:'):
-              if tok in data['org/recompile/freej2me/RG35XXGoldenFrameTransport.class']:
-                  raise SystemExit('FAIL stale transport '+repr(tok))
-          for n in names:
-              print(n+' SHA256='+hashlib.sha256(data[n]).hexdigest())
+              if tok in ft: raise SystemExit('FAIL stale transport '+repr(tok))
+
+          for n in must_java6:
+              print(n+' SHA256='+hashlib.sha256(all_classes[n]).hexdigest())
+          print('R13E_INNER_CLASS_TRACE_GATE=PASS')
           print('R13E_BYTECODE_GATE=PASS')
           PY
 
