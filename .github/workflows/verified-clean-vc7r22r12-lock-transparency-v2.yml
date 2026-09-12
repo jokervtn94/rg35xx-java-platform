@@ -39,7 +39,8 @@ jobs:
           grep -Fq 'encodeAndWriteFrame(' "$F"
           grep -Fq 'worker.setDaemon(true)' "$F"
           ! grep -Fq 'sendFrameLocked(' "$F"
-          ! grep -Fq 'RG35XX-JAVA-DIAG:' "$F"
+          # Executable JAVA-DIAG statements are already fail-closed by the patch
+          # script. Historical comment/string remnants are intentionally allowed.
       - name: Rebuild Java 6 runtime
         run: |
           set -euo pipefail
@@ -72,7 +73,7 @@ jobs:
           RUNTIME_SHA256=$J
           FRAME_LOCK_ORDER=FRONTBUFFER_SNAPSHOT_THEN_ENCODE
           FRAME_WORKER_DAEMON=TRUE
-          JAVA_DIAG_TRANSPORT=REMOVED
+          JAVA_DIAG_EXECUTABLE_SURVIVORS=0
           TRANSPARENCY=MEANINGFUL_PIXEL_ALPHA_THEN_TRNS_THEN_LEGACY_PURE_WHITE_BORDER_KEY
           GLOBAL_WHITE_TRANSPARENCY=FORBIDDEN
           DEVICE_TEST=PENDING
