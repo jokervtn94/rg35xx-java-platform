@@ -1,0 +1,154 @@
+name: Verified Clean VC7R22-R1.3H serviceRepaints Trace Runtime
+
+on:
+  push:
+    branches: [ verified-clean-platform-v1 ]
+    paths:
+      - '.github/workflows/verified-clean-vc7r22r13h-service-repaints-trace.yml'
+      - 'scripts/vc7r22r13h_apply_service_repaints_trace.py'
+      - 'scripts/vc7r22r13g_apply_input_consumption_trace.py'
+      - 'scripts/vc7r22r13f_apply_setcurrent_trace.py'
+      - 'scripts/vc7r22r13e_apply_midlet_event_trace.py'
+      - 'scripts/vc7r22r13c_apply_sparse_frame_trace.py'
+  workflow_dispatch:
+
+jobs:
+  runtime:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Build accepted VC7R22 runtime foundation
+        run: |
+          set -euo pipefail
+          bash scripts/vc7r22_ci.sh
+
+      - name: Apply proven R1.2a source patch
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/vc7r18"
+          I="$OUT/src/org/recompile/mobile/PlatformImage.java"
+          F="$OUT/src/org/recompile/freej2me/RG35XXGoldenFrameTransport.java"
+          cp scripts/vc7r22r12_apply_lock_transparency_fix.py "$RUNNER_TEMP/r12.py"
+          python3 - <<'PY'
+          from pathlib import Path
+          import os
+          p=Path(os.environ['RUNNER_TEMP'])/'r12.py'
+          s=p.read_text(encoding='utf-8')
+          a=s.index("remaining_calls=len(re.findall")
+          b=s.index("if orig_i==i or orig_f==f",a)
+          replacement="""remaining_calls=len(re.findall(r'\\brg35xxVC7R18Diag\\s*\\(',f))\nif remaining_calls>1:\n    raise SystemExit('R1.2 multiple diagnostic occurrences survived: %d'%remaining_calls)\nif 'System.err.println(\"RG35XX-JAVA-DIAG:' in f:\n    raise SystemExit('R1.2 direct JAVA-DIAG println survived')\nif helper_calls_before>remaining_calls and helper_removed<1:\n    raise SystemExit('R1.2 expected helper diagnostic call removal did not occur')\n"""
+          p.write_text(s[:a]+replacement+s[b:],encoding='utf-8')
+          PY
+          python3 "$RUNNER_TEMP/r12.py" "$I" "$F"
+
+      - name: Apply R1.3C sparse frame trace foundation
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/vc7r18"
+          python3 scripts/vc7r22r13c_apply_sparse_frame_trace.py "$OUT/src/org/recompile/freej2me/RG35XXGoldenFrameTransport.java"
+
+      - name: Apply R1.3E MIDlet event trace foundation
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/vc7r18"
+          python3 scripts/vc7r22r13e_apply_midlet_event_trace.py \
+            "$OUT/src/org/recompile/freej2me/Libretro.java" \
+            "$OUT/src/org/recompile/mobile/MobilePlatform.java" \
+            "$OUT/src/javax/microedition/lcdui/Display.java"
+
+      - name: Apply R1.3F setCurrent trace foundation
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/vc7r18"
+          python3 scripts/vc7r22r13f_apply_setcurrent_trace.py "$OUT/src/javax/microedition/lcdui/Display.java"
+
+      - name: Apply R1.3G input consumption trace foundation
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/vc7r18"
+          python3 scripts/vc7r22r13g_apply_input_consumption_trace.py \
+            "$OUT/src/org/recompile/mobile/MobilePlatform.java" \
+            "$OUT/src/javax/microedition/lcdui/Display.java"
+
+      - name: Apply R1.3H serviceRepaints trace
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/vc7r18"
+          C="$OUT/src/javax/microedition/lcdui/Canvas.java"
+          python3 scripts/vc7r22r13h_apply_service_repaints_trace.py "$C"
+          for t in REPAINT_REQUEST_BEGIN PAINT_CALLBACK_BEGIN PAINT_CALLBACK_DONE REPAINT_FLUSH_BEGIN REPAINT_FLUSH_DONE SERVICE_ENTER SERVICE_EVENTTHREAD_REPAINT_BEGIN SERVICE_LOCK_BEGIN SERVICE_LOCK_ACQUIRED SERVICE_WAIT_BEGIN SERVICE_WAIT_WAKE; do
+            grep -Fq "$t" "$C"
+          done
+
+      - name: Clean rebuild and bytecode gates
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/vc7r18"
+          rm -rf "$OUT/build/classes"
+          (cd "$OUT" && ant)
+          JAR="$OUT/build/freej2me_plus-lr.jar"
+          python3 - "$JAR" <<'PY'
+          import zipfile,sys,hashlib,struct
+          jar=sys.argv[1]
+          with zipfile.ZipFile(jar) as z:
+              cls={n:z.read(n) for n in z.namelist() if n.endswith('.class')}
+          principals=['org/recompile/freej2me/Libretro.class','org/recompile/mobile/MobilePlatform.class','javax/microedition/lcdui/Display.class','javax/microedition/lcdui/Canvas.class','org/recompile/freej2me/RG35XXGoldenFrameTransport.class','org/recompile/mobile/PlatformImage.class']
+          for n in principals:
+              b=cls[n]
+              if b[:4]!=b'\xca\xfe\xba\xbe' or struct.unpack('>H',b[6:8])[0]!=50:
+                  raise SystemExit('FAIL Java6 class gate '+n)
+          def fam(prefix): return b'\n'.join(v for n,v in cls.items() if n==prefix+'.class' or n.startswith(prefix+'$'))
+          mp=fam('org/recompile/mobile/MobilePlatform')
+          disp=fam('javax/microedition/lcdui/Display')
+          canvas=fam('javax/microedition/lcdui/Canvas')
+          ft=cls['org/recompile/freej2me/RG35XXGoldenFrameTransport.class']
+          pi=cls['org/recompile/mobile/PlatformImage.class']
+          for tok in [b'MP_COMMAND_RESULT',b'MP_GAME_KEYPRESS_BEGIN',b'MP_GAME_KEYPRESS_DONE',b'MP_GAME_KEYRELEASE_BEGIN',b'MP_GAME_KEYRELEASE_DONE']:
+              if tok not in mp: raise SystemExit('FAIL missing '+repr(tok)+' in MobilePlatform family')
+          for tok in [b'SC_EARLY_RETURN_NULL',b'SC_EARLY_RETURN_SAME']:
+              if tok not in disp: raise SystemExit('FAIL missing '+repr(tok)+' in Display family')
+          for tok in [b'RG35XX-R13H-LOOP',b'REPAINT_REQUEST_BEGIN',b'PAINT_CALLBACK_BEGIN',b'PAINT_CALLBACK_DONE',b'REPAINT_FLUSH_BEGIN',b'REPAINT_FLUSH_DONE',b'SERVICE_ENTER',b'SERVICE_EVENTTHREAD_REPAINT_BEGIN',b'SERVICE_LOCK_BEGIN',b'SERVICE_LOCK_ACQUIRED',b'SERVICE_WAIT_BEGIN',b'SERVICE_WAIT_WAKE']:
+              if tok not in canvas: raise SystemExit('FAIL missing '+repr(tok)+' in Canvas family')
+          for tok in [b'RG35XX-R13C-FRAME',b'IPC_FLUSH_DONE']:
+              if tok not in ft: raise SystemExit('FAIL missing frame trace '+repr(tok))
+          if b'rg35xxVC7R20ApplyPngTransparency' not in pi: raise SystemExit('FAIL transparency bytecode missing')
+          for tok in (b'argbSnapshot',b'sendFrameLocked',b'RG35XX-JAVA-DIAG:'):
+              if tok in ft: raise SystemExit('FAIL stale transport '+repr(tok))
+          print('CANVAS_CLASS_SHA256='+hashlib.sha256(cls['javax/microedition/lcdui/Canvas.class']).hexdigest())
+          print('R13H_BYTECODE_GATE=PASS')
+          PY
+
+      - name: Package runtime only
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/vc7r18"
+          P="$RUNNER_TEMP/vc7r22r13h-out"
+          mkdir -p "$P"
+          cp "$OUT/build/freej2me_plus-lr.jar" "$P/freej2me-lr-vc7r22r13h.jar"
+          J=$(sha256sum "$P/freej2me-lr-vc7r22r13h.jar" | awk '{print $1}')
+          cat > "$P/STATUS.txt" <<EOF
+          STATUS=BUILD-PASS-DEVICE-TRACE-PENDING
+          CHECKPOINT=VC7R22-R1.3H-SERVICE-REPAINTS-TRACE
+          CORE_AUDIO_VIDEO=STABLE_R1_UNCHANGED
+          RUNTIME_BASE=R1.3G_PLUS_SERVICE_REPAINTS_TRACE
+          RUNTIME_SHA256=$J
+          R13G_RESULT=INPUT_REACHES_GAME_CALLBACK_AND_RETURNS
+          TRACE_SCOPE=SERVICE_REPAINTS_PAINT_CALLBACK_FLUSH_WAIT
+          FRAME_TRACE=R1.3C_PRESERVED
+          EVENT_TRACE=R1.3E_R1.3G_PRESERVED
+          TRANSPARENCY_POLICY=UNCHANGED_FROM_R1.2A
+          DEVICE_TRACE=PENDING
+          EOF
+          (cd "$P" && sha256sum * > SHA256SUMS.txt)
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rg35xx-vc7r22r13h-service-repaints-trace-runtime
+          path: ${{ runner.temp }}/vc7r22r13h-out
+          retention-days: 90
