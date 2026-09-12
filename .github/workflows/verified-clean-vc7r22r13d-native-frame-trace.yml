@@ -5,7 +5,7 @@ on:
     branches: [ verified-clean-platform-v1 ]
     paths:
       - '.github/workflows/verified-clean-vc7r22r13d-native-frame-trace.yml'
-      - 'scripts/vc7r22r13d_apply_native_frame_trace.py'
+      - 'scripts/vc7r22r13d_apply_native_frame_trace_v2.py'
       - 'scripts/vc7r22r1_apply_worker_ring.py'
   workflow_dispatch:
 
@@ -23,18 +23,15 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/checkout@v4
         with:
           repository: TASEmulators/freej2me-plus
           ref: 13ec186903087156c145268f8706eecfaf9f1e50
           path: upstream
-
       - uses: actions/checkout@v4
         with:
           ref: d79180df9ae8621f2ddcf00f4f0648e4a43dc374
           path: history
-
       - name: Install pinned build toolchain
         run: |
           set -euo pipefail
@@ -46,10 +43,8 @@ jobs:
           sudo rm -rf /opt/miyoo
           sudo docker cp "$cid:/opt/miyoo" /opt/miyoo
           sudo chown -R "$(id -u):$(id -g)" /opt/miyoo
-
       - uses: actions/setup-java@v4
         with: {distribution: temurin, java-version: '8'}
-
       - name: Assemble accepted video foundation
         run: |
           set -euo pipefail
@@ -57,7 +52,6 @@ jobs:
           echo "R1=$RUNNER_TEMP/r13d" >> "$GITHUB_ENV"
           python3 scripts/vc7r2_apply_proven_dynamic_view.py "$RUNNER_TEMP/r13d/src/org/recompile/freej2me/Libretro.java"
           python3 scripts/vc7_apply_golden_font.py "$RUNNER_TEMP/r13d/src/org/recompile/mobile/PlatformGraphics.java"
-
       - name: Reconstruct verified font resource
         run: |
           set -euo pipefail
@@ -69,7 +63,6 @@ jobs:
           python3 scripts/vc7r_reconstruct_font.py --font "$LATIN" --font "$CJK#0" --out "$RUNNER_TEMP/r13d-font/rg35xx-font.bin" --manifest "$RUNNER_TEMP/r13d-font/manifest.json"
           test "$(sha256sum "$RUNNER_TEMP/r13d-font/rg35xx-font.bin" | awk '{print $1}')" = "$VC7R_FONT_SHA256"
           cp "$RUNNER_TEMP/r13d-font/rg35xx-font.bin" "$R1/resources/org/recompile/mobile/rg35xx-font.bin"
-
       - name: Materialize pinned media implementation
         run: |
           set -euo pipefail
@@ -80,7 +73,6 @@ jobs:
           sh history/native/vendor_tinysoundfont.sh
           cp history/native/vendor/TinySoundFont/tml.h "$R1/src/libretro/rg35xx/vendor/TinySoundFont/tml.h"
           cp history/native/vendor/TinySoundFont/tsf.h "$R1/src/libretro/rg35xx/vendor/TinySoundFont/tsf.h"
-
       - name: Apply media facade and R1 worker-ring audio
         run: |
           set -euo pipefail
@@ -93,19 +85,16 @@ jobs:
           python3 scripts/vc7r3_apply_native_audio.py "$R1/src/libretro/freej2me_libretro.c"
           python3 scripts/vc7r3_apply_java_media_events.py "$R1/src/org/recompile/freej2me/Libretro.java" "$R1/src/org/recompile/mobile/PlatformPlayer.java" "$R1/src/javax/microedition/media/Manager.java"
           python3 scripts/vc7r22r1_apply_worker_ring.py "$R1/src/libretro/freej2me_libretro.c"
-
       - name: Apply R1.3D native sparse video trace
         run: |
           set -euo pipefail
           V="$R1/src/libretro/rg35xx/golden/rg35xx_golden_video.c"
-          python3 scripts/vc7r22r13d_apply_native_frame_trace.py "$V"
+          python3 scripts/vc7r22r13d_apply_native_frame_trace_v2.py "$V"
           for t in 'R13D NATIVE READ_HEADER_DONE' 'R13D NATIVE READ_PAYLOAD_BEGIN' 'R13D NATIVE READ_PAYLOAD_DONE' 'R13D NATIVE PUBLISH_DONE' 'R13D NATIVE PRESENT_BEGIN' 'R13D NATIVE PRESENT_DONE'; do grep -Fq "$t" "$V"; done
-
       - name: Wire media modules
         run: |
           set -euo pipefail
           cat >> "$R1/src/libretro/Makefile.common" <<'EOF'
-
           SOURCES_C += rg35xx/rg35xx_media_cache.c
           SOURCES_C += rg35xx/rg35xx_media_event_queue.c
           SOURCES_C += rg35xx/rg35xx_audio_dispatch.c
@@ -119,24 +108,20 @@ jobs:
           INCLUDES += -Irg35xx -Irg35xx/vendor/TinySoundFont
           CFLAGS += -DRG35XX_SOUNDFONT_PATH='"/mnt/mmc/BIOS/freej2me.sf2"'
           EOF
-
       - name: Build Java compatibility gate
         run: |
           set -euo pipefail
           (cd "$R1" && ant)
-
       - name: Build ARMv5TE diagnostic core
         run: |
           set -euo pipefail
           cd "$R1/src/libretro"
           make clean
           make platform=unix CC='/opt/miyoo/bin/arm-miyoo-linux-uclibcgnueabi-gcc -march=armv5te -mtune=arm926ej-s -mfloat-abi=soft' CXX='/opt/miyoo/bin/arm-miyoo-linux-uclibcgnueabi-g++ -march=armv5te -mtune=arm926ej-s -mfloat-abi=soft' LDFLAGS='-lm -lpthread'
-
       - name: Fail-closed architecture and trace gates
         run: |
           set -euo pipefail
           C="$R1/src/libretro/freej2me_libretro.c"
-          V="$R1/src/libretro/rg35xx/golden/rg35xx_golden_video.c"
           CORE="$R1/src/libretro/freej2me_plus_libretro.so"
           file "$CORE"
           readelf -h "$CORE" | tee /tmp/r13d-elf.txt
@@ -151,7 +136,6 @@ jobs:
           strings -a "$CORE" | grep -Fq 'RG35XX-AUDIO: worker START ring=16384 target=3072 chunk=1470'
           for t in 'R13D NATIVE READ_HEADER_DONE' 'R13D NATIVE READ_PAYLOAD_BEGIN' 'R13D NATIVE READ_PAYLOAD_DONE' 'R13D NATIVE PUBLISH_DONE' 'R13D NATIVE PRESENT_BEGIN' 'R13D NATIVE PRESENT_DONE'; do strings -a "$CORE" | grep -Fq "$t"; done
           echo 'VC7R22R13D_ARCHITECTURE_TRACE_GATE=PASS'
-
       - name: Package diagnostic core only
         run: |
           set -euo pipefail
@@ -174,7 +158,6 @@ jobs:
           DEVICE_TRACE=PENDING
           EOF
           (cd "$OUT" && sha256sum * > SHA256SUMS.txt)
-
       - uses: actions/upload-artifact@v4
         with:
           name: rg35xx-vc7r22r13d-native-frame-trace-core
