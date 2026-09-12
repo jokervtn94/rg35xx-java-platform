@@ -66,13 +66,27 @@ Authoritative identities remain:
 
 The CN patch source is preserved at commit `7b7e91516d16a1988bae7bd907bacaecdf2fa972` and changes only the audited MIDI prime instructions from 12288 to 3072. Its source-build Actions artifact is not the device-tested CN binary and must not be substituted.
 
+## VC7R22 fail-closed worker-ring recovery
+
+A recovery installer source is now preserved at `scripts/vc7r22_recover_worker_ring_from_sd.ps1` (commit `307cead620f31cadcd9f89036b5c217863980f0c`).
+
+The installer does not contain or invent a replacement native core. It scans the SD card and existing recovery/backup trees for exact SHA256 identities:
+
+- exact CN core `9c248b0b...` → use directly;
+- exact Golden core `4ba55aea...` → apply only the three audited CN prime instructions and require the result to hash exactly to CN `9c248b0b...`;
+- anything else → fail closed with no unknown core installed.
+
+Before writing, the installer backs up current core/runtime targets. It then installs the CI-audited VC7R22 Java runtime (`cb892653...`) together with the exact CN native core and verifies every installed SHA.
+
+This closes the gap between "we know the Golden/CN binary contract" and "we can safely recover it from historical SD backups" without treating a source-rebuilt frame-coupled core as equivalent.
+
 ## VC7R22 release policy
 
 - Preserve VC7R21 Java graphics/transparency behavior.
 - Preserve RG35XX Lazy Media startup; do not restore eager `prepareMediaEngine()`, MediaWarmup, or `/dev/snd/seq` startup probing.
 - Do not publish the source-built VC7R3 native core as a Golden audio restore.
 - VC7R22 CI packages the cleaned Java runtime only until an exact Golden/CN core is recovered by SHA256.
-- A future full installer must fail closed unless the audio core is exactly Golden `4ba55a...` or CN `9c248b...` (CN preferred because short playTone priming is fixed).
+- A full installer must fail closed unless the audio core is exactly Golden `4ba55a...` or CN `9c248b...` (CN preferred because short playTone priming is fixed).
 
 ## Golden audio contract to preserve once exact binary is recovered
 
