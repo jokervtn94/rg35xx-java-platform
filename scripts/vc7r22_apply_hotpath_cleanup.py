@@ -11,7 +11,7 @@ ft = pathlib.Path(sys.argv[2])
 g = pg.read_text(encoding='utf-8')
 f = ft.read_text(encoding='utf-8')
 
-# VC7R9 was a diagnostic probe, not runtime behavior.  Its helper samples up to
+# VC7R9 was a diagnostic probe, not runtime behavior. Its helper samples up to
 # 256 pixels twice per image operation and prints a large StringBuffer to stderr.
 # Keep call sites/source markers so the historical assembly chain remains
 # compatible, but turn the helper itself into a production no-op.
@@ -23,16 +23,17 @@ replacement = '''\tprivate void vc7r9ProbeImage(String phase, Image image, int x
 g = g[:start] + replacement + g[end:]
 
 # The historical frame transport contains per-frame diagnostic writes around
-# request/wake/snapshot/encode/IPC.  They are useful during bring-up but cause
-# synchronous SD stderr traffic in normal gameplay.  Remove only JAVA-DIAG
+# request/wake/snapshot/encode/IPC. They are useful during bring-up but cause
+# synchronous SD stderr traffic in normal gameplay. Remove only JAVA-DIAG
 # statements; keep RG35XX-VIDEO error reports and stack traces intact.
+#
+# Important: VC7R19 already removes several hot-path writes. Therefore this
+# cleanup must be idempotent: removed=0 is valid when the input is already clean.
 diag = re.compile(r'\n[ \t]*System\.err\.println\("RG35XX-JAVA-DIAG:.*?\);\n', re.S)
 f, removed = diag.subn('\n', f)
-if removed < 8:
-    raise SystemExit('VC7R22: expected frame hot-path diagnostics, removed=%d' % removed)
 
 # VC7R5 uses StringBuffer + System.err.println(b.toString()), so it bypassed the
-# VC7R19 string-prefix gate.  Make that sampling helper a no-op as well.
+# VC7R19 string-prefix gate. Make that sampling helper a no-op as well.
 p5s = f.find('    private void vc7r5LogSamples(String phase, int w, int h, int pixels, boolean encoded)')
 if p5s >= 0:
     p5e = f.find('\n    private void sendFrameLocked(', p5s)
@@ -41,7 +42,8 @@ if p5s >= 0:
     f = f[:p5s] + '''    private void vc7r5LogSamples(String phase, int w, int h, int pixels, boolean encoded)\n    {\n        /* RG35XX-VC7R22-HOTPATH-CLEAN: production no-op. */\n    }\n''' + f[p5e:]
 
 # Fail closed: no hidden generic StringBuffer print is allowed to survive in
-# either known graphics/frame diagnostic path.
+# either known graphics/frame diagnostic path. This is the actual cleanliness
+# gate; it works whether the preceding revision removed 0 or many lines.
 for name, text in [('PlatformGraphics', g), ('FrameTransport', f)]:
     if 'System.err.println(b.toString())' in text:
         raise SystemExit('VC7R22: hidden StringBuffer stderr survived in ' + name)
@@ -56,6 +58,7 @@ pg.write_text(g, encoding='utf-8', newline='\n')
 ft.write_text(f, encoding='utf-8', newline='\n')
 print('VC7R22_HOTPATH_CLEANUP=PASS')
 print('FRAME_JAVA_DIAG_WRITES_REMOVED=%d' % removed)
+print('FRAME_JAVA_DIAG_INPUT_ALREADY_CLEAN=%s' % ('YES' if removed == 0 else 'NO'))
 print('VC7R9_IMAGE_SAMPLER=NOOP')
 print('VC7R5_COLOR_SAMPLER=NOOP_OR_ABSENT')
 print('ERROR_DIAGNOSTICS=PRESERVED')
