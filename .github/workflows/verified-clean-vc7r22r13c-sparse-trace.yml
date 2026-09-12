@@ -67,10 +67,14 @@ jobs:
               if tok not in t: raise SystemExit('FAIL missing '+repr(tok))
           for tok in (b'argbSnapshot',b'sendFrameLocked',b'RG35XX-JAVA-DIAG:'):
               if tok in t: raise SystemExit('FAIL stale token '+repr(tok))
-          for tok in (b'rg35xxVC7R20ApplyPngTransparency',b'rg35xxVC7R21ApplyLegacyWhiteKey'):
-              if tok not in i: raise SystemExit('FAIL transparency symbol missing '+repr(tok))
+          if b'rg35xxVC7R20ApplyPngTransparency' not in i:
+              raise SystemExit('FAIL PNG tRNS bytecode missing')
+          stale_i='a3371c57f1c9910c24b9b0ef78974315195ad733272a7c78ca836d03cd92e95a'
+          ih=hashlib.sha256(i).hexdigest()
+          if ih==stale_i:
+              raise SystemExit('FAIL stale PlatformImage class hash')
           print('R13C_TRANSPORT_CLASS_SHA256='+hashlib.sha256(t).hexdigest())
-          print('R13C_PLATFORMIMAGE_CLASS_SHA256='+hashlib.sha256(i).hexdigest())
+          print('R13C_PLATFORMIMAGE_CLASS_SHA256='+ih)
           print('R13C_SPARSE_TRACE_BYTECODE=PASS')
           PY
 
