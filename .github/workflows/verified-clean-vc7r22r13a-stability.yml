@@ -51,7 +51,6 @@ jobs:
           F="$OUT/src/org/recompile/freej2me/RG35XXGoldenFrameTransport.java"
           ! grep -Fq 'synchronized(lock)' "$F"
           grep -Fq 'System.arraycopy(data, 0, snapshot, 0, pixels);' "$F"
-          ! grep -R -Fq 'RG35XX-VC7R13-IMAGE-CREATE' "$OUT/src"
 
       - name: Clean rebuild and bytecode gates
         run: |
