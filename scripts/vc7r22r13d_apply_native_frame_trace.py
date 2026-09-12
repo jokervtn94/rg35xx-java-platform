@@ -10,41 +10,90 @@ def once(old,new,label):
     if n!=1: raise SystemExit('R13D %s anchor count=%d'%(label,n))
     s=s.replace(old,new,1)
 
+def match_paren(text, start):
+    depth=0; ins=False; inc=False; esc=False
+    for i in range(start,len(text)):
+        c=text[i]
+        if ins:
+            if esc: esc=False
+            elif c=='\\': esc=True
+            elif c=='"': ins=False
+            continue
+        if inc:
+            if esc: esc=False
+            elif c=='\\': esc=True
+            elif c=="'": inc=False
+            continue
+        if c=='"': ins=True; continue
+        if c=="'": inc=True; continue
+        if c=='(': depth+=1
+        elif c==')':
+            depth-=1
+            if depth==0: return i
+    return -1
+
+def match_brace(text,start):
+    depth=0; ins=False; inc=False; esc=False
+    for i in range(start,len(text)):
+        c=text[i]
+        if ins:
+            if esc: esc=False
+            elif c=='\\': esc=True
+            elif c=='"': ins=False
+            continue
+        if inc:
+            if esc: esc=False
+            elif c=='\\': esc=True
+            elif c=="'": inc=False
+            continue
+        if c=='"': ins=True; continue
+        if c=="'": inc=True; continue
+        if c=='{': depth+=1
+        elif c=='}':
+            depth-=1
+            if depth==0: return i
+    return -1
+
 # Extend existing B4 observability state. No video/audio semantics changed.
 once('    int obs_first_present;\n};', '''    int obs_first_present;\n\n    unsigned long r13d_headers;\n    unsigned long r13d_payloads;\n    unsigned long r13d_publishes;\n    unsigned long r13d_present_calls;\n};''', 'state')
 
 # Header stage: immediately after the receiver has a complete/resynced header.
 once('        if(!read_header_resync(header, &w, &h, &rotation)) break;\n\n        pixels = (size_t)w * (size_t)h;', '''        if(!read_header_resync(header, &w, &h, &rotation)) break;\n\n        g.r13d_headers++;\n        if(g.r13d_headers <= 8ul || (g.r13d_headers % 120ul)==0ul)\n            rg35xx_b4_video_log("R13D NATIVE READ_HEADER_DONE n=%lu src=%ux%u rot=%u",\n                                g.r13d_headers, w, h, rotation);\n\n        pixels = (size_t)w * (size_t)h;''', 'header')
 
-# Instrument the first payload read inside receiver_main only. This is fail-closed
-# and intentionally does not modify read_exact itself.
+# Payload stage: locate the first read_exact call after read_header_resync inside
+# receiver_main. Do not depend on one-line formatting; generated source has changed
+# formatting across checkpoints. BEGIN is inserted immediately before the owning
+# statement and DONE immediately after it, so failed reads that break/return never
+# emit DONE.
 rm=re.search(r'static void \*receiver_main\(.*?\n\}',s,re.S)
 if not rm: raise SystemExit('R13D receiver_main not found')
 r=rm.group(0)
-# first read_exact after read_header_resync within receiver_main is the frame payload
 hpos=r.find('read_header_resync')
 if hpos<0: raise SystemExit('R13D receiver header call not found')
-m=re.search(r'(?m)^([ \t]*)if\(!read_exact\(([^\n]+)\)\) break;\s*$',r[hpos:])
-if not m:
-    # tolerate braces form: if(!read_exact(...)) { ... break; }
-    m2=re.search(r'(?ms)^([ \t]*)if\(!read_exact\(([^\n]+)\)\)\s*\{(.*?)\n\1\}',r[hpos:])
-    if not m2: raise SystemExit('R13D receiver payload read anchor not found')
-    indent=m2.group(1); call=m2.group(2); body=m2.group(3)
-    old=m2.group(0)
-    new=(indent+'if(g.r13d_headers <= 8ul || (g.r13d_headers % 120ul)==0ul)\n'+
-         indent+'    rg35xx_b4_video_log("R13D NATIVE READ_PAYLOAD_BEGIN n=%lu", g.r13d_headers);\n'+old+'\n'+
-         indent+'g.r13d_payloads++;\n'+
-         indent+'if(g.r13d_payloads <= 8ul || (g.r13d_payloads % 120ul)==0ul)\n'+
-         indent+'    rg35xx_b4_video_log("R13D NATIVE READ_PAYLOAD_DONE n=%lu", g.r13d_payloads);')
-    r=r[:hpos+m2.start()]+new+r[hpos+m2.end():]
+call=r.find('read_exact(',hpos)
+if call<0: raise SystemExit('R13D receiver payload read_exact call not found')
+line_start=r.rfind('\n',0,call)+1
+indent=re.match(r'[ \t]*',r[line_start:]).group(0)
+openp=r.find('(',call)
+closep=match_paren(r,openp)
+if closep<0: raise SystemExit('R13D payload read_exact paren not closed')
+# Move through outer condition parens/whitespace.
+q=closep+1
+while q<len(r) and r[q] in ' \t\r\n)': q+=1
+if q<len(r) and r[q]=='{':
+    end=match_brace(r,q)
+    if end<0: raise SystemExit('R13D payload read block not closed')
+    stmt_end=end+1
 else:
-    indent=m.group(1); old=m.group(0)
-    new=(indent+'if(g.r13d_headers <= 8ul || (g.r13d_headers % 120ul)==0ul)\n'+
-         indent+'    rg35xx_b4_video_log("R13D NATIVE READ_PAYLOAD_BEGIN n=%lu", g.r13d_headers);\n'+old+'\n'+
-         indent+'g.r13d_payloads++;\n'+
-         indent+'if(g.r13d_payloads <= 8ul || (g.r13d_payloads % 120ul)==0ul)\n'+
-         indent+'    rg35xx_b4_video_log("R13D NATIVE READ_PAYLOAD_DONE n=%lu", g.r13d_payloads);')
-    r=r[:hpos+m.start()]+new+r[hpos+m.end():]
+    semi=r.find(';',q)
+    if semi<0: raise SystemExit('R13D payload read statement terminator not found')
+    stmt_end=semi+1
+begin=(indent+'if(g.r13d_headers <= 8ul || (g.r13d_headers % 120ul)==0ul)\n'+
+       indent+'    rg35xx_b4_video_log("R13D NATIVE READ_PAYLOAD_BEGIN n=%lu", g.r13d_headers);\n')
+done=('\n'+indent+'g.r13d_payloads++;\n'+
+      indent+'if(g.r13d_payloads <= 8ul || (g.r13d_payloads % 120ul)==0ul)\n'+
+      indent+'    rg35xx_b4_video_log("R13D NATIVE READ_PAYLOAD_DONE n=%lu", g.r13d_payloads);')
+r=r[:line_start]+begin+r[line_start:stmt_end]+done+r[stmt_end:]
 s=s[:rm.start()]+r+s[rm.end():]
 
 # Publish stage: existing B4 hook sits after generation is committed and mutex released.
