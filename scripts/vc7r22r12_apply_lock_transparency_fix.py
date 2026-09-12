@@ -22,25 +22,24 @@ i=re.sub(r'\n\t\tif\(rg35xxVC7R20TrnsLogCount\+\+<16\)\n\t\t\tSystem\.err\.print
 # Two fixed snapshots avoid races without per-frame allocation.
 f=f.replace('''    private final int[] argbSnapshot = new int[MAX_PIXELS];\n''','''    private final int[] workerSnapshot = new int[MAX_PIXELS];\n    private final int[] controlSnapshot = new int[MAX_PIXELS];\n''',1)
 
-# Remove every old JAVA-DIAG println statement, including multiline concatenations.
-# Do not depend on line shape: locate the println owning the token, then delete
-# exactly through that Java statement's semicolon. Real RG35XX-VIDEO errors stay.
-def strip_diag_prints(text):
-    token='RG35XX-JAVA-DIAG:'
-    removed=0
-    while token in text:
-        pos=text.find(token)
-        start=text.rfind('System.err.println(',0,pos)
-        if start<0:
-            raise SystemExit('R1.2 orphan JAVA-DIAG token near offset %d'%pos)
-        end=text.find(';',pos)
-        if end<0:
-            raise SystemExit('R1.2 unterminated JAVA-DIAG println near offset %d'%pos)
-        # Keep surrounding control-flow/braces intact; remove only the println.
-        text=text[:start]+text[end+1:]
-        removed+=1
-    return text,removed
-f,diag_removed=strip_diag_prints(f)
+# VC7R22 foundation already removes executable JAVA-DIAG println statements.
+# Historical comments/string remnants are harmless; gate executable statements only.
+def assert_no_executable_java_diag(text):
+    lines=text.splitlines(True)
+    k=0
+    while k < len(lines):
+        line=lines[k]
+        if 'System.err.println(' in line and not line.lstrip().startswith('//'):
+            stmt=line
+            j=k
+            while ');' not in stmt and j+1 < len(lines):
+                j+=1
+                stmt+=lines[j]
+            if 'RG35XX-JAVA-DIAG:' in stmt:
+                raise SystemExit('R1.2 executable JAVA-DIAG survived frame transport')
+            k=j+1
+            continue
+        k+=1
 
 old_control='''        try\n        {\n            synchronized(encodeLock)\n            {\n                sendFrameLocked(sourceWidth, sourceHeight, sourceData, sourceLock);\n            }\n        }\n'''
 new_control='''        try\n        {\n            if(snapshotFrame(sourceWidth, sourceHeight, sourceData, sourceLock, controlSnapshot))\n            {\n                synchronized(encodeLock)\n                {\n                    encodeAndWriteFrame(sourceWidth, sourceHeight, controlSnapshot);\n                }\n            }\n        }\n'''
@@ -65,12 +64,12 @@ f=f.replace('worker.setDaemon(false);','worker.setDaemon(true);',1)
 for tok in ('hasMeaningfulAlpha','if(!hasMeaningfulAlpha && !hasTrns)','workerSnapshot','controlSnapshot','snapshotFrame(','encodeAndWriteFrame(','worker.setDaemon(true)'):
     if tok not in i+f: raise SystemExit('R1.2 missing '+tok)
 if 'sendFrameLocked(' in f: raise SystemExit('R1.2 old sendFrameLocked survived')
-if 'RG35XX-JAVA-DIAG:' in f: raise SystemExit('R1.2 JAVA-DIAG survived in transport')
+assert_no_executable_java_diag(f)
 if orig_i==i or orig_f==f: raise SystemExit('R1.2 no mutation')
 pi.write_text(i,encoding='utf-8',newline='\n')
 ft.write_text(f,encoding='utf-8',newline='\n')
 print('VC7R22-R1.2 LOCK_TRANSPARENCY_FIX=PASS')
-print('JAVA_DIAG_PRINTS_REMOVED=%d'%diag_removed)
+print('JAVA_DIAG_EXECUTABLE_SURVIVORS=0')
 print('LOCK_ORDER=FRONTBUFFER_SNAPSHOT_THEN_ENCODE')
 print('TRANSPARENCY=MEANINGFUL_PIXEL_ALPHA_THEN_TRNS_THEN_LEGACY_WHITEKEY')
 print('FRAME_WORKER_DAEMON=TRUE')
