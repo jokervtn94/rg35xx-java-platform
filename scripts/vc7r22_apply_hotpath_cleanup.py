@@ -90,14 +90,22 @@ def replace_method_body(text, signature, replacement_body, label):
     raise SystemExit('VC7R22: %s closing brace not found' % label)
 
 
-# VC7R9 was a diagnostic probe, not runtime behavior. Replace only this method's
-# body. Do not slice to drawImage(): later revisions add helpers such as
-# vc7r13ProbeFullscreen between these methods and those must remain intact.
+# VC7R9 was a diagnostic probe, not runtime behavior. Keep its call sites but
+# remove the production cost.
 g = replace_method_body(
     g,
     '\tprivate void vc7r9ProbeImage(String phase, Image image, int x, int y)',
     '{\n\t\t/* RG35XX-VC7R22-HOTPATH-CLEAN: production no-op. */\n\t}',
     'VC7R9 image probe')
+
+# VC7R13 is also diagnostic-only. It samples up to 512 pixels, captures a stack
+# trace and constructs a StringBuffer on full-screen image blits. Keep the helper
+# and call chain for source compatibility, but make the helper itself a no-op.
+g = replace_method_body(
+    g,
+    '\tprivate void vc7r13ProbeFullscreen(String phase, Image image, int x, int y)',
+    '{\n\t\t/* RG35XX-VC7R22-HOTPATH-CLEAN: production no-op. */\n\t}',
+    'VC7R13 fullscreen probe')
 
 # Remove executable RG35XX-JAVA-DIAG println statements, including multiline
 # concatenations. VC7R19 may already have removed some or all of them, so this
@@ -154,8 +162,8 @@ while i < len(scan_lines):
         continue
     i += 1
 
-if 'RG35XX-VC7R22-HOTPATH-CLEAN' not in g:
-    raise SystemExit('VC7R22: graphics cleanup marker missing')
+if g.count('RG35XX-VC7R22-HOTPATH-CLEAN') < 2:
+    raise SystemExit('VC7R22: expected graphics cleanup markers missing')
 if 'vc7r13ProbeFullscreen(' not in g:
     raise SystemExit('VC7R22: VC7R13 fullscreen helper/call chain was accidentally removed')
 if 'RG35XX-VIDEO JAVA worker error' not in f or 'RG35XX-VIDEO JAVA control-frame error' not in f:
@@ -167,6 +175,6 @@ print('VC7R22_HOTPATH_CLEANUP=PASS')
 print('FRAME_JAVA_DIAG_WRITES_REMOVED=%d' % removed)
 print('FRAME_JAVA_DIAG_EXECUTABLE_SURVIVORS=0')
 print('VC7R9_IMAGE_SAMPLER=NOOP')
+print('VC7R13_FULLSCREEN_SAMPLER=NOOP')
 print('VC7R5_COLOR_SAMPLER=NOOP_OR_ABSENT')
-print('VC7R13_FULLSCREEN_HELPER=PRESERVED')
 print('ERROR_DIAGNOSTICS=PRESERVED')
