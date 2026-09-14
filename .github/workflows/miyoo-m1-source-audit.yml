@@ -1,0 +1,99 @@
+name: RG35XX Miyoo M1 Source Audit
+
+on:
+  push:
+    branches: [ rg35xx-miyoo-platform-v1 ]
+    paths:
+      - '.github/workflows/miyoo-m1-source-audit.yml'
+      - 'miyoo-m1/**'
+      - 'tasklog/MIYOO-M1-BOOTSTRAP-PREFLIGHT.md'
+  workflow_dispatch:
+
+jobs:
+  source-audit:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout project branch
+        uses: actions/checkout@v4
+
+      - name: Read project rules and M1 preflight
+        run: |
+          set -euo pipefail
+          test -f project-rules/RG35XX_PROJECT_RULES.json
+          test -f tasklog/MIYOO-M1-BOOTSTRAP-PREFLIGHT.md
+          grep -Fq 'DEVICE-INVENTORY: PENDING' tasklog/MIYOO-M1-BOOTSTRAP-PREFLIGHT.md
+          grep -Fq 'M1_SCOPE=DEVICE_ABI_JVM_SDL_INVENTORY_ONLY' miyoo-m1/SOURCE-PINS.txt
+
+      - name: Checkout pinned primary Miyoo source
+        uses: actions/checkout@v4
+        with:
+          repository: aweigit/freej2me-miyoomini
+          ref: ca11dfe8ea1cc273d92460f9a83bbf192023fa63
+          path: miyoo-primary
+
+      - name: Checkout pinned audio reference
+        uses: actions/checkout@v4
+        with:
+          repository: bqcuong/miyoo-j2me
+          ref: 75c79213d0a6472c801d86b8d9264abe02204c40
+          path: miyoo-audio-ref
+
+      - name: Prove source identities
+        run: |
+          set -euo pipefail
+          test "$(git -C miyoo-primary rev-parse HEAD)" = ca11dfe8ea1cc273d92460f9a83bbf192023fa63
+          test "$(git -C miyoo-audio-ref rev-parse HEAD)" = 75c79213d0a6472c801d86b8d9264abe02204c40
+
+      - name: Audit incompatible ARM assumptions
+        run: |
+          set -euo pipefail
+          grep -R -E -- '-march=armv7ve|-mtune=cortex-a7|-mfpu=neon-vfpv4|-mfloat-abi=hard' miyoo-primary/cpp miyoo-audio-ref/cpp > arm-assumptions.txt
+          test -s arm-assumptions.txt
+          echo 'M1_ARM_REUSE_DIRECTLY=NO' >> arm-assumptions.txt
+
+      - name: Audit modern Java API dependency
+        run: |
+          set -euo pipefail
+          grep -R -n -E 'java\.nio\.file|java\.util\.function' miyoo-primary/src miyoo-audio-ref/src > modern-java-api.txt || true
+          test -s modern-java-api.txt
+          echo 'M1_JAMVM_GNU_CLASSPATH_DROPIN=NO' >> modern-java-api.txt
+
+      - name: Audit SDL ownership model
+        run: |
+          set -euo pipefail
+          grep -R -n -E 'SDL2_mixer|SDL_AUDIODRIVER|Mix_LoadMUS|Mix_LoadWAV' miyoo-primary miyoo-audio-ref > sdl-audio-model.txt || true
+          test -s sdl-audio-model.txt
+          echo 'M1_DIRECT_SDL_MODEL_FOUND=YES' >> sdl-audio-model.txt
+
+      - name: Package read-only device audit
+        run: |
+          set -euo pipefail
+          mkdir -p artifact/evidence
+          cp miyoo-m1/M1-DEVICE-AUDIT.sh artifact/
+          cp miyoo-m1/SOURCE-PINS.txt artifact/evidence/
+          cp tasklog/MIYOO-M1-BOOTSTRAP-PREFLIGHT.md artifact/evidence/
+          cp arm-assumptions.txt modern-java-api.txt sdl-audio-model.txt artifact/evidence/
+          cat > artifact/README.txt <<'EOF'
+RG35XX MIYOO M1 PRE-BUILD AUDIT
+
+This package DOES NOT install or replace the current Java platform.
+M1 is intentionally read-only until the original RG35XX ABI/JVM/SDL environment is proven.
+
+Run M1-DEVICE-AUDIT.sh on the RG35XX shell. It writes:
+/mnt/mmc/RG35XX-MIYOO-M1-DEVICE-AUDIT.txt
+
+Return that report before any M1 runtime is built.
+
+BUILD-PASS=NO (runtime not built by design)
+DEVICE-PASS=NO
+STABLE=NO
+EOF
+          chmod +x artifact/M1-DEVICE-AUDIT.sh
+          (cd artifact && find . -type f -print0 | sort -z | xargs -0 sha256sum) > artifact/PACKAGE-SHA256SUMS.txt
+
+      - name: Upload M1 pre-build audit package
+        uses: actions/upload-artifact@v4
+        with:
+          name: rg35xx-miyoo-m1-prebuild-audit
+          path: artifact/
+          if-no-files-found: error
