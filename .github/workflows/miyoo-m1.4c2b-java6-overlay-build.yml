@@ -1,0 +1,173 @@
+name: RG35XX Miyoo M1.4C2B Java6 Core2D Overlay Build
+
+on:
+  push:
+    branches:
+      - rg35xx-miyoo-platform-v1
+    paths:
+      - 'miyoo-m1/M1.4C2B-PATCH-OVERLAY-HARNESS.py'
+      - 'tasklog/MIYOO-M1.4C2B-MIDLET-MULTIPATH-OVERLAY-FIX-PREFLIGHT.md'
+      - '.github/workflows/miyoo-m1.4c2b-java6-overlay-build.yml'
+  workflow_dispatch:
+
+jobs:
+  build-java6-core2d-overlay:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v4
+
+      - name: Gate rules and preflight
+        run: |
+          test -f project-rules/RG35XX_PROJECT_RULES.json
+          test -f tasklog/MIYOO-M1.4C2B-MIDLET-MULTIPATH-OVERLAY-FIX-PREFLIGHT.md
+          grep -q 'MINIMAL_PROPOSED_CHANGE' tasklog/MIYOO-M1.4C2B-MIDLET-MULTIPATH-OVERLAY-FIX-PREFLIGHT.md
+
+      - name: Setup JDK 8 compiler
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Checkout exact pinned Miyoo source
+        run: |
+          git clone https://github.com/aweigit/freej2me-miyoomini.git upstream-miyoo
+          cd upstream-miyoo
+          git checkout ca11dfe8ea1cc273d92460f9a83bbf192023fa63
+          test "$(git rev-parse HEAD)" = "ca11dfe8ea1cc273d92460f9a83bbf192023fa63"
+          echo 'SOURCE_PIN=ca11dfe8ea1cc273d92460f9a83bbf192023fa63' > ../M1.4C2B-summary.txt
+          echo 'SOURCE_PIN_MATCH=YES' >> ../M1.4C2B-summary.txt
+
+      - name: Patch overlay harness from measured M1.4C2A counts
+        run: |
+          python3 miyoo-m1/M1.4C2B-PATCH-OVERLAY-HARNESS.py miyoo-m1/M1.4C2-APPLY-JAVA6-OVERLAY.py | tee M1.4C2B-harness-patch.log
+          grep -q 'M1_4C2B_HARNESS_PATCH=PASS' M1.4C2B-harness-patch.log
+
+      - name: Record before hashes
+        run: |
+          cat > M1.4C2B-changed-files.txt <<'EOF'
+          src/javax/microedition/lcdui/event/CommandActionEvent.java
+          src/javax/microedition/lcdui/event/EventQueue.java
+          src/javax/microedition/rms/impl/AndroidRecordStoreManager.java
+          src/javax/microedition/rms/impl/RecordEnumerationImpl.java
+          src/javax/microedition/rms/impl/RecordStoreImpl.java
+          src/javax/microedition/util/LinkedList.java
+          src/org/microemu/cldc/file/FileSystemFileConnection.java
+          src/org/objectweb/asm/ClassReader.java
+          src/org/objectweb/asm/Constants.java
+          src/org/recompile/freej2me/SDLConfig.java
+          src/org/recompile/mobile/MIDletLoader.java
+          src/org/recompile/mobile/MyMethodVisitor.java
+          src/org/recompile/mobile/PlatformPlayer.java
+          EOF
+          cd upstream-miyoo
+          sha256sum $(cat ../M1.4C2B-changed-files.txt) | tee ../M1.4C2B-before-sha256.txt
+
+      - name: Apply bounded Java6 overlay
+        run: |
+          python3 miyoo-m1/M1.4C2-APPLY-JAVA6-OVERLAY.py upstream-miyoo | tee M1.4C2B-overlay.log
+          grep -q 'M1_4C2_OVERLAY=PASS' M1.4C2B-overlay.log
+          cd upstream-miyoo
+          sha256sum $(cat ../M1.4C2B-changed-files.txt) | tee ../M1.4C2B-after-sha256.txt
+          git diff --check
+          git diff --stat | tee ../M1.4C2B-diff-stat.txt
+          git diff > ../M1.4C2B-overlay.patch
+
+      - name: Build locked 2D source inventory
+        run: |
+          cd upstream-miyoo
+          find src -name '*.java' \
+            ! -path 'src/org/lwjgl/*' \
+            ! -path 'src/javax/microedition/m3g/*' \
+            ! -path 'src/ru/woesss/j2me/micro3d/*' \
+            | sort > ../M1.4C2B-core2d-sources.txt
+          echo "SOURCE_COUNT=$(wc -l < ../M1.4C2B-core2d-sources.txt)" | tee -a ../M1.4C2B-summary.txt
+          if grep -E '/org/lwjgl/|/javax/microedition/m3g/|/ru/woesss/j2me/micro3d/' ../M1.4C2B-core2d-sources.txt; then exit 20; fi
+          echo 'OPTIONAL_3D_EXCLUSION=PASS' | tee -a ../M1.4C2B-summary.txt
+
+      - name: Static forbidden API source gate
+        run: |
+          cd upstream-miyoo
+          if xargs grep -nE 'java\.nio\.file|java\.util\.(function|stream)' < ../M1.4C2B-core2d-sources.txt; then
+            echo 'FORBIDDEN_API_SOURCE_GATE=FAIL' | tee -a ../M1.4C2B-summary.txt
+            exit 21
+          fi
+          echo 'FORBIDDEN_API_SOURCE_GATE=PASS' | tee -a ../M1.4C2B-summary.txt
+
+      - name: Compile Java6 candidate
+        run: |
+          set +e
+          cd upstream-miyoo
+          mkdir -p build-java6-overlay/classes
+          javac -source 1.6 -target 1.6 -encoding UTF-8 -cp 'lib/*' -d build-java6-overlay/classes @../M1.4C2B-core2d-sources.txt > ../M1.4C2B-compile.log 2>&1
+          RC=$?
+          echo "$RC" > ../M1.4C2B-compile-rc.txt
+          echo "COMPILE_EXIT_CODE=$RC" | tee -a ../M1.4C2B-summary.txt
+          [ "$RC" -eq 0 ] && echo 'JAVA6_COMPILE=PASS' | tee -a ../M1.4C2B-summary.txt || echo 'JAVA6_COMPILE=FAIL' | tee -a ../M1.4C2B-summary.txt
+          exit 0
+
+      - name: Build candidate jar and run postcompile gates
+        run: |
+          RC=$(cat M1.4C2B-compile-rc.txt)
+          if [ "$RC" -ne 0 ]; then
+            echo 'POSTCOMPILE_GATES=SKIPPED_COMPILE_FAIL' | tee -a M1.4C2B-summary.txt
+            exit 0
+          fi
+          cd upstream-miyoo/build-java6-overlay/classes
+          jar cf ../../../M1.4C2B-freej2me-core2d-java6.jar .
+          cd ../../..
+          sha256sum M1.4C2B-freej2me-core2d-java6.jar | tee M1.4C2B-jar-sha256.txt
+          python3 - <<'PY'
+          import pathlib, struct, sys
+          root=pathlib.Path('upstream-miyoo/build-java6-overlay/classes')
+          bad=[]; total=0
+          for p in root.rglob('*.class'):
+              b=p.read_bytes()[:8]
+              if len(b)<8 or b[:4] != b'\xca\xfe\xba\xbe': bad.append((str(p),'not-class')); continue
+              major=struct.unpack('>H',b[6:8])[0]; total+=1
+              if major != 50: bad.append((str(p),major))
+          print('CLASS_COUNT=%d' % total)
+          if bad:
+              print('JAVA_MAJOR_GATE=FAIL', bad[:20]); sys.exit(30)
+          print('JAVA_MAJOR_GATE=PASS')
+          PY
+          if grep -R -a -nE 'java/nio/file|java/util/(function|stream)' upstream-miyoo/build-java6-overlay/classes; then
+            echo 'FORBIDDEN_API_CLASS_GATE=FAIL' | tee -a M1.4C2B-summary.txt
+            exit 31
+          fi
+          echo 'FORBIDDEN_API_CLASS_GATE=PASS' | tee -a M1.4C2B-summary.txt
+          echo 'POSTCOMPILE_GATES=PASS' | tee -a M1.4C2B-summary.txt
+
+      - name: Summarize and package evidence
+        if: always()
+        run: |
+          echo '== COMPILE LOG ==' >> M1.4C2B-summary.txt
+          sed -n '1,350p' M1.4C2B-compile.log >> M1.4C2B-summary.txt 2>/dev/null || true
+          echo '== DIFF STAT ==' >> M1.4C2B-summary.txt
+          cat M1.4C2B-diff-stat.txt >> M1.4C2B-summary.txt 2>/dev/null || true
+          mkdir -p artifact
+          cp M1.4C2B-summary.txt artifact/ || true
+          cp M1.4C2B-compile.log artifact/ 2>/dev/null || true
+          cp M1.4C2B-core2d-sources.txt artifact/ 2>/dev/null || true
+          cp M1.4C2B-before-sha256.txt M1.4C2B-after-sha256.txt artifact/ 2>/dev/null || true
+          cp M1.4C2B-overlay.patch M1.4C2B-overlay.log M1.4C2B-harness-patch.log artifact/ 2>/dev/null || true
+          cp M1.4C2B-jar-sha256.txt M1.4C2B-freej2me-core2d-java6.jar artifact/ 2>/dev/null || true
+          cp tasklog/MIYOO-M1.4C2B-MIDLET-MULTIPATH-OVERLAY-FIX-PREFLIGHT.md artifact/
+          sha256sum artifact/* | tee artifact/SHA256SUMS.txt
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rg35xx-miyoo-m1.4c2b-java6-core2d-overlay
+          path: artifact/
+          if-no-files-found: error
+
+      - name: Final BUILD-PASS gate
+        run: |
+          test "$(cat M1.4C2B-compile-rc.txt)" -eq 0
+          grep -q 'JAVA6_COMPILE=PASS' M1.4C2B-summary.txt
+          grep -q 'POSTCOMPILE_GATES=PASS' M1.4C2B-summary.txt
+          echo 'BUILD_PASS=YES'
+          echo 'DEVICE_PASS=NO'
+          echo 'STABLE=NO'
