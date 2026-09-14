@@ -88,7 +88,8 @@ jobs:
             'BUILD-PASS applies only to the native probe build.' \
             'DEVICE-PASS=NO' \
             'STABLE=NO' > "$OUT/README.txt"
-          (cd "$OUT" && find . -type f -print0 | sort -z | xargs -0 sha256sum) > "$OUT/PACKAGE-SHA256SUMS.txt"
+          (cd "$OUT" && find . -type f ! -name PACKAGE-SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum) > "$OUT/PACKAGE-SHA256SUMS.txt"
+          (cd "$OUT" && sha256sum -c PACKAGE-SHA256SUMS.txt)
           echo "PACKAGE_DIR=$OUT" >> "$GITHUB_ENV"
 
       - name: Upload M1.1 device package
