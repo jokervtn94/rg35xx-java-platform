@@ -5,6 +5,8 @@ on:
     branches: [ rg35xx-from-zero-rebuild-v1 ]
     paths:
       - '.github/workflows/from-zero-rebuild-v1.yml'
+      - 'installer/INSTALL-FROM-ZERO-FOUNDATION-v1.ps1'
+      - 'installer/INSTALL-FROM-ZERO-FOUNDATION-v1.cmd'
       - 'scripts/from_zero_*.py'
       - 'scripts/from_zero_assemble_v1.sh'
       - 'scripts/vc7r2_apply_proven_dynamic_view.py'
@@ -136,15 +138,50 @@ jobs:
           ! grep -Rq 'RG35XX-VC7R22' "$FZ/src"
           ! grep -Rq 'rg35xx-font.bin' "$FZ/resources" || { echo 'reconstructed font accidentally admitted'; exit 1; }
 
-      - name: Package clean checkpoint
+      - name: PowerShell installer syntax gate
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tokens = $null
+          $errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile(
+            "$env:GITHUB_WORKSPACE/installer/INSTALL-FROM-ZERO-FOUNDATION-v1.ps1",
+            [ref]$tokens,
+            [ref]$errors
+          )
+          if ($errors.Count -ne 0) {
+            $errors | ForEach-Object { Write-Error $_.Message }
+            exit 1
+          }
+          Write-Host 'FROM_ZERO_INSTALLER_PARSE=PASS'
+
+      - name: Package atomic SD installer
         run: |
           set -euo pipefail
-          OUT="$RUNNER_TEMP/from-zero-checkpoint"
-          mkdir -p "$OUT/BIOS" "$OUT/CFW/retroarch/.retroarch/cores" "$OUT/evidence"
-          cp "$FZ/build/freej2me_plus-lr.jar" "$OUT/BIOS/freej2me-lr.jar"
-          cp "$FZ/src/libretro/freej2me_plus_libretro.so" "$OUT/CFW/retroarch/.retroarch/cores/freej2me_plus_libretro.so"
+          OUT="$RUNNER_TEMP/from-zero-atomic-installer"
+          PAY="$OUT/payload"
+          mkdir -p \
+            "$PAY/BIOS" \
+            "$PAY/CFW/retroarch/.retroarch/cores" \
+            "$OUT/installer" \
+            "$OUT/evidence"
+
+          cp "$FZ/build/freej2me_plus-lr.jar" "$PAY/BIOS/freej2me-lr.jar"
+          cp "$FZ/src/libretro/freej2me_plus_libretro.so" "$PAY/CFW/retroarch/.retroarch/cores/freej2me_plus_libretro.so"
+          cp installer/INSTALL-FROM-ZERO-FOUNDATION-v1.ps1 "$OUT/installer/"
+          cp installer/INSTALL-FROM-ZERO-FOUNDATION-v1.cmd "$OUT/installer/"
           cp "$RUNNER_TEMP/from-zero-assembly.log" "$OUT/evidence/assembly.log"
           cp docs/FROM-ZERO-DEVICE-PROVEN-MANIFEST-v1.md "$OUT/evidence/"
+
+          (
+            cd "$PAY"
+            find . -type f -printf '%P\0' | sort -z | xargs -0 sha256sum
+          ) > "$PAY/SHA256SUMS.txt"
+          (
+            cd "$PAY"
+            sha256sum -c SHA256SUMS.txt
+          )
+
           printf '%s\n' \
             'RG35XX JAVA PLATFORM FROM-ZERO FOUNDATION V1' \
             'STATUS=BUILD-PASS-ONLY_DEVICE-ACCEPTANCE-PENDING' \
@@ -153,6 +190,8 @@ jobs:
             "CORE_SHA256=$FZ_CORE_SHA256" \
             "JAMVM_L_REQUIRED_SHA256=$JAMVM_L_SHA256" \
             "GLIBJ_REQUIRED_SHA256=$GLIBJ_SHA256" \
+            'INSTALLER=ATOMIC_BACKUP_VERIFY_ROLLBACK' \
+            'SD_ROOT_INPUT=G_OR_G_COLON_OR_G_BACKSLASH_SUPPORTED' \
             'LAZY_MEDIA=ADMITTED_DEVICE_PROVEN' \
             'ASYNC_RGB565_VIDEO=ADMITTED_DEVICE_PROVEN' \
             'DYNAMIC_LOGICAL_VIEW=ADMITTED_DEVICE_PROVEN' \
@@ -165,11 +204,30 @@ jobs:
             'TRANSPARENCY_EXTENSIONS=DEFERRED_REVALIDATION_REQUIRED' \
             'CV_CW=FORBIDDEN' \
             'HOTPATH_DIAGNOSTICS=FORBIDDEN' > "$OUT/STATUS.txt"
-          (cd "$OUT" && find . -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum) > "$OUT/SHA256SUMS.txt"
+
+          cat > "$OUT/README-INSTALL.txt" <<'EOF'
+          RG35XX FROM-ZERO FOUNDATION V1 - ATOMIC INSTALLER
+
+          1. This checkpoint is BUILD-PASS only until real RG35XX acceptance succeeds.
+          2. The SD card MUST already contain the device-proven JamVM L and pinned glibj.zip.
+             The installer checks their exact SHA256 and refuses to continue if either differs.
+          3. On Windows, run:
+               installer\INSTALL-FROM-ZERO-FOUNDATION-v1.cmd G
+             Accepted forms: G, G:, or G:\
+          4. Installer preflights every payload hash, backs up every replaced destination,
+             stages and verifies each new file, then commits it. Any failure triggers rollback.
+          5. After INSTALL PASS, safely eject SD and test on RG35XX:
+             - one normal 240x320 Java title
+             - KDTT or another proven 320x240 title
+          6. Do not restore Golden Audio, reconstructed font, or transparency extensions yet.
+          EOF
+          sed -i 's/^          //' "$OUT/README-INSTALL.txt"
+
+          (cd "$OUT" && find . -type f ! -name PACKAGE-SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum) > "$OUT/PACKAGE-SHA256SUMS.txt"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: rg35xx-from-zero-foundation-v1
-          path: ${{ runner.temp }}/from-zero-checkpoint
+          name: rg35xx-from-zero-foundation-v1-atomic-installer
+          path: ${{ runner.temp }}/from-zero-atomic-installer
           include-hidden-files: true
           retention-days: 30
