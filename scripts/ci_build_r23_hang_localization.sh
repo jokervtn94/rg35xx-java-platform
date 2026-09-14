@@ -62,7 +62,7 @@ INCLUDES += -Irg35xx -Irg35xx/vendor/TinySoundFont
 CFLAGS += -DRG35XX_SOUNDFONT_PATH='"/mnt/mmc/BIOS/freej2me.sf2"'
 EOF
 
-build_core(){ cd "$R23/src/libretro"; make clean >/dev/null; make platform=unix CC="$CC" CXX="$CXX" LDFLAGS='-lm -lpthread' >/dev/null; }
+build_core(){ (cd "$R23/src/libretro" && make clean >/dev/null && make platform=unix CC="$CC" CXX="$CXX" LDFLAGS='-lm -lpthread' >/dev/null); }
 build_core
 test "$(sha256sum "$R23/src/libretro/freej2me_plus_libretro.so"|awk '{print $1}')" = "$R2CORE"
 
