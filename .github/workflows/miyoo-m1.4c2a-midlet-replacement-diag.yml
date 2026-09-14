@@ -1,0 +1,33 @@
+name: RG35XX Miyoo M1.4C2A MIDlet Replacement Diagnostic
+
+on:
+  push:
+    branches:
+      - rg35xx-miyoo-platform-v1
+    paths:
+      - 'miyoo-m1/M1.4C2A-MIDLET-REPLACEMENT-DIAG.py'
+      - 'tasklog/MIYOO-M1.4C2A-OVERLAY-REPLACEMENT-DIAGNOSTIC-PREFLIGHT.md'
+      - '.github/workflows/miyoo-m1.4c2a-midlet-replacement-diag.yml'
+  workflow_dispatch:
+
+jobs:
+  diag:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Gate preflight
+        run: |
+          test -f tasklog/MIYOO-M1.4C2A-OVERLAY-REPLACEMENT-DIAGNOSTIC-PREFLIGHT.md
+      - name: Checkout pinned Miyoo source
+        run: |
+          git clone https://github.com/aweigit/freej2me-miyoomini.git upstream-miyoo
+          cd upstream-miyoo
+          git checkout ca11dfe8ea1cc273d92460f9a83bbf192023fa63
+          test "$(git rev-parse HEAD)" = "ca11dfe8ea1cc273d92460f9a83bbf192023fa63"
+      - name: Count exact MIDlet replacement fragments
+        run: |
+          python3 miyoo-m1/M1.4C2A-MIDLET-REPLACEMENT-DIAG.py upstream-miyoo | tee M1.4C2A-diag.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rg35xx-miyoo-m1.4c2a-midlet-replacement-diag
+          path: M1.4C2A-diag.txt
