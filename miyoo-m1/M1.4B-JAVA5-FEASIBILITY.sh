@@ -15,7 +15,7 @@ count_files() {
   local pattern=$1
   set +o pipefail
   local n
-  n=$(grep -RIlE --include='*.java' "$pattern" "${CORE_PATHS[@]}" 2>/dev/null | grep -v '/m3g/' | wc -l | tr -d ' ')
+  n=$(grep -RIlE --include='*.java' -- "$pattern" "${CORE_PATHS[@]}" 2>/dev/null | grep -v '/m3g/' | wc -l | tr -d ' ')
   set -o pipefail
   echo "$n"
 }
@@ -32,7 +32,7 @@ count_files() {
   echo "UTIL_STREAM_FILES=$(count_files 'java\.util\.stream')"
   echo "DIAMOND_FILES=$(count_files 'new[[:space:]]+[A-Za-z0-9_.$]+<>')"
   echo "TRY_WITH_RESOURCES_FILES=$(count_files 'try[[:space:]]*\(')"
-  echo "LAMBDA_OR_METHODREF_FILES=$(count_files -- '->|::')"
+  echo "LAMBDA_OR_METHODREF_FILES=$(count_files '->|::')"
   echo
 
   echo "== NIO EXACT LINES =="
