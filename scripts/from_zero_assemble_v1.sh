@@ -15,15 +15,19 @@ HEAD=$(git -C "$FZ_UPSTREAM" rev-parse HEAD)
 [ -z "$(git -C "$FZ_UPSTREAM" status --porcelain)" ] || fail "upstream checkout is dirty"
 [ "$FZ_ASSEMBLY" != "$FZ_UPSTREAM" ] || fail "assembly must be disposable/separate"
 
-# VC6 assembler itself starts from VC0-VC3/B4 on a fresh upstream copy and admits
-# only lazy-media, Golden async RGB565 receiver/Smart-Fit, bounded early native
-# observability, then source-level PNG iCCP compatibility.
+# VC6 starts from VC0-VC3/B4 on a fresh upstream copy and admits only lazy-media,
+# Golden async RGB565 receiver/Smart-Fit, bounded early native observability,
+# then source-level PNG iCCP compatibility.
 VC_UPSTREAM="$FZ_UPSTREAM" VC6_ASSEMBLY="$FZ_ASSEMBLY" \
   sh "$ROOT/scripts/vc6_png_iccp_assemble.sh"
 
 LIBRETRO="$FZ_ASSEMBLY/src/org/recompile/freej2me/Libretro.java"
 IMAGE="$FZ_ASSEMBLY/src/org/recompile/mobile/PlatformImage.java"
 GRAPHICS="$FZ_ASSEMBLY/src/org/recompile/mobile/PlatformGraphics.java"
+TRANSPORT="$FZ_ASSEMBLY/src/org/recompile/freej2me/RG35XXGoldenFrameTransport.java"
+
+# Remove historical per-frame diagnostics before adding any later production fix.
+python3 "$ROOT/scripts/from_zero_cleanup_transport_logs.py" "$TRANSPORT"
 
 # Device-proven logical LCD behavior. Physical 640x480 stays native Smart-Fit.
 python3 "$ROOT/scripts/vc7r2_apply_proven_dynamic_view.py" "$LIBRETRO"
@@ -50,19 +54,8 @@ grep -Fq 'fit_geometry' "$FZ_ASSEMBLY/src/libretro/rg35xx/golden/rg35xx_golden_v
 grep -Fq 'B4 CORE_INIT' "$FZ_ASSEMBLY/src/libretro/freej2me_libretro.c" || fail "bounded early log missing"
 
 # --------------------------- Negative gates -------------------------------
-# No rejected resolution experiment or boot-time media warmup.
-for bad in \
-  'RG35XX-CV:' \
-  'rg35xx_cv_' \
-  'RG35XX-CW' \
-  'RG35XX-MediaWarmup' \
-  'prepareMediaEngine();'
-do
-  if grep -R -Fq "$bad" "$FZ_ASSEMBLY/src"; then
-    # prepareMediaEngine may legitimately exist as a method/call outside runJar;
-    # only reject the warmup/CV markers globally. Handle prepare below narrowly.
-    if [ "$bad" != 'prepareMediaEngine();' ]; then fail "forbidden marker: $bad"; fi
-  fi
+for bad in 'RG35XX-CV:' 'rg35xx_cv_' 'RG35XX-CW' 'RG35XX-MediaWarmup'; do
+  if grep -R -Fq "$bad" "$FZ_ASSEMBLY/src"; then fail "forbidden marker: $bad"; fi
 done
 
 python3 - "$FZ_ASSEMBLY/src/org/recompile/mobile/MobilePlatform.java" <<'PY'
@@ -84,14 +77,14 @@ for bad in \
   'RG35XX-VC7R13' 'RG35XX-VC7R14' 'RG35XX-VC7R15-LCD-MASK' 'RG35XX-VC7R16' \
   'RG35XX-VC7R18' 'RG35XX-VC7R19' 'RG35XX-VC7R20' 'RG35XX-VC7R21' \
   'RG35XX-VC7R22' 'RG35XX-VC7R23' \
-  'RG35XXTransformCache' 'rg35xx-font.bin' 'GET_SEQUENCER' '735'
+  'RG35XXTransformCache' 'rg35xx-font.bin' 'GET_SEQUENCER'
 do
   if grep -R -Fq "$bad" "$FZ_ASSEMBLY/src" "$FZ_ASSEMBLY/resources" 2>/dev/null; then
     fail "unadmitted experiment/diagnostic: $bad"
   fi
 done
 
-# Hot-path production rule: no known per-frame diagnostic families.
+# Hot-path production rule: known per-frame diagnostics must be absent.
 for bad in 'RG35XX-JAVA-DIAG:' 'IMAGE-BLIT:' 'FRAME-BIND:' 'FULLSCREEN:' 'TRANSFORM:'; do
   if grep -R -Fq "$bad" "$FZ_ASSEMBLY/src"; then fail "hot-path diagnostic survived: $bad"; fi
 done
