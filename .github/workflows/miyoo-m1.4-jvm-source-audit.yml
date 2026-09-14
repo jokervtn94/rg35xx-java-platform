@@ -1,0 +1,54 @@
+name: RG35XX Miyoo M1.4 JVM Source Compatibility Audit
+
+on:
+  push:
+    branches:
+      - rg35xx-miyoo-platform-v1
+    paths:
+      - 'miyoo-m1/M1.4-SOURCE-COMPAT-AUDIT.sh'
+      - 'tasklog/MIYOO-M1.4-JVM-STRATEGY-SOURCE-AUDIT-PREFLIGHT.md'
+      - '.github/workflows/miyoo-m1.4-jvm-source-audit.yml'
+  workflow_dispatch:
+
+jobs:
+  audit-miyoo-java-compatibility:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v4
+
+      - name: Gate project rules and preflight
+        run: |
+          test -f project-rules/RG35XX_PROJECT_RULES.json
+          test -f tasklog/MIYOO-M1.4-JVM-STRATEGY-SOURCE-AUDIT-PREFLIGHT.md
+          grep -q 'MINIMAL_PROPOSED_CHANGE' tasklog/MIYOO-M1.4-JVM-STRATEGY-SOURCE-AUDIT-PREFLIGHT.md
+
+      - name: Checkout pinned Miyoo source
+        run: |
+          git clone https://github.com/aweigit/freej2me-miyoomini.git upstream-miyoo
+          cd upstream-miyoo
+          git checkout ca11dfe8ea1cc273d92460f9a83bbf192023fa63
+          test "$(git rev-parse HEAD)" = "ca11dfe8ea1cc273d92460f9a83bbf192023fa63"
+
+      - name: Run source compatibility audit
+        run: |
+          chmod +x miyoo-m1/M1.4-SOURCE-COMPAT-AUDIT.sh
+          ./miyoo-m1/M1.4-SOURCE-COMPAT-AUDIT.sh upstream-miyoo M1.4-SOURCE-COMPAT-REPORT.txt
+          grep -q 'PIN_MATCH=YES' M1.4-SOURCE-COMPAT-REPORT.txt
+          grep -q 'JAMVM_DROP_IN_AS_IS=NO' M1.4-SOURCE-COMPAT-REPORT.txt
+          grep -q 'AUDIT_ONLY=YES' M1.4-SOURCE-COMPAT-REPORT.txt
+
+      - name: Package audit evidence
+        run: |
+          mkdir -p artifact
+          cp M1.4-SOURCE-COMPAT-REPORT.txt artifact/
+          cp tasklog/MIYOO-M1.4-JVM-STRATEGY-SOURCE-AUDIT-PREFLIGHT.md artifact/
+          cp miyoo-m1/SOURCE-PINS.txt artifact/
+          sha256sum artifact/* | tee artifact/SHA256SUMS.txt
+
+      - name: Upload audit evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: rg35xx-miyoo-m1.4-jvm-source-audit
+          path: artifact/
+          if-no-files-found: error
