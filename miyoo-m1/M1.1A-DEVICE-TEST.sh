@@ -25,7 +25,6 @@ echo "MODIFIES_EXISTING_JAVA_PLATFORM=NO"
 echo "SCRIPT_DIR=$SCRIPT_DIR"
 
 echo
-echo(){ echo "$@"; }
 echo "== LOCKED FALLBACK HASHES BEFORE =="
 for f in \
   /mnt/mmc/BIOS/freej2me-lr.jar \
