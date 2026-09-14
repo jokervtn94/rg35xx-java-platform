@@ -1,0 +1,196 @@
+name: RG35XX From-Zero NoMask A-B
+
+on:
+  push:
+    branches: [ rg35xx-from-zero-rebuild-v1 ]
+    paths:
+      - '.github/workflows/from-zero-nomask-ab.yml'
+      - 'scripts/from_zero_apply_nomask_ab.py'
+      - 'scripts/from_zero_apply_proven_graphics.py'
+      - 'scripts/from_zero_assemble_v1.sh'
+      - 'scripts/vc7r2_apply_proven_dynamic_view.py'
+      - 'scripts/vc6_apply_png_iccp_compat.py'
+      - 'scripts/vc6_png_iccp_assemble.sh'
+      - 'scripts/vc0_vc3_assemble.sh'
+      - 'scripts/b4_verified_core_assemble.sh'
+      - 'scripts/b4_apply_early_native_log.py'
+      - 'scripts/b4_apply_video_observability.py'
+      - 'scripts/g1_apply_java_transport.py'
+      - 'scripts/g1_apply_rg35xx_media_boot.py'
+      - 'scripts/g1_apply_native_overlay.py'
+      - 'installer/INSTALL-FROM-ZERO-NOMASK-AB.ps1'
+      - 'installer/INSTALL-FROM-ZERO-NOMASK-AB.cmd'
+  workflow_dispatch:
+
+jobs:
+  runtime-ab:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    env:
+      FREEJ2ME_PIN: 13ec186903087156c145268f8706eecfaf9f1e50
+      FOUNDATION_CORE_SHA256: fc574021ad34b0466cd7ffe4f2eb58438eb2104c47cc503405d9f8722c02d062
+      JAMVM_L_SHA256: eea1b97cebfaca67b69ed365e966d80cdac22d8ff245c7a556137cfb2898ea34
+      GLIBJ_SHA256: d7abe888d2980329434c30f18c0eec124be1f02284bf9ed28e88d7242a1f2bea
+    steps:
+      - name: Checkout platform policy
+        uses: actions/checkout@v4
+
+      - name: Checkout pristine pinned FreeJ2ME
+        uses: actions/checkout@v4
+        with:
+          repository: TASEmulators/freej2me-plus
+          ref: 13ec186903087156c145268f8706eecfaf9f1e50
+          path: upstream
+
+      - name: Install build dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ant python3 unzip
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Prove pristine upstream identity
+        run: |
+          set -euo pipefail
+          test "$(git -C upstream rev-parse HEAD)" = "$FREEJ2ME_PIN"
+          test -z "$(git -C upstream status --porcelain)"
+
+      - name: Assemble exact Foundation v1 source
+        run: |
+          set -euo pipefail
+          FZ_UPSTREAM="$GITHUB_WORKSPACE/upstream" \
+          FZ_ASSEMBLY="$RUNNER_TEMP/from-zero-nomask" \
+            sh scripts/from_zero_assemble_v1.sh | tee "$RUNNER_TEMP/foundation-assembly.log"
+          echo "FZ=$RUNNER_TEMP/from-zero-nomask" >> "$GITHUB_ENV"
+
+      - name: Apply one-variable NoMask A-B
+        run: |
+          set -euo pipefail
+          python3 scripts/from_zero_apply_nomask_ab.py \
+            "$FZ/src/org/recompile/mobile/PlatformGraphics.java" | tee "$RUNNER_TEMP/nomask-ab.log"
+          grep -q 'RG35XX-NOMASK-AB' "$FZ/src/org/recompile/mobile/PlatformGraphics.java"
+          grep -q 'fastBlit = !Mobile.funLightsEnabled;' "$FZ/src/org/recompile/mobile/PlatformGraphics.java"
+          ! grep -q 'Mobile.renderLCDMask ? Mobile.lcdMaskColors' "$FZ/src/org/recompile/mobile/PlatformGraphics.java"
+
+      - name: Scope gate - no unrelated experimental features
+        run: |
+          set -euo pipefail
+          ! grep -Rq 'RG35XX-CV:' "$FZ/src"
+          ! grep -Rq 'RG35XX-MediaWarmup' "$FZ/src"
+          ! grep -Rq 'RG35XX-JAVA-DIAG:' "$FZ/src"
+          ! grep -Rq 'rg35xx-font.bin' "$FZ/resources" || { echo 'reconstructed font accidentally admitted'; exit 1; }
+          ! grep -Rq 'RG35XXTransformCache' "$FZ/src/org/recompile/mobile/PlatformGraphics.java"
+
+      - name: Build Java 6 runtime
+        run: |
+          set -euo pipefail
+          cd "$FZ"
+          ant
+          JAR="$FZ/build/freej2me_plus-lr.jar"
+          test -f "$JAR"
+          python3 - "$FZ/build/classes" <<'PY'
+          import os, struct, sys
+          root=sys.argv[1]; count=0
+          for base, _, files in os.walk(root):
+              for name in files:
+                  if not name.endswith('.class'): continue
+                  count += 1
+                  p=os.path.join(base,name)
+                  h=open(p,'rb').read(8)
+                  if len(h)!=8 or h[:4]!=b'\xca\xfe\xba\xbe': raise SystemExit('bad class '+p)
+                  major=struct.unpack('>H',h[6:8])[0]
+                  if major != 50: raise SystemExit('non-Java6 class %s major=%d' % (p,major))
+          if count < 1000: raise SystemExit('unexpected class count %d' % count)
+          print('NOMASK_AB_CLASS_COUNT=%d' % count)
+          print('NOMASK_AB_JAVA_MAJOR=50')
+          PY
+          SHA=$(sha256sum "$JAR" | awk '{print $1}')
+          echo "NOMASK_RUNTIME_SHA256=$SHA" >> "$GITHUB_ENV"
+          echo "NOMASK_RUNTIME_SHA256=$SHA"
+
+      - name: PowerShell installer syntax gate
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tokens = $null
+          $errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile(
+            "$env:GITHUB_WORKSPACE/installer/INSTALL-FROM-ZERO-NOMASK-AB.ps1",
+            [ref]$tokens,
+            [ref]$errors
+          )
+          if ($errors.Count -ne 0) {
+            $errors | ForEach-Object { Write-Error $_.Message }
+            exit 1
+          }
+          Write-Host 'NOMASK_AB_INSTALLER_PARSE=PASS'
+
+      - name: Package runtime-only atomic A-B installer
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/from-zero-nomask-ab-installer"
+          mkdir -p "$OUT/payload" "$OUT/installer" "$OUT/evidence"
+          cp "$FZ/build/freej2me_plus-lr.jar" "$OUT/payload/freej2me-lr.jar"
+          printf '%s\n' "$NOMASK_RUNTIME_SHA256" > "$OUT/payload/RUNTIME-SHA256.txt"
+          cp installer/INSTALL-FROM-ZERO-NOMASK-AB.ps1 "$OUT/installer/"
+          cp installer/INSTALL-FROM-ZERO-NOMASK-AB.cmd "$OUT/installer/"
+          cp "$RUNNER_TEMP/foundation-assembly.log" "$OUT/evidence/"
+          cp "$RUNNER_TEMP/nomask-ab.log" "$OUT/evidence/"
+          cp docs/checkpoints/FROM-ZERO-FOUNDATION-v1-DEVICE-FAIL-20260914.md "$OUT/evidence/"
+
+          cat > "$OUT/STATUS.txt" <<EOF
+          RG35XX FROM-ZERO NOMASK A/B
+          STATUS=BUILD-PASS-ONLY_DEVICE-AB-PENDING
+          FREEJ2ME_PIN=$FREEJ2ME_PIN
+          RUNTIME_SHA256=$NOMASK_RUNTIME_SHA256
+          REQUIRED_FOUNDATION_CORE_SHA256=$FOUNDATION_CORE_SHA256
+          JAMVM_L_REQUIRED_SHA256=$JAMVM_L_SHA256
+          GLIBJ_REQUIRED_SHA256=$GLIBJ_SHA256
+          CHANGE=PLATFORMGRAPHICS_LCD_MASK_SUPPRESSED_ONLY
+          NATIVE_CORE=UNCHANGED_ON_DEVICE
+          AUDIO=UNCHANGED
+          FONT=UNCHANGED
+          TRANSPARENCY=UNCHANGED
+          DEVICE_PASS=NO
+          EOF
+          sed -i 's/^          //' "$OUT/STATUS.txt"
+
+          cat > "$OUT/README-TEST.txt" <<'EOF'
+          RG35XX FROM-ZERO NOMASK A/B - RUNTIME ONLY
+
+          This is an isolated device experiment, not a stable release.
+          It requires the exact Foundation v1 core already installed.
+
+          Run on Windows:
+            installer\INSTALL-FROM-ZERO-NOMASK-AB.cmd H
+          Replace H with the SD drive letter. H, H: and H:\ are accepted.
+
+          Test order:
+          1. Real-Football-2015-240x320.jar (the reproduced green case)
+          2. one previously normal 240x320 title
+          3. KDTT 320x240 only to ensure geometry did not regress
+
+          Send back:
+          - screenshot of Real Football
+          - freej2me-java-error log
+          - existing early native log
+          - RG35XX-FROM-ZERO-NOMASK-AB-INSTALL-RESULT.txt
+
+          Expected diagnostic only if a game requests the LCD mask:
+            RG35XX-NOMASK-AB: suppressed renderLCDMask=true ...
+          EOF
+          sed -i 's/^          //' "$OUT/README-TEST.txt"
+
+          (cd "$OUT" && find . -type f ! -name PACKAGE-SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum) > "$OUT/PACKAGE-SHA256SUMS.txt"
+          (cd "$OUT" && sha256sum -c PACKAGE-SHA256SUMS.txt)
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rg35xx-from-zero-nomask-ab-runtime-installer
+          path: ${{ runner.temp }}/from-zero-nomask-ab-installer
+          include-hidden-files: true
+          retention-days: 30
