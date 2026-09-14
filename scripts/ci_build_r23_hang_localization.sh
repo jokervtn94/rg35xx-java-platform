@@ -67,8 +67,15 @@ build_core
 test "$(sha256sum "$R23/src/libretro/freej2me_plus_libretro.so"|awk '{print $1}')" = "$R2CORE"
 
 python3 scripts/vc7r22r22_apply_filebacked_midi.py "$R23/src/org/recompile/mobile/RG35XXNativePlayer.java" "$R23/src/org/recompile/mobile/RG35XXAudioTransport.java" "$R23/src/org/recompile/mobile/RG35XXAudioProtocol.java" "$R23/src/libretro/rg35xx/rg35xx_audio_protocol.h" "$R23/src/libretro/rg35xx/rg35xx_audio_dispatch.c"
+# Compile the R2.2 Java source to prove compatibility, but do not compare the rebuilt
+# JAR byte-for-byte: Ant/JAR entry timestamps make repeated builds non-reproducible.
+# R2.3 packages no Java runtime; the installer fail-closes on the exact installed
+# R2.2 runtime SHA256 above, so runtime identity on the device remains exact.
 (cd "$R23" && ant >/dev/null)
-test "$(sha256sum "$R23/build/freej2me_plus-lr.jar"|awk '{print $1}')" = "$R22RUNTIME"
+REBUILT_R22_RUNTIME=$(sha256sum "$R23/build/freej2me_plus-lr.jar"|awk '{print $1}')
+echo "R22_REBUILT_RUNTIME_NONIDENTITY_SHA256=$REBUILT_R22_RUNTIME"
+grep -Fq 'registerMidiFile' "$R23/src/org/recompile/mobile/RG35XXAudioTransport.java"
+grep -Fq '/mnt/mmc/CFW/java/cache/freej2me-media' "$R23/src/org/recompile/mobile/RG35XXNativePlayer.java"
 build_core
 test "$(sha256sum "$R23/src/libretro/freej2me_plus_libretro.so"|awk '{print $1}')" = "$R22CORE3072"
 
@@ -99,6 +106,8 @@ STATUS=BUILD-PASS_DEVICE-TEST-PENDING
 CHECKPOINT=R2.3-HANG-LOCALIZATION-AB
 PRIMARY_DELTA=BOUNDED_NATIVE_DIAGNOSTICS_ONLY
 BASELINE_RUNTIME_SHA256=$R22RUNTIME
+REBUILT_RUNTIME_SHA256=$REBUILT_R22_RUNTIME
+REBUILT_RUNTIME_BYTE_IDENTITY=NOT_CLAIMED_JAR_TIMESTAMPS
 CORE_PRIME3072_SHA256=$R23_3072
 CORE_PRIME2048_SHA256=$R23_2048
 LOG=/mnt/mmc/freej2me-vc3-early.log
