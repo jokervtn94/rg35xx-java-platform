@@ -1,0 +1,94 @@
+name: RG35XX Miyoo M1.4C1 Java6 Core2D Baseline
+
+on:
+  push:
+    branches:
+      - rg35xx-miyoo-platform-v1
+    paths:
+      - 'tasklog/MIYOO-M1.4C1-JAVA6-TARGET-CORRECTION-PREFLIGHT.md'
+      - '.github/workflows/miyoo-m1.4c1-java6-core2d-baseline.yml'
+  workflow_dispatch:
+
+jobs:
+  compile-java6-core2d-baseline:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v4
+
+      - name: Gate rules and preflight
+        run: |
+          test -f project-rules/RG35XX_PROJECT_RULES.json
+          test -f tasklog/MIYOO-M1.4C1-JAVA6-TARGET-CORRECTION-PREFLIGHT.md
+          grep -q 'MINIMAL_PROPOSED_CHANGE' tasklog/MIYOO-M1.4C1-JAVA6-TARGET-CORRECTION-PREFLIGHT.md
+
+      - name: Setup JDK 8 compiler
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Checkout pinned Miyoo source
+        run: |
+          git clone https://github.com/aweigit/freej2me-miyoomini.git upstream-miyoo
+          cd upstream-miyoo
+          git checkout ca11dfe8ea1cc273d92460f9a83bbf192023fa63
+          test "$(git rev-parse HEAD)" = "ca11dfe8ea1cc273d92460f9a83bbf192023fa63"
+
+      - name: Build corrected Core2D inventory
+        run: |
+          cd upstream-miyoo
+          find src -name '*.java' \
+            ! -path 'src/org/lwjgl/*' \
+            ! -path 'src/javax/microedition/m3g/*' \
+            ! -path 'src/ru/woesss/j2me/micro3d/*' \
+            | sort > ../M1.4C1-core2d-sources.txt
+          echo "SOURCE_COUNT=$(wc -l < ../M1.4C1-core2d-sources.txt)" | tee ../M1.4C1-summary.txt
+          if grep -E '/org/lwjgl/|/javax/microedition/m3g/|/ru/woesss/j2me/micro3d/' ../M1.4C1-core2d-sources.txt; then
+            echo 'OPTIONAL_3D_EXCLUSION=FAIL' | tee -a ../M1.4C1-summary.txt
+            exit 20
+          fi
+          echo 'OPTIONAL_3D_EXCLUSION=PASS' | tee -a ../M1.4C1-summary.txt
+
+      - name: Compile unmodified source as Java6 baseline
+        run: |
+          set +e
+          cd upstream-miyoo
+          mkdir -p build-java6-baseline/classes
+          javac -source 1.6 -target 1.6 -encoding UTF-8 \
+            -cp 'lib/*' \
+            -d build-java6-baseline/classes \
+            @../M1.4C1-core2d-sources.txt \
+            > ../M1.4C1-java6-compile.log 2>&1
+          RC=$?
+          echo "COMPILE_EXIT_CODE=$RC" | tee -a ../M1.4C1-summary.txt
+          if [ "$RC" -eq 0 ]; then
+            echo 'JAVA6_BASELINE_COMPILE=PASS_UNEXPECTED' | tee -a ../M1.4C1-summary.txt
+          else
+            echo 'JAVA6_BASELINE_COMPILE=FAIL_EXPECTED' | tee -a ../M1.4C1-summary.txt
+          fi
+          exit 0
+
+      - name: Summarize Java6 blockers
+        run: |
+          echo '== FIRST 250 COMPILER LINES ==' >> M1.4C1-summary.txt
+          sed -n '1,250p' M1.4C1-java6-compile.log >> M1.4C1-summary.txt
+          echo '== ERROR TOKENS ==' >> M1.4C1-summary.txt
+          grep -E 'error:|diamond operator|lambda expressions|try-with-resources|cannot find symbol|package .* does not exist|is not supported in -source 1.6' M1.4C1-java6-compile.log | head -200 >> M1.4C1-summary.txt || true
+          cat M1.4C1-summary.txt
+
+      - name: Package Java6 baseline evidence
+        run: |
+          mkdir -p artifact
+          cp M1.4C1-summary.txt artifact/
+          cp M1.4C1-java6-compile.log artifact/
+          cp M1.4C1-core2d-sources.txt artifact/
+          cp tasklog/MIYOO-M1.4C1-JAVA6-TARGET-CORRECTION-PREFLIGHT.md artifact/
+          sha256sum artifact/* | tee artifact/SHA256SUMS.txt
+
+      - name: Upload Java6 baseline evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: rg35xx-miyoo-m1.4c1-java6-core2d-baseline
+          path: artifact/
+          if-no-files-found: error
