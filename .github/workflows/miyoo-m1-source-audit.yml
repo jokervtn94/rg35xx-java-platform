@@ -73,21 +73,20 @@ jobs:
           cp miyoo-m1/SOURCE-PINS.txt artifact/evidence/
           cp tasklog/MIYOO-M1-BOOTSTRAP-PREFLIGHT.md artifact/evidence/
           cp arm-assumptions.txt modern-java-api.txt sdl-audio-model.txt artifact/evidence/
-          cat > artifact/README.txt <<'EOF'
-RG35XX MIYOO M1 PRE-BUILD AUDIT
-
-This package DOES NOT install or replace the current Java platform.
-M1 is intentionally read-only until the original RG35XX ABI/JVM/SDL environment is proven.
-
-Run M1-DEVICE-AUDIT.sh on the RG35XX shell. It writes:
-/mnt/mmc/RG35XX-MIYOO-M1-DEVICE-AUDIT.txt
-
-Return that report before any M1 runtime is built.
-
-BUILD-PASS=NO (runtime not built by design)
-DEVICE-PASS=NO
-STABLE=NO
-EOF
+          printf '%s\n' \
+            'RG35XX MIYOO M1 PRE-BUILD AUDIT' \
+            '' \
+            'This package DOES NOT install or replace the current Java platform.' \
+            'M1 is intentionally read-only until the original RG35XX ABI/JVM/SDL environment is proven.' \
+            '' \
+            'Run M1-DEVICE-AUDIT.sh on the RG35XX shell. It writes:' \
+            '/mnt/mmc/RG35XX-MIYOO-M1-DEVICE-AUDIT.txt' \
+            '' \
+            'Return that report before any M1 runtime is built.' \
+            '' \
+            'BUILD-PASS=NO (runtime not built by design)' \
+            'DEVICE-PASS=NO' \
+            'STABLE=NO' > artifact/README.txt
           chmod +x artifact/M1-DEVICE-AUDIT.sh
           (cd artifact && find . -type f -print0 | sort -z | xargs -0 sha256sum) > artifact/PACKAGE-SHA256SUMS.txt
 
