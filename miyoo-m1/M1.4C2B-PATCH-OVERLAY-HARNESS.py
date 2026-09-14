@@ -12,6 +12,12 @@ def one(old, new):
         raise SystemExit("FAIL_CLOSED harness patch expected=1 actual=%d fragment=%r" % (n, old[:120]))
     s = s.replace(old, new)
 
+# M1.4C.2C: preserve original upstream CRLF/LF bytes inside transformed Java files.
+one('s = p.read_text(encoding="utf-8")', 's = p.read_bytes().decode("utf-8")')
+one('p.write_text(s.replace(old, new), encoding="utf-8")', 'p.write_bytes(s.replace(old, new).encode("utf-8"))')
+one('comment_start = s = (root/rel).read_text(encoding="utf-8")', 'comment_start = s = (root/rel).read_bytes().decode("utf-8")')
+one('(root/rel).write_text(s, encoding="utf-8")', '(root/rel).write_bytes(s.encode("utf-8"))')
+
 # Counts proven by M1.4C.2A on exact pinned MIDletLoader source.
 one('rep(rel, "\\t\\tPath url = findJarResource(resource);", "\\t\\tJarEntry url = findJarResource(resource);")',
     'rep(rel, "\\t\\tPath url = findJarResource(resource);", "\\t\\tJarEntry url = findJarResource(resource);", count=4)')
@@ -38,4 +44,5 @@ one(marker, extra + marker)
 
 p.write_text(s, encoding="utf-8")
 print("M1_4C2B_HARNESS_PATCH=PASS")
+print("M1_4C2C_LINE_ENDING_PRESERVATION=PASS")
 print("TARGET=" + str(p))
