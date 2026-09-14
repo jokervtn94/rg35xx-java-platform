@@ -1,0 +1,83 @@
+{
+  "schema_version": "1.0",
+  "project": "RG35xx Java Platform",
+  "strict_mode": true,
+  "mandatory_preflight": [
+    "IDENTIFY_CURRENT_SYMPTOM",
+    "SEARCH_TASKLOG_AND_HISTORY",
+    "COMPARE_WITH_PREVIOUS_OCCURRENCES",
+    "CHECK_PREVIOUS_FIX_AND_DEVICE_EVIDENCE",
+    "CLASSIFY_CURRENT_STATE",
+    "CHOOSE_MINIMAL_CHANGE",
+    "ONLY_THEN_IMPLEMENT"
+  ],
+  "hard_rules": {
+    "tasklog_first": true,
+    "must_not_rely_on_memory_only": true,
+    "minimal_delta_required": true,
+    "one_primary_variable_per_ab_checkpoint": true,
+    "do_not_bundle_unrelated_fixes": true,
+    "must_preserve_device_pass_subsystems": true,
+    "must_fail_closed_on_unknown_source_or_binary": true,
+    "must_record_before_after_hashes": true,
+    "must_backup_and_support_rollback": true,
+    "real_device_required_for_device_pass": true,
+    "hard_hang_means_device_pass_no": true,
+    "ci_pass_is_not_device_pass": true,
+    "ci_pass_is_not_stable": true,
+    "forbid_unbounded_hotpath_logging": true
+  },
+  "evidence_order": [
+    "UNVERIFIED",
+    "BUILD-PASS",
+    "DEVICE-EVIDENCE",
+    "DEVICE-PASS",
+    "STABLE"
+  ],
+  "locked_audio_history": {
+    "async_callback": true,
+    "dedicated_worker": true,
+    "ring_frames": 16384,
+    "worker_chunk_frames": 1470,
+    "tsf_synth_hz": 14700,
+    "output_hz": 44100,
+    "conversion": "mono-x3",
+    "retro_run_audio_pumping": false,
+    "prime_history": {
+      "12288": "too large for short playTone",
+      "3072": "device evidence for short playTone CN fix",
+      "2048": "historical device evidence for Real Football; tasklog must be checked before reuse"
+    }
+  },
+  "forbidden_regressions": [
+    "MidiSystem.getSequencer on RG35XX",
+    "AudioSystem.getClip on RG35XX",
+    "MediaWarmup or eager media boot",
+    "/dev/snd/seq boot probe",
+    "735 frames per retro_run audio pumping",
+    "audio lifecycle tied to video cadence"
+  ],
+  "locked_video_policy": "Do not modify video in an audio checkpoint without evidence that video is the cause.",
+  "locked_font_policy": "Reconstructed font must not be called Golden or Stable.",
+  "required_preimplementation_report": [
+    "CURRENT_SYMPTOM",
+    "HISTORY_FOUND",
+    "PREVIOUS_FIX",
+    "PREVIOUS_EVIDENCE_LEVEL",
+    "REGRESSION_RISK",
+    "MINIMAL_PROPOSED_CHANGE",
+    "EXPECTED_DEVICE_TEST"
+  ],
+  "required_postbuild_report": [
+    "commit SHA",
+    "workflow/run ID",
+    "artifact ID",
+    "artifact digest",
+    "runtime SHA256",
+    "core SHA256",
+    "BUILD-PASS",
+    "DEVICE-PASS",
+    "STABLE",
+    "exact scope of change"
+  ]
+}
