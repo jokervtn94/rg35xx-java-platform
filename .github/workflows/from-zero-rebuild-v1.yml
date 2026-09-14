@@ -1,0 +1,175 @@
+name: RG35XX From-Zero Rebuild v1
+
+on:
+  push:
+    branches: [ rg35xx-from-zero-rebuild-v1 ]
+    paths:
+      - '.github/workflows/from-zero-rebuild-v1.yml'
+      - 'scripts/from_zero_*.py'
+      - 'scripts/from_zero_assemble_v1.sh'
+      - 'scripts/vc7r2_apply_proven_dynamic_view.py'
+      - 'scripts/vc6_apply_png_iccp_compat.py'
+      - 'scripts/vc6_png_iccp_assemble.sh'
+      - 'scripts/vc0_vc3_assemble.sh'
+      - 'scripts/b4_verified_core_assemble.sh'
+      - 'scripts/b4_apply_early_native_log.py'
+      - 'scripts/b4_apply_video_observability.py'
+      - 'scripts/g1_apply_java_transport.py'
+      - 'scripts/g1_apply_rg35xx_media_boot.py'
+      - 'scripts/g1_apply_native_overlay.py'
+      - 'src/org/recompile/freej2me/RG35XXGoldenFrameTransport.java'
+      - 'native/golden/**'
+      - 'docs/FROM-ZERO-DEVICE-PROVEN-MANIFEST-v1.md'
+  workflow_dispatch:
+
+jobs:
+  clean-build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    env:
+      FREEJ2ME_PIN: 13ec186903087156c145268f8706eecfaf9f1e50
+      TOOLCHAIN_IMAGE: docker.io/miyoocfw/toolchain-shared-uclibc@sha256:6f6761867b4e4dcc27c99bf25fb91b2910264165f27bdd40b1c17e6f98cf751e
+      JAMVM_L_SHA256: eea1b97cebfaca67b69ed365e966d80cdac22d8ff245c7a556137cfb2898ea34
+      GLIBJ_SHA256: d7abe888d2980329434c30f18c0eec124be1f02284bf9ed28e88d7242a1f2bea
+    steps:
+      - name: Checkout platform rebuild policy
+        uses: actions/checkout@v4
+
+      - name: Checkout pristine pinned FreeJ2ME
+        uses: actions/checkout@v4
+        with:
+          repository: TASEmulators/freej2me-plus
+          ref: 13ec186903087156c145268f8706eecfaf9f1e50
+          path: upstream
+
+      - name: Install build dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ant build-essential file unzip python3 binutils
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Prove pristine upstream identity
+        run: |
+          set -euo pipefail
+          test "$(git -C upstream rev-parse HEAD)" = "$FREEJ2ME_PIN"
+          test -z "$(git -C upstream status --porcelain)"
+          ! grep -Rq 'RG35XX-VC7R' upstream/src || { echo 'upstream contaminated'; exit 1; }
+
+      - name: Assemble only device-proven allowlist
+        run: |
+          set -euo pipefail
+          FZ_UPSTREAM="$GITHUB_WORKSPACE/upstream" \
+          FZ_ASSEMBLY="$RUNNER_TEMP/from-zero" \
+            sh scripts/from_zero_assemble_v1.sh | tee "$RUNNER_TEMP/from-zero-assembly.log"
+          echo "FZ=$RUNNER_TEMP/from-zero" >> "$GITHUB_ENV"
+
+      - name: Compile Java runtime and gate Java 6 bytecode
+        run: |
+          set -euo pipefail
+          cd "$FZ"
+          ant
+          JAR="$FZ/build/freej2me_plus-lr.jar"
+          test -f "$JAR"
+          python3 - "$FZ/build/classes" <<'PY'
+          import os, struct, sys
+          root=sys.argv[1]; count=0
+          for base, _, files in os.walk(root):
+              for name in files:
+                  if not name.endswith('.class'): continue
+                  count += 1
+                  p=os.path.join(base,name)
+                  h=open(p,'rb').read(8)
+                  if len(h)!=8 or h[:4]!=b'\xca\xfe\xba\xbe': raise SystemExit('bad class '+p)
+                  major=struct.unpack('>H',h[6:8])[0]
+                  if major != 50: raise SystemExit('non-Java6 class %s major=%d' % (p,major))
+          if count < 1000: raise SystemExit('unexpected class count %d' % count)
+          print('FROM_ZERO_CLASS_COUNT=%d' % count)
+          print('FROM_ZERO_JAVA_MAJOR=50')
+          PY
+          echo "FZ_RUNTIME_SHA256=$(sha256sum "$JAR" | awk '{print $1}')" >> "$GITHUB_ENV"
+
+      - name: Materialize pinned ARM uClibc toolchain
+        run: |
+          set -euo pipefail
+          docker pull "$TOOLCHAIN_IMAGE"
+          cid=$(docker create "$TOOLCHAIN_IMAGE" true)
+          trap 'docker rm -f "$cid" >/dev/null 2>&1 || true' EXIT
+          sudo rm -rf /opt/miyoo
+          sudo docker cp "$cid:/opt/miyoo" /opt/miyoo
+          sudo chown -R "$(id -u):$(id -g)" /opt/miyoo
+          test "$(/opt/miyoo/bin/arm-miyoo-linux-uclibcgnueabi-gcc -dumpmachine)" = arm-miyoo-linux-uclibcgnueabi
+
+      - name: Build ARMv5TE soft-float libretro core
+        run: |
+          set -euo pipefail
+          cd "$FZ/src/libretro"
+          make clean
+          make platform=unix \
+            CC='/opt/miyoo/bin/arm-miyoo-linux-uclibcgnueabi-gcc -march=armv5te -mtune=arm926ej-s -mfloat-abi=soft' \
+            CXX='/opt/miyoo/bin/arm-miyoo-linux-uclibcgnueabi-g++ -march=armv5te -mtune=arm926ej-s -mfloat-abi=soft' \
+            LDFLAGS='-lm -lpthread'
+          echo "FZ_CORE_SHA256=$(sha256sum freej2me_plus_libretro.so | awk '{print $1}')" >> "$GITHUB_ENV"
+
+      - name: Strict production contract gate
+        run: |
+          set -euo pipefail
+          CORE="$FZ/src/libretro/freej2me_plus_libretro.so"
+          readelf -h "$CORE" | tee /tmp/elf.txt
+          grep -q 'Class:.*ELF32' /tmp/elf.txt
+          grep -q 'Machine:.*ARM' /tmp/elf.txt
+          grep -q 'Version5 EABI' /tmp/elf.txt
+          grep -q 'soft-float ABI' /tmp/elf.txt
+          /opt/miyoo/bin/arm-miyoo-linux-uclibcgnueabi-nm "$CORE" | grep rg35xx_golden_video_start
+          /opt/miyoo/bin/arm-miyoo-linux-uclibcgnueabi-nm "$CORE" | grep rg35xx_golden_video_present
+          strings "$CORE" | grep -F '/mnt/mmc/CFW/java/bin/jamvm'
+          strings "$CORE" | grep -F '/mnt/mmc/freej2me-java-error.log'
+          strings "$CORE" | grep -F 'B4 CORE_INIT'
+          strings "$CORE" | grep -F 'B4 FIRST_FRAME_PUBLISH'
+          ! grep -Rq 'RG35XX-CV:' "$FZ/src"
+          ! grep -Rq 'RG35XX-MediaWarmup' "$FZ/src"
+          ! grep -Rq 'RG35XX-JAVA-DIAG:' "$FZ/src"
+          ! grep -Rq 'RG35XX-VC7R22' "$FZ/src"
+          ! grep -Rq 'rg35xx-font.bin' "$FZ/resources" || { echo 'reconstructed font accidentally admitted'; exit 1; }
+
+      - name: Package clean checkpoint
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/from-zero-checkpoint"
+          mkdir -p "$OUT/BIOS" "$OUT/CFW/retroarch/.retroarch/cores" "$OUT/evidence"
+          cp "$FZ/build/freej2me_plus-lr.jar" "$OUT/BIOS/freej2me-lr.jar"
+          cp "$FZ/src/libretro/freej2me_plus_libretro.so" "$OUT/CFW/retroarch/.retroarch/cores/freej2me_plus_libretro.so"
+          cp "$RUNNER_TEMP/from-zero-assembly.log" "$OUT/evidence/assembly.log"
+          cp docs/FROM-ZERO-DEVICE-PROVEN-MANIFEST-v1.md "$OUT/evidence/"
+          printf '%s\n' \
+            'RG35XX JAVA PLATFORM FROM-ZERO FOUNDATION V1' \
+            'STATUS=BUILD-PASS-ONLY_DEVICE-ACCEPTANCE-PENDING' \
+            "FREEJ2ME_PIN=$FREEJ2ME_PIN" \
+            "RUNTIME_SHA256=$FZ_RUNTIME_SHA256" \
+            "CORE_SHA256=$FZ_CORE_SHA256" \
+            "JAMVM_L_REQUIRED_SHA256=$JAMVM_L_SHA256" \
+            "GLIBJ_REQUIRED_SHA256=$GLIBJ_SHA256" \
+            'LAZY_MEDIA=ADMITTED_DEVICE_PROVEN' \
+            'ASYNC_RGB565_VIDEO=ADMITTED_DEVICE_PROVEN' \
+            'DYNAMIC_LOGICAL_VIEW=ADMITTED_DEVICE_PROVEN' \
+            'PNG_ICCP=ADMITTED_DEVICE_EXERCISED' \
+            'CANONICAL_FRAMEBUFFER_BINDING=ADMITTED_DEVICE_PROVEN' \
+            'HEADLESS_IMAGE_NORMALIZE=ADMITTED_FROM_DEVICE_EVIDENCE' \
+            'LCD_MASK_GATE=ADMITTED_VISUALLY_PROVEN' \
+            'FONT_GOLDEN=DEFERRED' \
+            'AUDIO_WORKER_RING=DEFERRED_REVALIDATION_REQUIRED' \
+            'TRANSPARENCY_EXTENSIONS=DEFERRED_REVALIDATION_REQUIRED' \
+            'CV_CW=FORBIDDEN' \
+            'HOTPATH_DIAGNOSTICS=FORBIDDEN' > "$OUT/STATUS.txt"
+          (cd "$OUT" && find . -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum) > "$OUT/SHA256SUMS.txt"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rg35xx-from-zero-foundation-v1
+          path: ${{ runner.temp }}/from-zero-checkpoint
+          include-hidden-files: true
+          retention-days: 30
