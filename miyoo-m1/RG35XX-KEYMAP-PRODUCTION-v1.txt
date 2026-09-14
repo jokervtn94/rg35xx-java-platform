@@ -1,0 +1,27 @@
+RG35XX MIYOO STANDALONE INPUT KEYMAP v1
+STATUS=DEVICE-PASS_SCOPE_SPECIFIC
+DEVICE=original RG35XX (2022)
+INPUT=/dev/input/js0
+SOURCE_CHECKPOINT=M1.3C
+
+UP=axis:7:-32767
+DOWN=axis:7:32767
+LEFT=axis:6:-32767
+RIGHT=axis:6:32767
+A=button:0:1
+B=button:1:1
+X=button:2:1
+Y=button:3:1
+START=button:8:1
+SELECT=button:7:1
+L=button:5:1
+R=button:6:1
+
+RELEASE_AXIS6=0
+RELEASE_AXIS7=0
+RELEASE_BUTTON=0
+
+NOTES:
+- Opposite D-pad directions intentionally share the same raw axis with opposite values.
+- This manifest is valid for the standalone raw-js0 input layer only.
+- Full Miyoo-derived platform is not DEVICE-PASS and not STABLE.
