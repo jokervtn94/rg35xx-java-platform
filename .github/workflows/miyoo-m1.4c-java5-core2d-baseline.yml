@@ -1,0 +1,92 @@
+name: RG35XX Miyoo M1.4C Java5 Core2D Baseline Compile
+
+on:
+  push:
+    branches:
+      - rg35xx-miyoo-platform-v1
+    paths:
+      - 'tasklog/MIYOO-M1.4C-CORE2D-JAVA5-BACKPORT-BUILD-PREFLIGHT.md'
+      - '.github/workflows/miyoo-m1.4c-java5-core2d-baseline.yml'
+  workflow_dispatch:
+
+jobs:
+  compile-java5-core2d-baseline:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v4
+
+      - name: Gate rules and preflight
+        run: |
+          test -f project-rules/RG35XX_PROJECT_RULES.json
+          test -f tasklog/MIYOO-M1.4C-CORE2D-JAVA5-BACKPORT-BUILD-PREFLIGHT.md
+          grep -q 'MINIMAL_PROPOSED_CHANGE' tasklog/MIYOO-M1.4C-CORE2D-JAVA5-BACKPORT-BUILD-PREFLIGHT.md
+
+      - name: Setup JDK 8 compiler
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Checkout pinned Miyoo source
+        run: |
+          git clone https://github.com/aweigit/freej2me-miyoomini.git upstream-miyoo
+          cd upstream-miyoo
+          git checkout ca11dfe8ea1cc273d92460f9a83bbf192023fa63
+          test "$(git rev-parse HEAD)" = "ca11dfe8ea1cc273d92460f9a83bbf192023fa63"
+
+      - name: Build Java5 Core2D source inventory
+        run: |
+          cd upstream-miyoo
+          find src -name '*.java' \
+            ! -path 'src/org/lwjgl/*' \
+            ! -path 'src/javax/microedition/m3g/*' \
+            ! -path 'src/com/mascotcapsule/*' \
+            | sort > ../M1.4C-core2d-sources.txt
+          echo "SOURCE_COUNT=$(wc -l < ../M1.4C-core2d-sources.txt)" | tee ../M1.4C-baseline-summary.txt
+          grep -E '/org/lwjgl/|/javax/microedition/m3g/|/com/mascotcapsule/' ../M1.4C-core2d-sources.txt && exit 20 || true
+
+      - name: Compile unmodified source as Java5 baseline
+        id: compile
+        shell: bash
+        run: |
+          set +e
+          cd upstream-miyoo
+          mkdir -p build-java5-baseline/classes
+          javac -source 1.5 -target 1.5 -encoding UTF-8 \
+            -cp 'lib/*' \
+            -d build-java5-baseline/classes \
+            @../M1.4C-core2d-sources.txt \
+            > ../M1.4C-java5-baseline-compile.log 2>&1
+          RC=$?
+          echo "COMPILE_EXIT_CODE=$RC" | tee -a ../M1.4C-baseline-summary.txt
+          if [ "$RC" -eq 0 ]; then
+            echo 'BASELINE_COMPILE=PASS_UNEXPECTED' | tee -a ../M1.4C-baseline-summary.txt
+          else
+            echo 'BASELINE_COMPILE=FAIL_EXPECTED' | tee -a ../M1.4C-baseline-summary.txt
+          fi
+          exit 0
+
+      - name: Summarize blockers
+        run: |
+          echo '== FIRST 250 COMPILER LINES ==' >> M1.4C-baseline-summary.txt
+          sed -n '1,250p' M1.4C-java5-baseline-compile.log >> M1.4C-baseline-summary.txt
+          echo '== ERROR TOKENS ==' >> M1.4C-baseline-summary.txt
+          grep -E 'error:|diamond operator|lambda expressions|try-with-resources|cannot find symbol|package .* does not exist|is not supported in -source 1.5' M1.4C-java5-baseline-compile.log | head -200 >> M1.4C-baseline-summary.txt || true
+          cat M1.4C-baseline-summary.txt
+
+      - name: Package baseline evidence
+        run: |
+          mkdir -p artifact
+          cp M1.4C-baseline-summary.txt artifact/
+          cp M1.4C-java5-baseline-compile.log artifact/
+          cp M1.4C-core2d-sources.txt artifact/
+          cp tasklog/MIYOO-M1.4C-CORE2D-JAVA5-BACKPORT-BUILD-PREFLIGHT.md artifact/
+          sha256sum artifact/* | tee artifact/SHA256SUMS.txt
+
+      - name: Upload baseline evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: rg35xx-miyoo-m1.4c-java5-core2d-baseline
+          path: artifact/
+          if-no-files-found: error
