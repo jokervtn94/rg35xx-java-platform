@@ -41,7 +41,7 @@ jobs:
       - uses: actions/setup-java@v4
         with: {distribution: temurin, java-version: '8'}
       - name: Build and gate R2.3
-        run: sh scripts/ci_build_r23_hang_localization.sh
+        run: sh -x scripts/ci_build_r23_hang_localization.sh
       - name: Validate installer syntax
         shell: pwsh
         run: |
