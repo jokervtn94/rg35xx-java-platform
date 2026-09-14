@@ -175,7 +175,7 @@ jobs:
 
           (
             cd "$PAY"
-            find . -type f -printf '%P\0' | sort -z | xargs -0 sha256sum
+            find . -type f ! -name SHA256SUMS.txt -printf '%P\0' | sort -z | xargs -0 sha256sum
           ) > "$PAY/SHA256SUMS.txt"
           (
             cd "$PAY"
@@ -224,6 +224,7 @@ jobs:
           sed -i 's/^          //' "$OUT/README-INSTALL.txt"
 
           (cd "$OUT" && find . -type f ! -name PACKAGE-SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum) > "$OUT/PACKAGE-SHA256SUMS.txt"
+          (cd "$OUT" && sha256sum -c PACKAGE-SHA256SUMS.txt)
 
       - uses: actions/upload-artifact@v4
         with:
