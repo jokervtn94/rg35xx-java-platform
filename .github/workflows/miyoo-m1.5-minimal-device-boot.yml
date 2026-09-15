@@ -1,0 +1,106 @@
+name: Miyoo M1.5 Minimal Java Device Boot
+on:
+  workflow_dispatch:
+  push:
+    branches: [rg35xx-miyoo-platform-v1]
+    paths:
+      - 'miyoo-m1/M1.5-DEVICE-TEST.sh'
+      - 'miyoo-m1/M1.4A-java5-boot-slice-audit.sh'
+      - 'miyoo-m1/M1.4A.8-mymethodvisitor-java5-audit.sh'
+      - 'tasklog/MIYOO-M1.5-MINIMAL-DEVICE-BOOT-PREFLIGHT.md'
+      - '.github/workflows/miyoo-m1.5-minimal-device-boot.yml'
+jobs:
+  package:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Preflight gate
+        run: |
+          test -f project-rules/RG35XX_PROJECT_RULES.json
+          test -f tasklog/MIYOO-M1.5-MINIMAL-DEVICE-BOOT-PREFLIGHT.md
+          grep -q 'LAUNCH_M1_4A_8_JAVA5_2D_NO_AUDIO_SLICE_ON_DEVICE_PROVEN_JAMVM_L_GLIBJ' tasklog/MIYOO-M1.5-MINIMAL-DEVICE-BOOT-PREFLIGHT.md
+      - name: Install pinned-compatible Java 8 compiler
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y openjdk-8-jdk-headless
+          JAVAC8=/usr/lib/jvm/java-8-openjdk-amd64/bin/javac
+          test -x "$JAVAC8"
+          "$JAVAC8" -version 2>&1 | tee javac-version.txt
+          grep -q '^javac 1\.8\.' javac-version.txt
+          echo "JAVAC8=$JAVAC8" >> "$GITHUB_ENV"
+      - name: Reproduce M1.4A.8 class-major-49 slice
+        run: |
+          mkdir -p .java8-bin
+          ln -sf "$JAVAC8" .java8-bin/javac
+          export PATH="$PWD/.java8-bin:$PATH"
+          bash miyoo-m1/M1.4A.8-mymethodvisitor-java5-audit.sh m1_5_audit | tee m1_5_audit-console.txt
+          test -d m1_5_audit/classes
+          COUNT=$(find m1_5_audit/classes -name '*.class' | wc -l)
+          test "$COUNT" -eq 245
+          python3 - <<'PY'
+from pathlib import Path
+bad=[]
+for p in Path('m1_5_audit/classes').rglob('*.class'):
+    b=p.read_bytes()
+    if int.from_bytes(b[6:8],'big') != 49: bad.append(str(p))
+if bad: raise SystemExit('NON_MAJOR49:'+','.join(bad[:10]))
+print('CLASS_MAJOR_49_ONLY=YES')
+PY
+      - name: Build isolated boot probe and package
+        run: |
+          mkdir -p m1_5_package/Roms/APPS/RG35XX-MIYOO-M1.5
+          cat > /tmp/M15BootProbe.java <<'EOF'
+          public final class M15BootProbe {
+            public static void main(String[] args) throws Exception {
+              System.out.println("M1_5_BOOT_MARKER=PASS");
+              ClassLoader cl = M15BootProbe.class.getClassLoader();
+              String[] required = {
+                "org.recompile.mobile.Mobile",
+                "org.recompile.mobile.MobilePlatform",
+                "org.recompile.mobile.MIDletLoader",
+                "org.recompile.mobile.MyProducer",
+                "org.recompile.mobile.MyClassVisitor",
+                "org.recompile.mobile.MyMethodVisitor"
+              };
+              for (int i=0;i<required.length;i++) {
+                Class.forName(required[i], false, cl);
+                System.out.println("LINK_OK="+required[i]);
+              }
+              System.out.println("M1_5_LINKAGE_MARKER=PASS");
+            }
+          }
+          EOF
+          "$JAVAC8" -source 5 -target 5 -d /tmp /tmp/M15BootProbe.java
+          jar cf m1_5_package/Roms/APPS/RG35XX-MIYOO-M1.5/m1.5-java5-slice.jar -C m1_5_audit/classes .
+          jar cf m1_5_package/Roms/APPS/RG35XX-MIYOO-M1.5/m1.5-boot-probe.jar -C /tmp M15BootProbe.class
+          cp miyoo-m1/M1.5-DEVICE-TEST.sh m1_5_package/Roms/APPS/RG35XX-MIYOO-M1.5/RUN-M1.5-DEVICE-TEST.sh
+          chmod +x m1_5_package/Roms/APPS/RG35XX-MIYOO-M1.5/RUN-M1.5-DEVICE-TEST.sh
+          cat > m1_5_package/README-M1.5.txt <<'EOF'
+          M1.5 isolated device test. Copy the contents of this package to the SD root.
+          Run: /mnt/mmc/Roms/APPS/RG35XX-MIYOO-M1.5/RUN-M1.5-DEVICE-TEST.sh
+          Result: /mnt/mmc/RG35XX-MIYOO-M1.5-DEVICE-RESULT.txt
+          JamVM log: /mnt/mmc/RG35XX-MIYOO-M1.5-JAMVM.log
+          This test does not overwrite the installed Java platform.
+          EOF
+          find m1_5_package -type f -exec sha256sum {} \; | sort > m1_5_package/SHA256SUMS.txt
+          sha256sum m1_5_package/Roms/APPS/RG35XX-MIYOO-M1.5/*.jar
+      - name: Package gate
+        run: |
+          grep -q 'eea1b97cebfaca67b69ed365e966d80cdac22d8ff245c7a556137cfb2898ea34' m1_5_package/Roms/APPS/RG35XX-MIYOO-M1.5/RUN-M1.5-DEVICE-TEST.sh
+          grep -q 'd7abe888d2980329434c30f18c0eec124be1f02284bf9ed28e88d7242a1f2bea' m1_5_package/Roms/APPS/RG35XX-MIYOO-M1.5/RUN-M1.5-DEVICE-TEST.sh
+          grep -q 'WATCHDOG_TIMEOUT' m1_5_package/Roms/APPS/RG35XX-MIYOO-M1.5/RUN-M1.5-DEVICE-TEST.sh
+          test -s m1_5_package/Roms/APPS/RG35XX-MIYOO-M1.5/m1.5-java5-slice.jar
+          test -s m1_5_package/Roms/APPS/RG35XX-MIYOO-M1.5/m1.5-boot-probe.jar
+          echo M1_5_PACKAGE_BUILD_PASS=YES
+          echo DEVICE_PASS=NO
+          echo STABLE=NO
+      - name: Upload M1.5 device package
+        uses: actions/upload-artifact@v4
+        with:
+          name: rg35xx-miyoo-m1.5-minimal-device-boot
+          path: |
+            m1_5_package/
+            m1_5_audit/
+            m1_5_audit-console.txt
+            javac-version.txt
+          if-no-files-found: error
