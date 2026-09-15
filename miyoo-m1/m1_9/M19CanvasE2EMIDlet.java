@@ -81,7 +81,7 @@ public final class M19CanvasE2EMIDlet extends MIDlet {
             int presents=0;
             while (running && System.currentTimeMillis()<end) {
                 repaint(); serviceRepaints();
-                PlatformImage image = MobilePlatform.getLCD();
+                PlatformImage image = MobilePlatform.getLcdBackbuffer();
                 if (image != null) {
                     int[] fb = image.getMIDPGraphics().getFrameBuffer();
                     int rc = M19SdlPresenter.presentARGB(fb, 640, 480);
