@@ -6,9 +6,9 @@ package org.recompile.mobile;
  * Contract:
  *  - M1.8/JNI is the sole raw js0 owner in the production M1.8 runtime.
  *  - MobilePlatform remains the sole MIDP event owner.
- *  - Raw RG35XX semantic controls are converted to canonical Libretro logical
- *    slots, then Mobile.getMobileKey(slot) performs the phone-specific MIDP
- *    mapping already owned by FreeJ2ME-Plus.
+ *  - Raw RG35XX semantic controls are converted to FreeJ2ME's canonical
+ *    logical key indices, then Mobile.getMobileKey(index) performs the
+ *    phone/profile-specific MIDP mapping already owned by FreeJ2ME-Plus.
  *  - This class never calls a Displayable directly.
  *  - Repeat is generated only for held directional/FIRE controls and is
  *    bounded by time; press/release are edge-triggered.
@@ -23,7 +23,7 @@ public final class M1InputDispatch {
     private int previous;
     private final long[] nextRepeat = new long[13];
 
-    /** Poll exactly once. Call from the existing canonical frontend input tick only. */
+    /** Poll exactly once. Call from the existing canonical platform input tick only. */
     public void poll(long nowMs) {
         final int state = M1Input.rawGetState();
         dispatchState(state, nowMs);
@@ -35,9 +35,9 @@ public final class M1InputDispatch {
             final int bit = 1 << (id - 1);
             final boolean wasDown = (previous & bit) != 0;
             final boolean isDown = (state & bit) != 0;
-            final int slot = toLibretroSlot(id);
-            if (slot < 0) continue;
-            final int key = Mobile.getMobileKey(slot);
+            final int logicalIndex = toLogicalKeyIndex(id);
+            if (logicalIndex < 0) continue;
+            final int key = Mobile.getMobileKey(logicalIndex);
 
             if (!wasDown && isDown) {
                 MobilePlatform.keyPressed(key);
@@ -59,14 +59,15 @@ public final class M1InputDispatch {
     }
 
     /**
-     * Canonical FreeJ2ME-Plus Libretro logical slots (Mobile.java):
+     * FreeJ2ME canonical logical key indices from Mobile.keyArray:
      * 0 Up, 1 Down, 2 Left, 3 Right, 4=9, 5=7, 6=0, 7 Fire,
      * 8 RightSoft, 9 LeftSoft, 10=1, 11=3, 12=*, 13=#, ...
      *
-     * Physical RG35XX labels are mapped only to these frontend-neutral slots;
-     * Mobile.getMobileKey() remains responsible for device/profile keycodes.
+     * These are logical FreeJ2ME key indices, not raw RG35XX joystick IDs and
+     * not an external frontend transport. Mobile.getMobileKey() remains
+     * responsible for device/profile-specific MIDP keycodes.
      */
-    private static int toLibretroSlot(int id) {
+    private static int toLogicalKeyIndex(int id) {
         switch (id) {
             case UP:     return 0;
             case DOWN:   return 1;
@@ -74,12 +75,12 @@ public final class M1InputDispatch {
             case RIGHT:  return 3;
             case A:      return 7;  // Fire
             case B:      return 8;  // RightSoft
-            case X:      return 5;  // 7 / GAME_A-compatible slot
-            case Y:      return 4;  // 9 / GAME_B-compatible slot
-            case L1:     return 12; // * / GAME_C-compatible slot
-            case R1:     return 13; // # / GAME_D-compatible slot
+            case X:      return 5;  // 7 / GAME_A-compatible logical key
+            case Y:      return 4;  // 9 / GAME_B-compatible logical key
+            case L1:     return 12; // * / GAME_C-compatible logical key
+            case R1:     return 13; // # / GAME_D-compatible logical key
             case START:  return 9;  // LeftSoft
-            case SELECT: return 6;  // 0; canonical slot, device behavior still needs RG35XX test
+            case SELECT: return 6;  // 0; behavior still needs RG35XX device acceptance
             default:     return -1;
         }
     }
