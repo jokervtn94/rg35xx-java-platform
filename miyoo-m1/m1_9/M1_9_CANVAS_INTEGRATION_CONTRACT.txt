@@ -1,0 +1,51 @@
+RG35XX MIYOO-INSPIRED M1.9 CANVAS/GAMECANVAS INTEGRATION CONTRACT
+
+PRECONDITIONS (LOCKED; DO NOT MODIFY):
+- M1.6 SDL1/fbcon display = DEVICE-PASS.
+- M1.7 raw /dev/input/js0 = DEVICE-PASS.
+- M1.8 physical js0 -> JNI -> M1InputDispatch.poll() -> MobilePlatform = DEVICE-PASS.
+- JamVM L SHA256 = eea1b97cebfaca67b69ed365e966d80cdac22d8ff245c7a556137cfb2898ea34.
+- glibj SHA256 = d7abe888d2980329434c30f18c0eec124be1f02284bf9ed28e88d7242a1f2bea.
+
+CURRENT_SYMPTOM:
+The canonical MobilePlatform event owner is proven to receive real physical input, but real MIDP Canvas/GameCanvas callback/state plus visible display response has not yet been proven on RG35XX.
+
+ONE PRIMARY VARIABLE:
+Connect the already-proven M1.8 production polling path to a minimal real MIDP Canvas/GameCanvas acceptance MIDlet and observe canonical callbacks/state and visible response.
+
+FORBIDDEN CHANGES:
+- no M1.6 display transport change
+- no M1.7 raw mapping recalibration
+- no M1.8 semantic mapping/repeat-policy change
+- no second input dispatcher
+- no Libretro frontend/input/video path
+- no audio/MIDI/font/game-specific work
+- no JamVM/glibj replacement or patch
+- no unbounded logging
+
+REQUIRED REAL-DEVICE EVIDENCE:
+1. Acceptance MIDlet/Canvas becomes visible through the DEVICE-PASS display path.
+2. Physical D-pad produces real Canvas/GameCanvas directional callback/state evidence.
+3. Physical A produces FIRE callback/state evidence.
+4. Release is observed; no stuck key after release.
+5. Repeat remains bounded; no catch-up burst/duplicate dispatch.
+6. Program exits normally without hard reset/hang.
+7. JamVM/glibj hashes are unchanged before/after.
+8. M1.6 display and M1.8 physical-input behavior show no regression.
+
+PASS MARKERS (target):
+M1_9_CANVAS_VISIBLE=PASS
+M1_9_DIRECTION_CALLBACK=PASS
+M1_9_FIRE_CALLBACK=PASS
+M1_9_RELEASE_NO_STUCK=PASS
+M1_9_REPEAT_BOUNDED=PASS
+M1_9_NORMAL_EXIT=PASS
+M1_9_PROTECTED_HASHES=PASS
+M1_9_DEVICE_ACCEPTANCE_MARKER=PASS
+
+EVIDENCE POLICY:
+BUILD-PASS alone is not DEVICE-PASS. M1.9 may be promoted only after logs plus real RG35XX human visual/input confirmation support the required evidence above.
+
+M1.9_DEVICE_PASS=NO
+DEVICE_TEST_PENDING=YES
+FULL_PLATFORM_STABLE=NO
