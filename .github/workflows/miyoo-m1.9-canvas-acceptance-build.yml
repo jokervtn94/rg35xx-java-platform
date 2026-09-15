@@ -115,24 +115,26 @@ jobs:
           exec >"$OUT" 2>&1
           echo 'RG35XX MIYOO M1.9 REAL MIDP CANVAS ACCEPTANCE'
           echo 'ACTION=VERIFY_CANVAS_VISIBLE_THEN_PRESS_RELEASE_DPAD_AND_A_FOR_30_SECONDS'
+          echo M1_9_SHELL_BEFORE_JAMVM=YES
           JB=$(sha256sum "$JAMVM"|awk '{print $1}'); GB=$(sha256sum "$GLIBJ"|awk '{print $1}')
           echo JAMVM_SHA256_BEFORE=$JB; echo GLIBJ_SHA256_BEFORE=$GB
           export LD_LIBRARY_PATH="$APP:${LD_LIBRARY_PATH-}"
-          "$JAMVM" -Xmx64m -cp "$GLIBJ:$APP/m1.9-freej2me-platform.jar" org.recompile.mobile.M19LifecycleLauncher "$APP/m1.9-canvas-midlet.jar" >"$LOG" 2>&1
+          "$JAMVM" -Xmx64m -cp "$GLIBJ:$APP/m1.9-freej2me-platform.jar" org.recompile.mobile.M19LifecycleLauncher "$APP/m1.9-canvas-midlet.jar" >>"$OUT" 2>&1
           RC=$?
+          echo M1_9_SHELL_AFTER_JAMVM=YES
           JA=$(sha256sum "$JAMVM"|awk '{print $1}'); GA=$(sha256sum "$GLIBJ"|awk '{print $1}')
           echo JAMVM_EXIT_CODE=$RC
-          tail -n 180 "$LOG"
+          echo M1_9_LEGACY_LOG_SIZE=$(wc -c <"$LOG" 2>/dev/null || echo 0)
           echo JAMVM_SHA256_AFTER=$JA; echo GLIBJ_SHA256_AFTER=$GA
           if [ "$JB" = "$JA" ] && [ "$GB" = "$GA" ]; then echo M1_9_PROTECTED_HASHES=PASS; else echo M1_9_PROTECTED_HASHES=FAIL; fi
-          if [ "$RC" -eq 0 ] && grep -q 'M1_9_LIFECYCLE_LOAD=PASS' "$LOG" && grep -q 'M1_9_DEVICE_ACCEPTANCE_MARKER=PASS' "$LOG"; then echo M1_9_EXECUTION_RESULT=PASS; else echo M1_9_EXECUTION_RESULT=FAIL; fi
+          if [ "$RC" -eq 0 ] && grep -q 'M1_9_LIFECYCLE_LOAD=PASS' "$OUT" && grep -q 'M1_9_DEVICE_ACCEPTANCE_MARKER=PASS' "$OUT"; then echo M1_9_EXECUTION_RESULT=PASS; else echo M1_9_EXECUTION_RESULT=FAIL; fi
           echo DEVICE_PASS=NO_PENDING_VISUAL_AND_LOG_REVIEW
           echo FULL_PLATFORM_STABLE=NO
           sync
           exit "$RC"
           SH
           chmod +x "$APP/M1.9-CANVAS-ACCEPTANCE.sh"
-          printf '%s\n' 'PACKAGE_LAYOUT=GARLICOS_FLAT_APPS' 'EXTRACT_TARGET=SD_ROOT' 'M1.8_INPUT=DEVICE-PASS_LOCKED' 'M1.9_LIFECYCLE=CANONICAL_MIDLETLOADER_START' 'M1.9_DEVICE_TEST_PENDING=YES' 'FULL_PLATFORM_STABLE=NO' > out/garlicos/STATUS.txt
+          printf '%s\n' 'PACKAGE_LAYOUT=GARLICOS_FLAT_APPS' 'EXTRACT_TARGET=SD_ROOT' 'M1.8_INPUT=DEVICE-PASS_LOCKED' 'M1.9_LIFECYCLE=CANONICAL_MIDLETLOADER_START' 'M1.9_DIAGNOSTICS=RESULT_FILE_DIRECT' 'M1.9_DEVICE_TEST_PENDING=YES' 'FULL_PLATFORM_STABLE=NO' > out/garlicos/STATUS.txt
           (cd out/garlicos && find Roms M1.9-DOCS -type f -print0 | sort -z | xargs -0 sha256sum) > out/garlicos/SHA256SUMS.txt
           (cd out/garlicos && sha256sum -c SHA256SUMS.txt)
           sha256sum out/m1.9-freej2me-platform.jar out/m1.9-canvas-midlet.jar out/libm1_8_input.so | tee out/BUILD-SHA256SUMS.txt
