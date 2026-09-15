@@ -44,7 +44,7 @@ jobs:
           $CC -shared -fPIC -Os -pipe -fno-strict-aliasing -march=armv5te -mtune=arm926ej-s -mfloat-abi=soft -Wall -Wextra -I"$JH" -I"$JH/linux" miyoo-m1/m1_8/m1_8_input_jni.c -o libm1_8_input.so
           $CC -shared -fPIC -Os -pipe -fno-strict-aliasing -march=armv5te -mtune=arm926ej-s -mfloat-abi=soft -Wall -Wextra -I"$JH" -I"$JH/linux" miyoo-m1/m1_9/m1_9e_presenter_jni.c -Wl,--as-needed -ldl -o libm1_9e_presenter.so
           mkdir -p midlet-classes
-          javac -source 1.5 -target 1.5 -bootclasspath upstream/build/freej2me_plus.jar -classpath upstream/build/freej2me_plus.jar -d midlet-classes miyoo-m1/m1_9/M19CanvasE2EMIDlet.java
+          /usr/lib/jvm/java-8-openjdk-amd64/bin/javac -source 1.5 -target 1.5 -bootclasspath upstream/build/freej2me_plus.jar -classpath upstream/build/freej2me_plus.jar -d midlet-classes miyoo-m1/m1_9/M19CanvasE2EMIDlet.java
           printf 'Manifest-Version: 1.0\nMIDlet-1: M1.9F,,org.recompile.mobile.M19CanvasE2EMIDlet\nMIDlet-Name: M1.9F\nMIDlet-Vendor: RG35XX\nMIDlet-Version: 1.0\nMicroEdition-Configuration: CLDC-1.1\nMicroEdition-Profile: MIDP-2.0\n' >/tmp/m19f.mf
           jar cfm m1.9f-canvas.jar /tmp/m19f.mf -C midlet-classes .
           echo M1_9F_BUILD_GATE=PASS
