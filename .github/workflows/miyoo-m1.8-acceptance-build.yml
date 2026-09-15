@@ -101,22 +101,29 @@ jobs:
           grep -q 'Machine:.*ARM' out/ELF-HEADER.txt
           grep -q 'Version5 EABI' out/ELF-HEADER.txt
           grep -q 'soft-float ABI' out/ELF-HEADER.txt
-      - name: Package device acceptance checkpoint
+      - name: Package proven flat GarlicOS APPS layout
         run: |
           set -euo pipefail
-          APP=out/device/Roms/APPS/M1.8-MIDP-ACCEPTANCE
+          APP=out/garlicos/Roms/APPS
           mkdir -p "$APP"
-          cp out/m1.8-midp-acceptance.jar out/libm1_8_input.so "$APP/"
-          cp miyoo-m1/M1.8-DEVICE-ACCEPTANCE.sh "$APP/launch.sh"
-          cp miyoo-m1/m1_8/M1_8_DEVICE_ACCEPTANCE.txt "$APP/"
-          cp miyoo-m1/m1_8/M18_MOBILEPLATFORM_ACCEPTANCE_CONTRACT.txt "$APP/"
-          chmod +x "$APP/launch.sh"
-          (cd out/device && find . -type f ! -name PACKAGE-SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum) > out/device/PACKAGE-SHA256SUMS.txt
-          (cd out/device && sha256sum -c PACKAGE-SHA256SUMS.txt)
-          printf '%s\n' 'M1.8_ACCEPTANCE_BUILD=PASS' 'DEVICE_PASS=NO' 'DEVICE_TEST_PENDING=YES' 'FULL_PLATFORM_STABLE=NO' > out/STATUS.txt
+          cp out/m1.8-midp-acceptance.jar "$APP/"
+          cp out/libm1_8_input.so "$APP/"
+          cp miyoo-m1/M1.8-DEVICE-ACCEPTANCE.sh "$APP/M1.8-DEVICE-ACCEPTANCE.sh"
+          chmod +x "$APP/M1.8-DEVICE-ACCEPTANCE.sh"
+          # Keep docs outside APPS so GarlicOS only sees the executable test entry plus its runtime payload.
+          mkdir -p out/garlicos/M1.8-DOCS
+          cp miyoo-m1/m1_8/M1_8_DEVICE_ACCEPTANCE.txt out/garlicos/M1.8-DOCS/
+          cp miyoo-m1/m1_8/M18_MOBILEPLATFORM_ACCEPTANCE_CONTRACT.txt out/garlicos/M1.8-DOCS/
+          (cd out/garlicos && find Roms M1.8-DOCS -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum) > out/garlicos/SHA256SUMS.txt
+          (cd out/garlicos && sha256sum -c SHA256SUMS.txt)
+          test -f out/garlicos/Roms/APPS/M1.8-DEVICE-ACCEPTANCE.sh
+          test -f out/garlicos/Roms/APPS/m1.8-midp-acceptance.jar
+          test -f out/garlicos/Roms/APPS/libm1_8_input.so
+          test ! -d out/garlicos/Roms/APPS/M1.8-MIDP-ACCEPTANCE
+          printf '%s\n' 'PACKAGE_LAYOUT=GARLICOS_FLAT_APPS' 'EXTRACT_TARGET=SD_ROOT' 'M1.8_ACCEPTANCE_BUILD=PASS' 'DEVICE_PASS=NO' 'DEVICE_TEST_PENDING=YES' 'FULL_PLATFORM_STABLE=NO' > out/garlicos/STATUS.txt
           sha256sum out/m1.8-midp-acceptance.jar out/libm1_8_input.so | tee out/BUILD-SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: miyoo-m1.8-standalone-device-acceptance
-          path: out/
+          name: miyoo-m1.8-garlicos-device-acceptance
+          path: out/garlicos/
           if-no-files-found: error
