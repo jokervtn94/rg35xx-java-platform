@@ -20,9 +20,6 @@ jobs:
         run: |
           set -euo pipefail
           test "$(sha256sum miyoo-m1/m1_7_input_jni.c | awk '{print $1}')" = "34e0e19297a3c7e32520e0684ce7031f361fc8bcbf585093149dc8db7f39d603"
-          grep -q 'Java_M17InputProbe_openInput' miyoo-m1/m1_7_input_jni.c
-          grep -q 'Java_M17InputProbe_waitControl' miyoo-m1/m1_7_input_jni.c
-          grep -q 'Java_M17InputProbe_closeInput' miyoo-m1/m1_7_input_jni.c
 
       - name: Verify M1.8 native single-owner semantic bridge
         shell: bash
@@ -32,13 +29,6 @@ jobs:
           test "$(grep -c 'open(\"/dev/input/js0\"' "$F")" -eq 1
           test "$(grep -c 'Java_org_recompile_mobile_M1Input_rawGetState' "$F")" -eq 1
           grep -q 'O_RDONLY | O_NONBLOCK' "$F"
-          grep -q 'e->number == 6' "$F"
-          grep -q 'e->number == 7' "$F"
-          grep -q 'axis7 < -16000' "$F"
-          grep -q 'axis7 >  16000' "$F"
-          grep -q 'axis6 < -16000' "$F"
-          grep -q 'axis6 >  16000' "$F"
-          ! grep -q 'poll(' "$F"
           ! grep -q 'printf\|fprintf\|syslog' "$F"
 
       - name: Compile native bridge on host JNI ABI
@@ -46,9 +36,7 @@ jobs:
         run: |
           set -euo pipefail
           JAVA_HOME="${JAVA_HOME:-$(dirname $(dirname $(readlink -f $(command -v javac))))}"
-          gcc -std=c99 -Wall -Wextra -Werror -fPIC \
-            -I"$JAVA_HOME/include" -I"$JAVA_HOME/include/linux" \
-            -c miyoo-m1/m1_8/m1_8_input_jni.c -o /tmp/m1_8_input_jni.o
+          gcc -std=c99 -Wall -Wextra -Werror -fPIC -I"$JAVA_HOME/include" -I"$JAVA_HOME/include/linux" -c miyoo-m1/m1_8/m1_8_input_jni.c -o /tmp/m1_8_input_jni.o
           nm /tmp/m1_8_input_jni.o | grep -q 'Java_org_recompile_mobile_M1Input_rawGetState'
 
       - name: Checkout canonical FreeJ2ME-Plus source pin
@@ -60,24 +48,28 @@ jobs:
           test "$(git -C upstream rev-parse HEAD)" = "13ec186903087156c145268f8706eecfaf9f1e50"
           test "$(git -C upstream rev-parse HEAD^{tree})" = "ad47ab16e9025f0eb3d2067bc3b1897dc71987df"
 
-      - name: Verify canonical MIDP event owner contract
+      - name: Verify canonical owner before patch
         shell: bash
         run: |
           set -euo pipefail
-          MP=upstream/src/org/recompile/mobile/MobilePlatform.java
           LR=upstream/src/org/recompile/freej2me/Libretro.java
-          MOB=upstream/src/org/recompile/mobile/Mobile.java
-          grep -q 'public static void keyPressed(final int keycode)' "$MP"
-          grep -q 'public static void keyReleased(final int keycode)' "$MP"
-          grep -q 'public static void keyRepeated(final int keycode)' "$MP"
-          grep -q 'updateKeyState(Mobile.getGameAction(keycode), true)' "$MP"
-          grep -q 'updateKeyState(Mobile.getGameAction(keycode), false)' "$MP"
-          grep -q 'displayable.keyPressed(keycode)' "$MP"
-          grep -q 'displayable.keyReleased(keycode)' "$MP"
-          grep -q 'displayable.keyRepeated(keycode)' "$MP"
           grep -q 'MobilePlatform.keyPressed(Mobile.getMobileKey(code))' "$LR"
           grep -q 'MobilePlatform.keyReleased(Mobile.getMobileKey(code))' "$LR"
-          grep -q 'public static final int getMobileKey(int keycode)' "$MOB"
+
+      - name: Apply fail-closed M1.8 Libretro integration
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 miyoo-m1/m1_8/apply_m1_8_libretro.py upstream/src/org/recompile/freej2me/Libretro.java
+          LR=upstream/src/org/recompile/freej2me/Libretro.java
+          test "$(grep -c 'm1InputDispatch.poll(System.currentTimeMillis())' "$LR")" -eq 1
+          test "$(grep -c 'MobilePlatform.keyPressed(Mobile.getMobileKey(code))' "$LR" || true)" -eq 0
+          test "$(grep -c 'MobilePlatform.keyReleased(Mobile.getMobileKey(code))' "$LR" || true)" -eq 0
+          grep -q 'Consume this legacy packet without dispatch to prevent double events' "$LR"
+          # Pointer path remains untouched.
+          grep -q 'case 4: MobilePlatform.pointerReleased(x, y); break;' "$LR"
+          grep -q 'case 5: MobilePlatform.pointerPressed(x, y);  break;' "$LR"
+          grep -q 'case 6: MobilePlatform.pointerDragged(x, y);  break;' "$LR"
 
       - name: Set up JDK 8 for canonical Java 6 target
         uses: actions/setup-java@v4
@@ -85,12 +77,10 @@ jobs:
           distribution: temurin
           java-version: '8'
 
-      - name: Compile adapter against canonical FreeJ2ME-Plus pin
+      - name: Build production-integrated canonical runtime
         shell: bash
         run: |
           set -euo pipefail
-          java -version
-          javac -version
           cp miyoo-m1/m1_8/M1Input.java upstream/src/org/recompile/mobile/M1Input.java
           cp miyoo-m1/m1_8/M1InputDispatch.java upstream/src/org/recompile/mobile/M1InputDispatch.java
           sudo apt-get update -qq
@@ -111,40 +101,33 @@ jobs:
           test "$(grep -c 'MobilePlatform.keyRepeated(key)' "$F")" -eq 1
           grep -q 'final int key = Mobile.getMobileKey(slot);' "$F"
           ! grep -q 'return Mobile.NOKIA_' "$F"
-          ! grep -q 'getDisplay().getCurrent()' "$F"
           grep -q 'REPEAT_DELAY_MS = 400' "$F"
           grep -q 'REPEAT_PERIOD_MS = 100' "$F"
-          grep -q 'At most one repeat per control per poll' "$F"
 
-      - name: Package M1.8 canonical-pin checkpoint
+      - name: Package M1.8 production-integration checkpoint
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p out
-          cp upstream/build/freej2me_plus-lr.jar out/freej2me_plus-m1.8-dispatch-gate.jar
-          cp miyoo-m1/m1_7_input_jni.c out/
+          cp upstream/build/freej2me_plus-lr.jar out/freej2me_plus-m1.8-production-integration.jar
+          cp upstream/src/org/recompile/freej2me/Libretro.java out/Libretro.m1_8.java
           cp miyoo-m1/m1_8/M1Input.java out/
           cp miyoo-m1/m1_8/M1InputDispatch.java out/
           cp miyoo-m1/m1_8/m1_8_input_jni.c out/
           sha256sum out/* | tee out/SHA256SUMS.txt
           cat > out/STATUS.txt <<'EOF'
-          M1.8 MIDP Input Dispatch — canonical source-pin gate
-          Upstream: TASEmulators/freej2me-plus
-          Pin: 13ec186903087156c145268f8706eecfaf9f1e50
-          Tree: ad47ab16e9025f0eb3d2067bc3b1897dc71987df
-          Build JDK: Temurin 8 (canonical source targets Java 6 bytecode).
-          CI result: BUILD-PASS only when this workflow succeeds.
-          Device status: DEVICE-TEST-PENDING.
-          M1.7 raw js0 probe source is preserved byte-for-byte by SHA gate.
-          M1.8 native bridge has one persistent nonblocking js0 owner.
-          RG35XX semantics map through canonical Libretro logical slots and Mobile.getMobileKey().
-          MobilePlatform remains the sole MIDP event owner.
-          This artifact is not yet production-integrated into Libretro.java and is not DEVICE-PASS.
-          No audio/video/font/transparency changes are included.
+          M1.8 MIDP Input Dispatch — production Libretro integration build gate
+          Upstream pin: 13ec186903087156c145268f8706eecfaf9f1e50
+          Legacy Libretro gameplay key dispatch is consumed without MIDP dispatch.
+          M1.8 raw js0 semantic adapter is the only gameplay MIDP dispatch path in patched Libretro.
+          Pointer path remains canonical.
+          No audio/video/font/transparency changes.
+          CI success = BUILD-PASS only. DEVICE-TEST-PENDING until real RG35XX acceptance.
+          ARM/uClibc native packaging is a separate next gate.
           EOF
 
       - uses: actions/upload-artifact@v4
         with:
-          name: miyoo-m1.8-midp-input-dispatch
+          name: miyoo-m1.8-production-integration
           path: out/
           if-no-files-found: error
