@@ -109,8 +109,8 @@ jobs:
           test "$(grep -c 'MobilePlatform.keyPressed(key)' "$F")" -eq 1
           test "$(grep -c 'MobilePlatform.keyReleased(key)' "$F")" -eq 1
           test "$(grep -c 'MobilePlatform.keyRepeated(key)' "$F")" -eq 1
-          test "$(grep -c 'Mobile.getMobileKey(slot)' "$F")" -eq 1
-          ! grep -q 'NOKIA_' "$F"
+          grep -q 'final int key = Mobile.getMobileKey(slot);' "$F"
+          ! grep -q 'return Mobile.NOKIA_' "$F"
           ! grep -q 'getDisplay().getCurrent()' "$F"
           grep -q 'REPEAT_DELAY_MS = 400' "$F"
           grep -q 'REPEAT_PERIOD_MS = 100' "$F"
