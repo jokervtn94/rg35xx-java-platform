@@ -1,0 +1,36 @@
+name: Miyoo M1.4A Java5 Boot Slice
+on:
+  workflow_dispatch:
+  push:
+    branches: [rg35xx-miyoo-platform-v1]
+    paths:
+      - 'miyoo-m1/M1.4A-java5-boot-slice-audit.sh'
+      - 'tasklog/MIYOO-M1.4A-JAVA5-BOOT-SLICE-PREFLIGHT.md'
+      - '.github/workflows/miyoo-m1.4a-java5-boot-slice.yml'
+jobs:
+  audit:
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Preflight gate
+        run: |
+          test -f project-rules/RG35XX_PROJECT_RULES.json
+          test -f tasklog/MIYOO-M1.4A-JAVA5-BOOT-SLICE-PREFLIGHT.md
+          grep -q 'MINIMAL_PROPOSED_CHANGE' tasklog/MIYOO-M1.4A-JAVA5-BOOT-SLICE-PREFLIGHT.md
+      - name: Install Java 8 compiler
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y openjdk-8-jdk-headless || true
+          if [ -x /usr/lib/jvm/java-8-openjdk-amd64/bin/javac ]; then
+            echo /usr/lib/jvm/java-8-openjdk-amd64/bin >> "$GITHUB_PATH"
+          fi
+          javac -version
+      - name: Run bounded Java5 audit
+        run: bash miyoo-m1/M1.4A-java5-boot-slice-audit.sh m1_4a_audit
+      - name: Upload audit evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rg35xx-miyoo-m1.4a-java5-boot-slice-audit
+          path: m1_4a_audit/
+          if-no-files-found: error
