@@ -21,7 +21,7 @@ jobs:
         run: |
           set -euo pipefail
           grep -Fq 'HISTORY_FOUND = YES' tasklog/MIYOO-M1.7-JAVA-RAW-JS0-INPUT-PREFLIGHT.md
-          grep -Fq 'ADD_JAVA_TO_RAW_JS0_INPUT_BRIDGE_USING_EXACT_M1_3C_MAPPING' tasklog/MIYOO-M1.7-JAVA-RAW-JS0-INPUT-PREFLIGHT.md
+          grep -Fq 'PRIMARY_VARIABLE = CONNECT_JAVA_TO_RAW_/dev/input/js0_INPUT_ONLY_WHILE_PRESERVING_M1.6_DISPLAY' tasklog/MIYOO-M1.7-JAVA-RAW-JS0-INPUT-PREFLIGHT.md
       - name: Install Java8 and pinned ARM toolchain
         run: |
           set -euo pipefail
