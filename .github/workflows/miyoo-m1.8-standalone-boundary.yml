@@ -1,0 +1,31 @@
+name: Miyoo M1.8 Standalone Boundary
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [miyoo-m1.8-midp-input-dispatch]
+    paths:
+      - 'miyoo-m1/m1_8/**'
+      - 'miyoo-m1/m1_7_input_jni.c'
+      - 'tasklog/MIYOO-M1.8-STANDALONE-DEVICE-AB.md'
+      - '.github/workflows/miyoo-m1.8-standalone-boundary.yml'
+
+jobs:
+  standalone_boundary:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify frozen M1.7 and standalone M1.8 boundary
+        run: sh miyoo-m1/m1_8/verify_standalone_boundary.sh
+      - name: Write status
+        run: |
+          mkdir -p out
+          sh miyoo-m1/m1_8/verify_standalone_boundary.sh | tee out/M1.8-STANDALONE-BOUNDARY.txt
+          cp miyoo-m1/m1_8/M1_8_DEVICE_ACCEPTANCE.txt out/
+          cp tasklog/MIYOO-M1.8-STANDALONE-DEVICE-AB.md out/
+          sha256sum out/* | tee out/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: miyoo-m1.8-standalone-boundary
+          path: out/
+          if-no-files-found: error
