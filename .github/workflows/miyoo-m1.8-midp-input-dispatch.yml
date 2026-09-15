@@ -24,6 +24,33 @@ jobs:
           grep -q 'Java_M17InputProbe_waitControl' miyoo-m1/m1_7_input_jni.c
           grep -q 'Java_M17InputProbe_closeInput' miyoo-m1/m1_7_input_jni.c
 
+      - name: Verify M1.8 native single-owner semantic bridge
+        shell: bash
+        run: |
+          set -euo pipefail
+          F=miyoo-m1/m1_8/m1_8_input_jni.c
+          test "$(grep -c 'open(\"/dev/input/js0\"' "$F")" -eq 1
+          test "$(grep -c 'Java_org_recompile_mobile_M1Input_rawGetState' "$F")" -eq 1
+          grep -q 'O_RDONLY | O_NONBLOCK' "$F"
+          grep -q 'e->number == 6' "$F"
+          grep -q 'e->number == 7' "$F"
+          grep -q 'axis7 < -16000' "$F"
+          grep -q 'axis7 >  16000' "$F"
+          grep -q 'axis6 < -16000' "$F"
+          grep -q 'axis6 >  16000' "$F"
+          ! grep -q 'poll(' "$F"
+          ! grep -q 'printf\|fprintf\|syslog' "$F"
+
+      - name: Compile native bridge on host JNI ABI
+        shell: bash
+        run: |
+          set -euo pipefail
+          JAVA_HOME="${JAVA_HOME:-$(dirname $(dirname $(readlink -f $(command -v javac))))}"
+          gcc -std=c99 -Wall -Wextra -Werror -fPIC \
+            -I"$JAVA_HOME/include" -I"$JAVA_HOME/include/linux" \
+            -c miyoo-m1/m1_8/m1_8_input_jni.c -o /tmp/m1_8_input_jni.o
+          nm /tmp/m1_8_input_jni.o | grep -q 'Java_org_recompile_mobile_M1Input_rawGetState'
+
       - name: Verify upstream MIDP event owner contract
         shell: bash
         run: |
@@ -76,12 +103,14 @@ jobs:
           cp miyoo-m1/m1_7_input_jni.c out/
           cp miyoo-m1/m1_8/M1Input.java out/
           cp miyoo-m1/m1_8/M1InputDispatch.java out/
+          cp miyoo-m1/m1_8/m1_8_input_jni.c out/
           sha256sum out/* | tee out/SHA256SUMS.txt
           cat > out/STATUS.txt <<'EOF'
           M1.8 MIDP Input Dispatch
           CI result: BUILD-PASS only when this workflow succeeds.
           Device status: DEVICE-TEST-PENDING.
-          M1.7 raw js0 acquisition is preserved byte-for-byte by SHA gate.
+          M1.7 raw js0 probe source is preserved byte-for-byte by SHA gate.
+          Production M1.8 has one persistent nonblocking js0 owner and exposes semantic state only.
           MobilePlatform remains the only MIDP event owner.
           No audio/video/font/transparency changes are included.
           EOF
