@@ -1,0 +1,15 @@
+M1.8 MobilePlatform acceptance contract
+
+This checkpoint must instrument the canonical FreeJ2ME MobilePlatform owner only for the dedicated acceptance build.
+Production behavior must remain unchanged.
+
+Required package-visible acceptance seam in MobilePlatform:
+- m1AcceptanceReset()
+- m1AcceptancePressCount()
+- m1AcceptanceReleaseCount()
+- m1AcceptanceRepeatCount()
+
+Counters increment inside the existing canonical keyPressed/keyReleased/keyRepeated methods; no second dispatcher and no direct Displayable call is allowed.
+The acceptance workflow must patch a fresh pinned FreeJ2ME upstream tree (13ec186903087156c145268f8706eecfaf9f1e50), compile Java 5 compatible classes, and package only the dedicated acceptance JAR plus ARMv5TE/uClibc/soft-float libm1_8_input.so and M1.8-DEVICE-ACCEPTANCE.sh.
+
+This is BUILD-PASS evidence only until the package is executed on a real RG35XX.
