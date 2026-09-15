@@ -1,0 +1,91 @@
+name: Miyoo M1.8 MIDP Input Dispatch
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [miyoo-m1.8-midp-input-dispatch]
+    paths:
+      - 'miyoo-m1/m1_8/**'
+      - 'miyoo-m1/m1_7_input_jni.c'
+      - '.github/workflows/miyoo-m1.8-midp-input-dispatch.yml'
+
+jobs:
+  m1_8_dispatch_gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify M1.7 raw input is unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(sha256sum miyoo-m1/m1_7_input_jni.c | awk '{print $1}')" = "b766d7f3cc8c0883cc600e72f4c29c8b38874a1e0c283e00d799ca76240c9c66"
+          grep -q 'Java_org_recompile_mobile_M1Input_rawGetState' miyoo-m1/m1_7_input_jni.c
+
+      - name: Verify upstream MIDP event owner contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone -q https://github.com/aweigit/freej2me-miyoomini.git upstream
+          git -C upstream checkout -q ca11dfe8ea1cc273d92460f9a83bbf192023fa63
+          MP=upstream/src/org/recompile/mobile/MobilePlatform.java
+          grep -q 'public void keyPressed(int keycode)' "$MP"
+          grep -q 'public void keyReleased(int keycode)' "$MP"
+          grep -q 'public void keyRepeated(int keycode)' "$MP"
+          grep -q 'updateKeyState(keycode, 1)' "$MP"
+          grep -q 'updateKeyState(keycode, 0)' "$MP"
+          grep -q 'Mobile.getDisplay().getCurrent().keyPressed(keycode)' "$MP"
+          grep -q 'Mobile.getDisplay().getCurrent().keyReleased(keycode)' "$MP"
+          grep -q 'Mobile.getDisplay().getCurrent().keyRepeated(keycode)' "$MP"
+
+      - name: Compile adapter against pinned FreeJ2ME source
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp miyoo-m1/m1_8/M1Input.java upstream/src/org/recompile/mobile/M1Input.java
+          cp miyoo-m1/m1_8/M1InputDispatch.java upstream/src/org/recompile/mobile/M1InputDispatch.java
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ant
+          (cd upstream && ant)
+          test -f upstream/build/freej2me-sdl.jar
+          jar tf upstream/build/freej2me-sdl.jar | grep -q 'org/recompile/mobile/M1Input.class'
+          jar tf upstream/build/freej2me-sdl.jar | grep -q 'org/recompile/mobile/M1InputDispatch.class'
+
+      - name: Static single-dispatch and bounded-repeat gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          F=miyoo-m1/m1_8/M1InputDispatch.java
+          test "$(grep -c 'M1Input.rawGetState()' "$F")" -eq 1
+          test "$(grep -c 'platform.keyPressed(key)' "$F")" -eq 1
+          test "$(grep -c 'platform.keyReleased(key)' "$F")" -eq 1
+          test "$(grep -c 'platform.keyRepeated(key)' "$F")" -eq 1
+          ! grep -q 'getDisplay().getCurrent()' "$F"
+          grep -q 'REPEAT_DELAY_MS = 400' "$F"
+          grep -q 'REPEAT_PERIOD_MS = 100' "$F"
+          grep -q 'At most one repeat per poll' "$F"
+
+      - name: Package M1.8 checkpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          cp upstream/build/freej2me-sdl.jar out/freej2me-m1.8-dispatch-gate.jar
+          cp miyoo-m1/m1_7_input_jni.c out/
+          cp miyoo-m1/m1_8/M1Input.java out/
+          cp miyoo-m1/m1_8/M1InputDispatch.java out/
+          sha256sum out/* | tee out/SHA256SUMS.txt
+          cat > out/STATUS.txt <<'EOF'
+          M1.8 MIDP Input Dispatch
+          CI result: BUILD-PASS only when this workflow succeeds.
+          Device status: DEVICE-TEST-PENDING.
+          M1.7 raw js0 acquisition is preserved byte-for-byte by SHA gate.
+          MobilePlatform remains the only MIDP event owner.
+          No audio/video/font/transparency changes are included.
+          EOF
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: miyoo-m1.8-midp-input-dispatch
+          path: out/
+          if-no-files-found: error
