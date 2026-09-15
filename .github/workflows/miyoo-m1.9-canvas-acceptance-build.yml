@@ -36,36 +36,51 @@ jobs:
           git checkout -q 13ec186903087156c145268f8706eecfaf9f1e50
           test "$(git rev-parse HEAD)" = 13ec186903087156c145268f8706eecfaf9f1e50
           test "$(git rev-parse HEAD^{tree})" = ad47ab16e9025f0eb3d2067bc3b1897dc71987df
-      - name: Add locked M1.8 input and M1.9 Canvas sources
+      - name: Add locked M1.8 input and M1.9 lifecycle Canvas sources
         run: |
           set -euo pipefail
           cp miyoo-m1/m1_8/M1Input.java upstream/src/org/recompile/mobile/
           cp miyoo-m1/m1_8/M1InputDispatch.java upstream/src/org/recompile/mobile/
           cp miyoo-m1/m1_9/M19InputPump.java upstream/src/org/recompile/mobile/
           cp miyoo-m1/m1_9/M19CanvasAcceptanceMIDlet.java upstream/src/org/recompile/mobile/
+          cp miyoo-m1/m1_9/M19LifecycleLauncher.java upstream/src/org/recompile/mobile/
           for f in miyoo-m1/m1_9/*.java; do ! grep -Eq 'Libretro|retro_' "$f"; done
-      - name: Build pinned FreeJ2ME plus M1.9
+      - name: Build pinned FreeJ2ME plus M1.9 lifecycle
         run: |
           set -euo pipefail
           cd upstream
           JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64 ant -noinput -buildfile build.xml
-          test -f build/classes/org/recompile/mobile/M19InputPump.class
-          test -f build/classes/org/recompile/mobile/M19CanvasAcceptanceMIDlet.class
+          for n in M19InputPump M19CanvasAcceptanceMIDlet M19LifecycleLauncher; do test -f build/classes/org/recompile/mobile/$n.class; done
           python3 - <<'PY'
           from pathlib import Path
-          for n in ('M19InputPump','M19CanvasAcceptanceMIDlet'):
+          for n in ('M19InputPump','M19CanvasAcceptanceMIDlet','M19LifecycleLauncher'):
               p=Path('build/classes/org/recompile/mobile/'+n+'.class')
               major=int.from_bytes(p.read_bytes()[6:8],'big')
               print(n+'_JAVA_CLASS_MAJOR=%d' % major)
               assert major==50
           PY
           cd ..
-          mkdir -p out
+          mkdir -p out/midlet-stage/META-INF
           cp upstream/build/freej2me_plus.jar out/m1.9-freej2me-platform.jar
+          jar tf out/m1.9-freej2me-platform.jar | grep -q 'org/recompile/mobile/M19LifecycleLauncher.class'
           jar tf out/m1.9-freej2me-platform.jar | grep -q 'org/recompile/mobile/M19CanvasAcceptanceMIDlet.class'
-          jar tf out/m1.9-freej2me-platform.jar | grep -q 'org/recompile/mobile/M19InputPump.class'
           if jar tf out/m1.9-freej2me-platform.jar | grep -Eq '(^|/)Libretro[^/]*\.class$'; then echo 'M1_9_STANDALONE_JAR=FAIL_LIBRETRO'; exit 1; fi
           echo M1_9_STANDALONE_JAR=PASS
+          mkdir -p out/midlet-stage/org/recompile/mobile
+          cp upstream/build/classes/org/recompile/mobile/M19CanvasAcceptanceMIDlet*.class out/midlet-stage/org/recompile/mobile/
+          cp upstream/build/classes/org/recompile/mobile/M19InputPump.class out/midlet-stage/org/recompile/mobile/
+          cat > out/midlet-manifest.mf <<'MF'
+          Manifest-Version: 1.0
+          MIDlet-Name: RG35XX M1.9 Canvas Acceptance
+          MIDlet-Vendor: RG35XX Java Platform
+          MIDlet-Version: 1.0
+          MicroEdition-Configuration: CLDC-1.1
+          MicroEdition-Profile: MIDP-2.0
+          MIDlet-1: RG35XX M1.9 Canvas Acceptance,,org.recompile.mobile.M19CanvasAcceptanceMIDlet
+          MF
+          jar cfm out/m1.9-canvas-midlet.jar out/midlet-manifest.mf -C out/midlet-stage org
+          jar tf out/m1.9-canvas-midlet.jar | grep -q 'org/recompile/mobile/M19CanvasAcceptanceMIDlet.class'
+          unzip -p out/m1.9-canvas-midlet.jar META-INF/MANIFEST.MF | grep -q 'MIDlet-1: RG35XX M1.9 Canvas Acceptance,,org.recompile.mobile.M19CanvasAcceptanceMIDlet'
       - name: Build ARMv5TE uClibc JNI unchanged from M1.8
         run: |
           set -euo pipefail
@@ -80,6 +95,7 @@ jobs:
           APP=out/garlicos/Roms/APPS
           mkdir -p "$APP" out/garlicos/M1.9-DOCS
           cp out/m1.9-freej2me-platform.jar "$APP/"
+          cp out/m1.9-canvas-midlet.jar "$APP/"
           cp out/libm1_8_input.so "$APP/"
           cp miyoo-m1/m1_9/M1_9_CANVAS_INTEGRATION_CONTRACT.txt out/garlicos/M1.9-DOCS/
           cat > "$APP/M1.9-CANVAS-ACCEPTANCE.sh" <<'SH'
@@ -95,24 +111,24 @@ jobs:
           JB=$(sha256sum "$JAMVM"|awk '{print $1}'); GB=$(sha256sum "$GLIBJ"|awk '{print $1}')
           echo JAMVM_SHA256_BEFORE=$JB; echo GLIBJ_SHA256_BEFORE=$GB
           export LD_LIBRARY_PATH="$APP:${LD_LIBRARY_PATH-}"
-          "$JAMVM" -Xmx64m -cp "$GLIBJ:$APP/m1.9-freej2me-platform.jar" org.recompile.mobile.M19CanvasAcceptanceMIDlet >"$LOG" 2>&1
+          "$JAMVM" -Xmx64m -cp "$GLIBJ:$APP/m1.9-freej2me-platform.jar" org.recompile.mobile.M19LifecycleLauncher "$APP/m1.9-canvas-midlet.jar" >"$LOG" 2>&1
           RC=$?
           JA=$(sha256sum "$JAMVM"|awk '{print $1}'); GA=$(sha256sum "$GLIBJ"|awk '{print $1}')
           echo JAMVM_EXIT_CODE=$RC
-          tail -n 160 "$LOG"
+          tail -n 180 "$LOG"
           echo JAMVM_SHA256_AFTER=$JA; echo GLIBJ_SHA256_AFTER=$GA
           if [ "$JB" = "$JA" ] && [ "$GB" = "$GA" ]; then echo M1_9_PROTECTED_HASHES=PASS; else echo M1_9_PROTECTED_HASHES=FAIL; fi
-          if [ "$RC" -eq 0 ] && grep -q 'M1_9_DEVICE_ACCEPTANCE_MARKER=PASS' "$LOG"; then echo M1_9_EXECUTION_RESULT=PASS; else echo M1_9_EXECUTION_RESULT=FAIL; fi
+          if [ "$RC" -eq 0 ] && grep -q 'M1_9_LIFECYCLE_LOAD=PASS' "$LOG" && grep -q 'M1_9_DEVICE_ACCEPTANCE_MARKER=PASS' "$LOG"; then echo M1_9_EXECUTION_RESULT=PASS; else echo M1_9_EXECUTION_RESULT=FAIL; fi
           echo DEVICE_PASS=NO_PENDING_VISUAL_AND_LOG_REVIEW
           echo FULL_PLATFORM_STABLE=NO
           sync
           exit "$RC"
           SH
           chmod +x "$APP/M1.9-CANVAS-ACCEPTANCE.sh"
-          printf '%s\n' 'PACKAGE_LAYOUT=GARLICOS_FLAT_APPS' 'EXTRACT_TARGET=SD_ROOT' 'M1.8_INPUT=DEVICE-PASS_LOCKED' 'M1.9_DEVICE_TEST_PENDING=YES' 'FULL_PLATFORM_STABLE=NO' > out/garlicos/STATUS.txt
+          printf '%s\n' 'PACKAGE_LAYOUT=GARLICOS_FLAT_APPS' 'EXTRACT_TARGET=SD_ROOT' 'M1.8_INPUT=DEVICE-PASS_LOCKED' 'M1.9_LIFECYCLE=CANONICAL_MIDLETLOADER_START' 'M1.9_DEVICE_TEST_PENDING=YES' 'FULL_PLATFORM_STABLE=NO' > out/garlicos/STATUS.txt
           (cd out/garlicos && find Roms M1.9-DOCS -type f -print0 | sort -z | xargs -0 sha256sum) > out/garlicos/SHA256SUMS.txt
           (cd out/garlicos && sha256sum -c SHA256SUMS.txt)
-          sha256sum out/m1.9-freej2me-platform.jar out/libm1_8_input.so | tee out/BUILD-SHA256SUMS.txt
+          sha256sum out/m1.9-freej2me-platform.jar out/m1.9-canvas-midlet.jar out/libm1_8_input.so | tee out/BUILD-SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:
           name: miyoo-m1.9-garlicos-canvas-acceptance
