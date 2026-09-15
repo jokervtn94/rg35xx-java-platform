@@ -21,11 +21,13 @@ public final class M19LifecycleLauncher {
         if (!midletJar.isFile()) { mark("M1_9_MIDLET_JAR_MISSING=" + midletJar.getPath()); System.exit(3); }
         mark("M1_9_MIDLET_FILE=PASS");
 
-        // M1.9A primary variable only: prevent PlatformFont from constructing
-        // host java.awt.Font/FontMetrics. The workflow patches only
-        // PlatformFont for this property; locked M1.6-M1.8 remain unchanged.
         System.setProperty("rg35xx.headless.font", "true");
         mark("M1_9_HEADLESS_FONT=ENABLED");
+
+        // M1.9B is allocation-only. It proves whether the two resizeLCD backing
+        // buffers can exist without BufferedImage/GTK. Rendering is not enabled.
+        System.setProperty("rg35xx.headless.image.probe", "true");
+        mark("M1_9_HEADLESS_IMAGE_PROBE=ENABLED");
 
         mark("M1_9_RESIZE_PROBE_BEGIN=YES");
         mark("M1_9_FONT_SIZE_BEGIN=YES");
@@ -45,19 +47,10 @@ public final class M19LifecycleLauncher {
         probeBack = null;
         mark("M1_9_RESIZE_PROBE_END=YES");
 
-        mark("M1_9_PLATFORM_CREATE_BEGIN=YES");
-        MobilePlatform platform = new MobilePlatform(640, 480);
-        mark("M1_9_PLATFORM_CREATE_END=YES");
-        Mobile.setPlatform(platform, new Runnable() { public void run() { } });
-        mark("M1_9_PLATFORM_SET=YES");
-
-        mark("M1_9_LIFECYCLE_PLATFORM_READY=YES");
-        mark("M1_9_LOAD_BEGIN=YES");
-        if (!platform.load(midletJar.toURI().toString())) { mark("M1_9_LIFECYCLE_LOAD=FAIL"); System.exit(4); }
-        mark("M1_9_LIFECYCLE_LOAD=PASS");
-
-        mark("M1_9_STARTAPP_BEGIN=YES");
-        platform.loader.start();
-        mark("M1_9_LIFECYCLE_STARTAPP_INVOKED=YES");
+        // Stop deliberately here for M1.9B. MobilePlatform constructor would
+        // immediately create PlatformGraphics, whose Graphics2D path is the next
+        // independent AWT boundary and must not be mixed into this checkpoint.
+        mark("M1_9B_ALLOCATION_ACCEPTANCE_MARKER=PASS");
+        mark("M1_9B_STOP_BEFORE_PLATFORMGRAPHICS=YES");
     }
 }
