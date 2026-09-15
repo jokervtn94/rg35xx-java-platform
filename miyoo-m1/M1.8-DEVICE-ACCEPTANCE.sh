@@ -10,8 +10,8 @@ GE=d7abe888d2980329434c30f18c0eec124be1f02284bf9ed28e88d7242a1f2bea
 exec >"$OUT" 2>&1
 
 echo 'RG35XX MIYOO M1.8 MIDP DEVICE ACCEPTANCE'
-echo 'SCOPE=M1.7_RAW_JS0_TO_MOBILEPLATFORM_TO_CANVAS_GAMECANVAS'
-echo 'EXPECTED: directions, A=FIRE, press/release, bounded repeat, no duplicate, no stuck key, normal exit'
+echo 'SCOPE=M1.8_DETERMINISTIC_ADAPTER_TO_MOBILEPLATFORM_BUILD_ACCEPTANCE'
+echo 'NOTE=This runner validates JamVM compatibility and deterministic M1InputDispatch to canonical MobilePlatform only; physical js0 and real Canvas callbacks require the next device harness.'
 
 JB=$(sha256sum "$JAMVM" 2>/dev/null|awk '{print $1}')
 GB=$(sha256sum "$GLIBJ" 2>/dev/null|awk '{print $1}')
@@ -29,7 +29,7 @@ echo M1_8_NATIVE_SHA256=$(sha256sum "$LIB"|awk '{print $1}')
 
 rm -f "$JLOG"
 export LD_LIBRARY_PATH="$APP:${LD_LIBRARY_PATH-}"
-"$JAMVM" -Xmx64m -cp "$GLIBJ:$JAR" M18MidpAcceptance >"$JLOG" 2>&1 &
+"$JAMVM" -Xmx64m -cp "$GLIBJ:$JAR" org.recompile.mobile.M18DispatchAcceptance >"$JLOG" 2>&1 &
 PID=$!; N=0; LIMIT=180
 while kill -0 "$PID" 2>/dev/null; do
   sleep 1; N=$((N+1))
@@ -52,12 +52,13 @@ echo JAMVM_SHA256_AFTER=$JA
 echo GLIBJ_SHA256_AFTER=$GA
 [ "$JB" = "$JA" ] && [ "$GB" = "$GA" ] && echo PROTECTED_HASHES_UNCHANGED=YES || echo PROTECTED_HASHES_UNCHANGED=NO
 
-if [ "$RC" -eq 0 ] && grep -q 'M1_8_MIDP_ACCEPTANCE=PASS' "$JLOG"; then
+if [ "$RC" -eq 0 ] && grep -q 'M1_8_MIDP_ACCEPTANCE_MARKER=PASS' "$JLOG"; then
   echo M1_8_EXECUTION_RESULT=PASS
 else
   echo M1_8_EXECUTION_RESULT=FAIL
 fi
-echo DEVICE_PASS=NO_PENDING_HUMAN_CONFIRMATION_AND_LOG_REVIEW
+echo DEVICE_PASS=NO_DETERMINISTIC_ACCEPTANCE_ONLY
+echo PHYSICAL_JS0_CANVAS_TEST_PENDING=YES
 echo FULL_PLATFORM_STABLE=NO
 sync
 exit "$RC"
