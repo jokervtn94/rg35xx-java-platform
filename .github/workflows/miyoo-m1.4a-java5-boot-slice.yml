@@ -25,20 +25,29 @@ jobs:
           grep -q 'MINIMAL_PROPOSED_CHANGE' tasklog/MIYOO-M1.4A-JAVA5-BOOT-SLICE-PREFLIGHT.md
           grep -q 'REMOVE_UNUSED_MIDLET_RMS_IMPORT_ONLY' tasklog/MIYOO-M1.4A.6-RMS-IMPORT-BOUNDARY-PREFLIGHT.md
           grep -q 'REMOVE_INACTIVE_GRAPHICS3D_IMPORTS_FROM_2D_BOOT_SLICE_ONLY' tasklog/MIYOO-M1.4A.7-M3G-2D-IMPORT-BOUNDARY-PREFLIGHT.md
-      - name: Install Java 8 compiler
+      - name: Install and pin Java 8 compiler
         run: |
           sudo apt-get update
-          sudo apt-get install -y openjdk-8-jdk-headless || true
-          if [ -x /usr/lib/jvm/java-8-openjdk-amd64/bin/javac ]; then
-            echo /usr/lib/jvm/java-8-openjdk-amd64/bin >> "$GITHUB_PATH"
-          fi
-          javac -version
+          sudo apt-get install -y openjdk-8-jdk-headless
+          JAVAC8=/usr/lib/jvm/java-8-openjdk-amd64/bin/javac
+          test -x "$JAVAC8"
+          "$JAVAC8" -version 2>&1 | tee javac-version.txt
+          grep -q '^javac 1\.8\.' javac-version.txt
+          echo "JAVAC8=$JAVAC8" >> "$GITHUB_ENV"
       - name: Run bounded Java5 audit
-        run: bash miyoo-m1/M1.4A.7-m3g-import-audit.sh m1_4a_audit
+        run: |
+          mkdir -p .java8-bin
+          ln -sf "$JAVAC8" .java8-bin/javac
+          export PATH="$PWD/.java8-bin:$PATH"
+          test "$(command -v javac)" = "$PWD/.java8-bin/javac"
+          javac -version
+          bash miyoo-m1/M1.4A.7-m3g-import-audit.sh m1_4a_audit
       - name: Upload audit evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: rg35xx-miyoo-m1.4a-java5-boot-slice-audit
-          path: m1_4a_audit/
+          path: |
+            m1_4a_audit/
+            javac-version.txt
           if-no-files-found: error
