@@ -10,7 +10,9 @@ import sys
 p=Path(sys.argv[1]); s=p.read_text()
 s=s.replace('echo M1_4A_5_SDLMIXER_BOOT_DECOUPLE_AUDIT','echo M1_4A_6_RMS_IMPORT_BOUNDARY_AUDIT')
 s=s.replace('echo PRIMARY_VARIABLE=REMOVE_SDLMIXER_BOOT_LIFECYCLE_COUPLING_FROM_NO_AUDIO_M1_SLICE','echo PRIMARY_VARIABLE=REMOVE_UNUSED_MIDLET_RMS_IMPORT_ONLY')
-needle="s=s.replace('import org.recompile.mobile.SdlMixerManager;\\n','')\n"
+# Anchor specifically inside the MIDlet transformation. The prior wrapper used the first
+# SdlMixerManager import-removal occurrence, which belongs to Display.java, so RMS was never removed.
+needle="p=Path('src/javax/microedition/midlet/MIDlet.java'); s=p.read_text()\ns=s.replace('import org.recompile.mobile.SdlMixerManager;\\n','')\n"
 replacement=needle+"s=s.replace('import javax.microedition.rms.*;\\n','')\n"
 if needle not in s: raise SystemExit('MIDLET_TRANSFORM_ANCHOR_NOT_FOUND')
 s=s.replace(needle,replacement,1)
