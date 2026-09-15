@@ -19,8 +19,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(sha256sum miyoo-m1/m1_7_input_jni.c | awk '{print $1}')" = "b766d7f3cc8c0883cc600e72f4c29c8b38874a1e0c283e00d799ca76240c9c66"
-          grep -q 'Java_org_recompile_mobile_M1Input_rawGetState' miyoo-m1/m1_7_input_jni.c
+          test "$(sha256sum miyoo-m1/m1_7_input_jni.c | awk '{print $1}')" = "34e0e19297a3c7e32520e0684ce7031f361fc8bcbf585093149dc8db7f39d603"
+          grep -q 'Java_M17InputProbe_openInput' miyoo-m1/m1_7_input_jni.c
+          grep -q 'Java_M17InputProbe_waitControl' miyoo-m1/m1_7_input_jni.c
+          grep -q 'Java_M17InputProbe_closeInput' miyoo-m1/m1_7_input_jni.c
 
       - name: Verify upstream MIDP event owner contract
         shell: bash
