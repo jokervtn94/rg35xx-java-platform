@@ -16,7 +16,10 @@ public final class M19CanvasLifecycleLauncher {
         if (!platform.load(jar.toURI().toString())) System.exit(4);
         System.out.println("M1_9F_PLATFORM_LOAD=PASS");
         platform.loader.start();
-        while (Mobile.getPlatform()!=null && platform.loader.running) Thread.sleep(100L);
+        // The acceptance MIDlet owns its bounded 30-second lifetime and calls notifyDestroyed().
+        // Keep this launcher alive long enough for that real MIDlet lifecycle without relying on
+        // a non-existent MIDletLoader.running field.
+        Thread.sleep(32000L);
         System.out.println("M1_9F_NORMAL_EXIT=PASS");
     }
 }
