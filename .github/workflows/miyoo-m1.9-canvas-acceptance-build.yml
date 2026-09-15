@@ -47,7 +47,7 @@ jobs:
       - name: Apply M1.9B headless PlatformImage allocation probe
         run: |
           set -euo pipefail
-          test "$(git -C upstream hash-object src/org/recompile/mobile/PlatformImage.java)" = 6a85410c241284340339ee92bd71bb4b31f9339a
+          test "$(git -C upstream hash-object src/org/recompile/mobile/PlatformImage.java)" = 7da4a9325cdf40fe23deee4d88e473f64c1fc0e0
           python3 miyoo-m1/m1_9/patch_headless_platformimage_probe.py
           grep -q 'rg35xx.headless.image.probe' upstream/src/org/recompile/mobile/PlatformImage.java
           grep -q 'dataBuffer = new int\[Width \* Height\]' upstream/src/org/recompile/mobile/PlatformImage.java
