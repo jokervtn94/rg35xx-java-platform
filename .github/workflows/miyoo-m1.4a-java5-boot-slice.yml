@@ -5,6 +5,8 @@ on:
     branches: [rg35xx-miyoo-platform-v1]
     paths:
       - 'miyoo-m1/M1.4A-java5-boot-slice-audit.sh'
+      - 'miyoo-m1/M1.4A.6-rms-import-audit.sh'
+      - 'tasklog/MIYOO-M1.4A.6-RMS-IMPORT-BOUNDARY-PREFLIGHT.md'
       - 'tasklog/MIYOO-M1.4A-JAVA5-BOOT-SLICE-PREFLIGHT.md'
       - '.github/workflows/miyoo-m1.4a-java5-boot-slice.yml'
 jobs:
@@ -16,7 +18,9 @@ jobs:
         run: |
           test -f project-rules/RG35XX_PROJECT_RULES.json
           test -f tasklog/MIYOO-M1.4A-JAVA5-BOOT-SLICE-PREFLIGHT.md
+          test -f tasklog/MIYOO-M1.4A.6-RMS-IMPORT-BOUNDARY-PREFLIGHT.md
           grep -q 'MINIMAL_PROPOSED_CHANGE' tasklog/MIYOO-M1.4A-JAVA5-BOOT-SLICE-PREFLIGHT.md
+          grep -q 'REMOVE_UNUSED_MIDLET_RMS_IMPORT_ONLY' tasklog/MIYOO-M1.4A.6-RMS-IMPORT-BOUNDARY-PREFLIGHT.md
       - name: Install Java 8 compiler
         run: |
           sudo apt-get update
@@ -26,7 +30,7 @@ jobs:
           fi
           javac -version
       - name: Run bounded Java5 audit
-        run: bash miyoo-m1/M1.4A-java5-boot-slice-audit.sh m1_4a_audit
+        run: bash miyoo-m1/M1.4A.6-rms-import-audit.sh m1_4a_audit
       - name: Upload audit evidence
         if: always()
         uses: actions/upload-artifact@v4
