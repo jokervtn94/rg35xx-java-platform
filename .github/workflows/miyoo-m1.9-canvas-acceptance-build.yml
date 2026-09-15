@@ -80,7 +80,14 @@ jobs:
           MF
           jar cfm out/m1.9-canvas-midlet.jar out/midlet-manifest.mf -C out/midlet-stage org
           jar tf out/m1.9-canvas-midlet.jar | grep -q 'org/recompile/mobile/M19CanvasAcceptanceMIDlet.class'
-          unzip -p out/m1.9-canvas-midlet.jar META-INF/MANIFEST.MF | grep -q 'MIDlet-1: RG35XX M1.9 Canvas Acceptance,,org.recompile.mobile.M19CanvasAcceptanceMIDlet'
+          python3 - <<'PY'
+          import zipfile
+          expected='MIDlet-1: RG35XX M1.9 Canvas Acceptance,,org.recompile.mobile.M19CanvasAcceptanceMIDlet'
+          with zipfile.ZipFile('out/m1.9-canvas-midlet.jar') as z:
+              raw=z.read('META-INF/MANIFEST.MF').decode('utf-8').replace('\r\n ','').replace('\n ','')
+          assert expected in raw, raw
+          print('M1_9_MIDLET_MANIFEST=PASS')
+          PY
       - name: Build ARMv5TE uClibc JNI unchanged from M1.8
         run: |
           set -euo pipefail
