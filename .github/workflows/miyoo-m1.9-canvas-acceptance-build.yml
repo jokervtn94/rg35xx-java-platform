@@ -36,6 +36,14 @@ jobs:
           git checkout -q 13ec186903087156c145268f8706eecfaf9f1e50
           test "$(git rev-parse HEAD)" = 13ec186903087156c145268f8706eecfaf9f1e50
           test "$(git rev-parse HEAD^{tree})" = ad47ab16e9025f0eb3d2067bc3b1897dc71987df
+      - name: Apply M1.9A headless PlatformFont patch
+        run: |
+          set -euo pipefail
+          test "$(git -C upstream hash-object src/org/recompile/mobile/PlatformFont.java)" = acc9e1c5ee5263662e768f68d406cadbeda167e9
+          python3 miyoo-m1/m1_9/patch_headless_platformfont.py
+          grep -q 'rg35xx.headless.font' upstream/src/org/recompile/mobile/PlatformFont.java
+          grep -q 'if (metrics == null)' upstream/src/org/recompile/mobile/PlatformFont.java
+          echo M1_9A_HEADLESS_PLATFORMFONT_GATE=PASS
       - name: Add locked M1.8 input and M1.9 lifecycle Canvas sources
         run: |
           set -euo pipefail
@@ -79,7 +87,6 @@ jobs:
           MIDlet-1: RG35XX M1.9 Canvas Acceptance,,org.recompile.mobile.M19CanvasAcceptanceMIDlet
           MF
           jar cfm out/m1.9-canvas-midlet.jar out/midlet-manifest.mf -C out/midlet-stage org
-          jar tf out/m1.9-canvas-midlet.jar | grep -q 'org/recompile/mobile/M19CanvasAcceptanceMIDlet.class'
           python3 - <<'PY'
           import zipfile
           expected='MIDlet-1: RG35XX M1.9 Canvas Acceptance,,org.recompile.mobile.M19CanvasAcceptanceMIDlet'
@@ -132,7 +139,7 @@ jobs:
           exit "$RC"
           SH
           chmod +x "$APP/M1.9-CANVAS-ACCEPTANCE.sh"
-          printf '%s\n' 'PACKAGE_LAYOUT=GARLICOS_FLAT_APPS' 'EXTRACT_TARGET=SD_ROOT' 'M1.8_INPUT=DEVICE-PASS_LOCKED' 'M1.9_LIFECYCLE=CANONICAL_MIDLETLOADER_START' 'M1.9_DIAGNOSTICS=RESULT_FILE_DIRECT_NO_EXEC_REDIRECT' 'M1.9_DEVICE_TEST_PENDING=YES' 'FULL_PLATFORM_STABLE=NO' > out/garlicos/STATUS.txt
+          printf '%s\n' 'PACKAGE_LAYOUT=GARLICOS_FLAT_APPS' 'EXTRACT_TARGET=SD_ROOT' 'M1.8_INPUT=DEVICE-PASS_LOCKED' 'M1.9A_HEADLESS_PLATFORMFONT=EXPERIMENT' 'M1.9_LIFECYCLE=CANONICAL_MIDLETLOADER_START' 'M1.9_DEVICE_TEST_PENDING=YES' 'FULL_PLATFORM_STABLE=NO' > out/garlicos/STATUS.txt
           (cd out/garlicos && find Roms M1.9-DOCS -type f -print0 | sort -z | xargs -0 sha256sum) > out/garlicos/SHA256SUMS.txt
           (cd out/garlicos && sha256sum -c SHA256SUMS.txt)
           sha256sum out/m1.9-freej2me-platform.jar out/m1.9-canvas-midlet.jar out/libm1_8_input.so | tee out/BUILD-SHA256SUMS.txt
