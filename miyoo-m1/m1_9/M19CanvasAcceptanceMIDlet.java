@@ -44,7 +44,7 @@ public final class M19CanvasAcceptanceMIDlet extends MIDlet {
             g.drawString("DIR:"+directions+" FIRE:"+fires, w/2, h/2+30, Graphics.TOP|Graphics.HCENTER);
         }
 
-        protected void keyPressed(int keyCode) {
+        public void keyPressed(int keyCode) {
             presses++;
             int ga=getGameAction(keyCode);
             if (ga==UP || ga==DOWN || ga==LEFT || ga==RIGHT) directions++;
@@ -54,14 +54,14 @@ public final class M19CanvasAcceptanceMIDlet extends MIDlet {
             repaint(); serviceRepaints();
         }
 
-        protected void keyReleased(int keyCode) {
+        public void keyReleased(int keyCode) {
             releases++;
             last="RELEASE key="+keyCode;
             System.out.println("M1_9_CANVAS_KEY_RELEASED="+keyCode);
             repaint(); serviceRepaints();
         }
 
-        protected void keyRepeated(int keyCode) {
+        public void keyRepeated(int keyCode) {
             repeats++;
             last="REPEAT key="+keyCode;
             System.out.println("M1_9_CANVAS_KEY_REPEATED="+keyCode);
