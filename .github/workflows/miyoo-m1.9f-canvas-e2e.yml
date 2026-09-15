@@ -30,6 +30,7 @@ jobs:
           python3 miyoo-m1/m1_9/patch_headless_platformimage_probe.py
           python3 miyoo-m1/m1_9/patch_headless_platformgraphics_probe.py
           python3 miyoo-m1/m1_9/patch_headless_platformgraphics_fillrect.py
+          python3 miyoo-m1/m1_9/patch_mobileplatform_resize_diagnostics.py
       - name: Build platform input JNI presenter and MIDlet
         run: |
           set -euo pipefail
