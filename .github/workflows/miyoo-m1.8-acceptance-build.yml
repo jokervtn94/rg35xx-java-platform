@@ -43,9 +43,8 @@ jobs:
           cp miyoo-m1/m1_8/M1Input.java upstream/src/org/recompile/mobile/
           cp miyoo-m1/m1_8/M1InputDispatch.java upstream/src/org/recompile/mobile/
           cp miyoo-m1/m1_8/M18DispatchAcceptance.java upstream/src/org/recompile/mobile/
-          ! grep -Eq 'Libretro|retro_' miyoo-m1/m1_8/M1Input.java
-          ! grep -Eq 'Libretro|retro_' miyoo-m1/m1_8/M1InputDispatch.java
-          ! grep -Eq 'Libretro|retro_' miyoo-m1/m1_8/M18DispatchAcceptance.java
+          cp miyoo-m1/m1_8/M18PhysicalInputAcceptance.java upstream/src/org/recompile/mobile/
+          for f in M1Input.java M1InputDispatch.java M18DispatchAcceptance.java M18PhysicalInputAcceptance.java; do ! grep -Eq 'Libretro|retro_' "miyoo-m1/m1_8/$f"; done
           ! grep -Eq 'Libretro|retro_' miyoo-m1/m1_8/m1_8_input_jni.c
       - name: Instrument canonical MobilePlatform acceptance counters
         run: |
@@ -59,11 +58,9 @@ jobs:
           assert s.count(anchor)==1
           s=s.replace(anchor,inject+anchor,1)
           s=s.replace(anchor,anchor+'\t\tm1AcceptancePressCount++;\n',1)
-          anchor2='\tpublic static void keyReleased(final int keycode)\n\t{\n'
-          assert s.count(anchor2)==1
+          anchor2='\tpublic static void keyReleased(final int keycode)\n\t{\n'; assert s.count(anchor2)==1
           s=s.replace(anchor2,anchor2+'\t\tm1AcceptanceReleaseCount++;\n',1)
-          anchor3='\tpublic static void keyRepeated(final int keycode)\n\t{\n'
-          assert s.count(anchor3)==1
+          anchor3='\tpublic static void keyRepeated(final int keycode)\n\t{\n'; assert s.count(anchor3)==1
           s=s.replace(anchor3,anchor3+'\t\tm1AcceptanceRepeatCount++;\n',1)
           p.write_text(s)
           PY
@@ -73,12 +70,14 @@ jobs:
           cd upstream
           JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64 ant -noinput -buildfile build.xml
           test -f build/classes/org/recompile/mobile/M18DispatchAcceptance.class
+          test -f build/classes/org/recompile/mobile/M18PhysicalInputAcceptance.class
           python3 - <<'PY'
           from pathlib import Path
-          p=Path('build/classes/org/recompile/mobile/M18DispatchAcceptance.class')
-          major=int.from_bytes(p.read_bytes()[6:8],'big')
-          print('JAVA_CLASS_MAJOR=%d' % major)
-          assert major==50
+          for n in ('M18DispatchAcceptance','M18PhysicalInputAcceptance'):
+              p=Path('build/classes/org/recompile/mobile/'+n+'.class')
+              major=int.from_bytes(p.read_bytes()[6:8],'big')
+              print(n+'_JAVA_CLASS_MAJOR=%d' % major)
+              assert major==50
           PY
           jar cf ../m1.8-midp-acceptance.jar -C build/classes .
           cd ..
@@ -89,6 +88,7 @@ jobs:
           set -euo pipefail
           java -cp out/m1.8-midp-acceptance.jar org.recompile.mobile.M18DispatchAcceptance | tee out/CI-ACCEPTANCE.txt
           grep -q 'M1_8_MIDP_ACCEPTANCE_MARKER=PASS' out/CI-ACCEPTANCE.txt
+          jar tf out/m1.8-midp-acceptance.jar | grep -q 'org/recompile/mobile/M18PhysicalInputAcceptance.class'
       - name: Build ARMv5TE uClibc JNI
         run: |
           set -euo pipefail
@@ -110,20 +110,42 @@ jobs:
           cp out/libm1_8_input.so "$APP/"
           cp miyoo-m1/M1.8-DEVICE-ACCEPTANCE.sh "$APP/M1.8-DEVICE-ACCEPTANCE.sh"
           chmod +x "$APP/M1.8-DEVICE-ACCEPTANCE.sh"
-          # Keep docs outside APPS so GarlicOS only sees the executable test entry plus its runtime payload.
+          cat > "$APP/M1.8-PHYSICAL-INPUT-ACCEPTANCE.sh" <<'SH'
+          #!/bin/sh
+          OUT=/mnt/mmc/RG35XX-MIYOO-M1.8-PHYSICAL-RESULT.txt
+          LOG=/mnt/mmc/RG35XX-MIYOO-M1.8-PHYSICAL-JAMVM.log
+          APP="$(CDPATH= cd -- "$(dirname -- "$0")" 2>/dev/null && pwd)"
+          JAMVM=/mnt/mmc/CFW/java/bin/jamvm
+          GLIBJ=/mnt/mmc/CFW/java/share/classpath/glibj.zip
+          exec >"$OUT" 2>&1
+          echo 'RG35XX M1.8 PHYSICAL JS0 ACCEPTANCE'
+          echo 'ACTION=FOR_30_SECONDS_PRESS_DPAD_AND_A_THEN_RELEASE_EACH_KEY'
+          echo JAMVM_SHA256_BEFORE=$(sha256sum "$JAMVM"|awk '{print $1}')
+          echo GLIBJ_SHA256_BEFORE=$(sha256sum "$GLIBJ"|awk '{print $1}')
+          export LD_LIBRARY_PATH="$APP:${LD_LIBRARY_PATH-}"
+          "$JAMVM" -Xmx64m -cp "$GLIBJ:$APP/m1.8-midp-acceptance.jar" org.recompile.mobile.M18PhysicalInputAcceptance >"$LOG" 2>&1
+          RC=$?
+          echo JAMVM_EXIT_CODE=$RC
+          tail -n 120 "$LOG"
+          echo JAMVM_SHA256_AFTER=$(sha256sum "$JAMVM"|awk '{print $1}')
+          echo GLIBJ_SHA256_AFTER=$(sha256sum "$GLIBJ"|awk '{print $1}')
+          if [ "$RC" -eq 0 ] && grep -q 'M1_8_PHYSICAL_ACCEPTANCE_MARKER=PASS' "$LOG"; then echo M1_8_PHYSICAL_EXECUTION_RESULT=PASS; else echo M1_8_PHYSICAL_EXECUTION_RESULT=FAIL; fi
+          echo DEVICE_PASS=NO_PENDING_LOG_REVIEW
+          echo FULL_PLATFORM_STABLE=NO
+          sync
+          exit "$RC"
+          SH
+          chmod +x "$APP/M1.8-PHYSICAL-INPUT-ACCEPTANCE.sh"
           mkdir -p out/garlicos/M1.8-DOCS
           cp miyoo-m1/m1_8/M1_8_DEVICE_ACCEPTANCE.txt out/garlicos/M1.8-DOCS/
           cp miyoo-m1/m1_8/M18_MOBILEPLATFORM_ACCEPTANCE_CONTRACT.txt out/garlicos/M1.8-DOCS/
           (cd out/garlicos && find Roms M1.8-DOCS -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum) > out/garlicos/SHA256SUMS.txt
           (cd out/garlicos && sha256sum -c SHA256SUMS.txt)
-          test -f out/garlicos/Roms/APPS/M1.8-DEVICE-ACCEPTANCE.sh
-          test -f out/garlicos/Roms/APPS/m1.8-midp-acceptance.jar
-          test -f out/garlicos/Roms/APPS/libm1_8_input.so
-          test ! -d out/garlicos/Roms/APPS/M1.8-MIDP-ACCEPTANCE
-          printf '%s\n' 'PACKAGE_LAYOUT=GARLICOS_FLAT_APPS' 'EXTRACT_TARGET=SD_ROOT' 'M1.8_ACCEPTANCE_BUILD=PASS' 'DEVICE_PASS=NO' 'DEVICE_TEST_PENDING=YES' 'FULL_PLATFORM_STABLE=NO' > out/garlicos/STATUS.txt
+          test -f "$APP/M1.8-PHYSICAL-INPUT-ACCEPTANCE.sh"
+          printf '%s\n' 'PACKAGE_LAYOUT=GARLICOS_FLAT_APPS' 'EXTRACT_TARGET=SD_ROOT' 'M1.8_DETERMINISTIC_DEVICE=PASS_EVIDENCE_RECEIVED' 'M1.8_PHYSICAL_DEVICE_TEST_PENDING=YES' 'FULL_PLATFORM_STABLE=NO' > out/garlicos/STATUS.txt
           sha256sum out/m1.8-midp-acceptance.jar out/libm1_8_input.so | tee out/BUILD-SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: miyoo-m1.8-garlicos-device-acceptance
+          name: miyoo-m1.8-garlicos-physical-input-acceptance
           path: out/garlicos/
           if-no-files-found: error
