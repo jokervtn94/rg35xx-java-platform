@@ -1,0 +1,68 @@
+name: RG35XX Miyoo M1.8 MIDP Input Adapter
+on:
+  workflow_dispatch:
+  push:
+    branches: [rg35xx-miyoo-platform-v1]
+    paths:
+      - '.github/workflows/miyoo-m1.8-midp-input-adapter.yml'
+      - 'miyoo-m1/M18SemanticKeyAdapter.java'
+      - 'miyoo-m1/M18AdapterContractProbe.java'
+      - 'tasklog/MIYOO-M1.8-MIDP-INPUT-DISPATCH-PREFLIGHT.md'
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tasklog-first preflight gate
+        run: |
+          set -euo pipefail
+          grep -Fq 'HISTORY_FOUND = YES' tasklog/MIYOO-M1.8-MIDP-INPUT-DISPATCH-PREFLIGHT.md
+          grep -Fq 'PRIMARY_VARIABLE = CONNECT_M1.7_LOCKED_RAW_JS0_SEMANTIC_EVENTS_TO_EXISTING_FREEJ2ME_MOBILEPLATFORM_MIDP_KEY_DISPATCH_ONLY' tasklog/MIYOO-M1.8-MIDP-INPUT-DISPATCH-PREFLIGHT.md
+      - name: Install Java8
+        run: sudo apt-get update >/dev/null && sudo apt-get install -y openjdk-8-jdk-headless >/dev/null
+      - name: Fetch exact pinned Miyoo source and apply bounded Java5 prerequisites
+        run: |
+          set -euo pipefail
+          git clone -q https://github.com/aweigit/freej2me-miyoomini.git upstream
+          git -C upstream checkout -q ca11dfe8ea1cc273d92460f9a83bbf192023fa63
+          test "$(git -C upstream rev-parse HEAD)" = ca11dfe8ea1cc273d92460f9a83bbf192023fa63
+          # Reuse the already BUILD-PASS M1.4A.8 transformation; no new platform semantics here.
+          bash miyoo-m1/M1.4A-java5-boot-slice-audit.sh build-m1.8-base >/dev/null
+          mkdir -p build-m1.8/classes
+          cp -a build-m1.8-base/classes/. build-m1.8/classes/
+      - name: Compile M1.8 adapter against bounded Java5 slice
+        run: |
+          set -euo pipefail
+          J=/usr/lib/jvm/java-8-openjdk-amd64/bin
+          "$J/javac" -source 5 -target 5 -encoding UTF-8 -cp build-m1.8/classes -d build-m1.8/classes miyoo-m1/M18SemanticKeyAdapter.java miyoo-m1/M18AdapterContractProbe.java
+          python3 - <<'PY'
+          from pathlib import Path
+          for n in ['M18SemanticKeyAdapter.class','M18AdapterContractProbe.class']:
+              p=Path('build-m1.8/classes/org/recompile/mobile')/n
+              assert p.exists(), p
+              assert int.from_bytes(p.read_bytes()[6:8],'big')==49, n
+          print('M1_8_CLASS_MAJOR_49_ONLY=YES')
+          PY
+          "$J/java" -cp build-m1.8/classes org.recompile.mobile.M18AdapterContractProbe | tee build-m1.8/ADAPTER-CONTRACT.txt
+          grep -Fq 'M1_8_ADAPTER_CONTRACT=PASS' build-m1.8/ADAPTER-CONTRACT.txt
+      - name: Ownership and regression gates
+        run: |
+          set -euo pipefail
+          grep -Fq 'platform.keyPressed(toMidpKey(control))' miyoo-m1/M18SemanticKeyAdapter.java
+          grep -Fq 'platform.keyReleased(toMidpKey(control))' miyoo-m1/M18SemanticKeyAdapter.java
+          grep -Fq 'platform.keyRepeated(toMidpKey(control))' miyoo-m1/M18SemanticKeyAdapter.java
+          ! grep -Eq 'SDL|/dev/input/js0|audio|mixer|Timer|Thread' miyoo-m1/M18SemanticKeyAdapter.java
+          ! grep -Eq 'Mobile\.getMobileKey|pressedKeys' miyoo-m1/M18SemanticKeyAdapter.java
+          sha256sum miyoo-m1/M18SemanticKeyAdapter.java miyoo-m1/M18AdapterContractProbe.java > build-m1.8/SHA256.txt
+          echo M1_8_BUILD_PASS=YES
+          echo DEVICE_PASS=NO
+          echo STABLE=NO
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rg35xx-miyoo-m1.8-midp-input-adapter-build-evidence
+          path: |
+            build-m1.8/ADAPTER-CONTRACT.txt
+            build-m1.8/SHA256.txt
+            tasklog/MIYOO-M1.8-MIDP-INPUT-DISPATCH-PREFLIGHT.md
+          if-no-files-found: error
