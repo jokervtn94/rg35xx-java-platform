@@ -77,10 +77,18 @@ jobs:
           grep -q 'MobilePlatform.keyPressed(Mobile.getMobileKey(code))' "$LR"
           grep -q 'MobilePlatform.keyReleased(Mobile.getMobileKey(code))' "$LR"
 
+      - name: Set up JDK 8 for canonical Java 6 target
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+
       - name: Compile adapter against canonical FreeJ2ME-Plus pin
         shell: bash
         run: |
           set -euo pipefail
+          java -version
+          javac -version
           cp miyoo-m1/m1_8/M1Input.java upstream/src/org/recompile/mobile/M1Input.java
           cp miyoo-m1/m1_8/M1InputDispatch.java upstream/src/org/recompile/mobile/M1InputDispatch.java
           sudo apt-get update -qq
@@ -120,6 +128,7 @@ jobs:
           Upstream: TASEmulators/freej2me-plus
           Pin: 13ec186903087156c145268f8706eecfaf9f1e50
           Tree: ad47ab16e9025f0eb3d2067bc3b1897dc71987df
+          Build JDK: Temurin 8 (canonical source targets Java 6 bytecode).
           CI result: BUILD-PASS only when this workflow succeeds.
           Device status: DEVICE-TEST-PENDING.
           M1.7 raw js0 probe source is preserved byte-for-byte by SHA gate.
