@@ -8,20 +8,25 @@ import javax.microedition.midlet.MIDlet;
 /** Minimal real MIDP Canvas used only for M1.9 RG35XX device acceptance. */
 public final class M19CanvasAcceptanceMIDlet extends MIDlet {
     private AcceptanceCanvas canvas;
+    private M19InputPump inputPump;
 
     protected void startApp() {
         canvas = new AcceptanceCanvas();
         Display.getDisplay(this).setCurrent(canvas);
+        inputPump = new M19InputPump();
+        new Thread(inputPump).start();
         System.out.println("M1_9_CANVAS_VISIBLE_READY=YES");
+        System.out.println("M1_9_PRODUCTION_INPUT_PUMP=STARTED");
     }
 
     protected void pauseApp() {}
-    protected void destroyApp(boolean unconditional) {}
+    protected void destroyApp(boolean unconditional) {
+        if (inputPump != null) inputPump.stop();
+    }
 
     private final class AcceptanceCanvas extends Canvas implements Runnable {
         private volatile boolean running = true;
         private int presses, releases, repeats, directions, fires;
-        private int lastKey;
         private String last = "PRESS D-PAD + A";
 
         AcceptanceCanvas() {
@@ -40,7 +45,7 @@ public final class M19CanvasAcceptanceMIDlet extends MIDlet {
         }
 
         protected void keyPressed(int keyCode) {
-            presses++; lastKey=keyCode;
+            presses++;
             int ga=getGameAction(keyCode);
             if (ga==UP || ga==DOWN || ga==LEFT || ga==RIGHT) directions++;
             if (ga==FIRE) fires++;
@@ -50,14 +55,14 @@ public final class M19CanvasAcceptanceMIDlet extends MIDlet {
         }
 
         protected void keyReleased(int keyCode) {
-            releases++; lastKey=keyCode;
+            releases++;
             last="RELEASE key="+keyCode;
             System.out.println("M1_9_CANVAS_KEY_RELEASED="+keyCode);
             repaint(); serviceRepaints();
         }
 
         protected void keyRepeated(int keyCode) {
-            repeats++; lastKey=keyCode;
+            repeats++;
             last="REPEAT key="+keyCode;
             System.out.println("M1_9_CANVAS_KEY_REPEATED="+keyCode);
             repaint(); serviceRepaints();
@@ -69,6 +74,7 @@ public final class M19CanvasAcceptanceMIDlet extends MIDlet {
                 try { Thread.sleep(100L); } catch (InterruptedException ignored) {}
             }
             running=false;
+            if (inputPump != null) inputPump.stop();
             System.out.println("M1_9_PRESS_COUNT="+presses);
             System.out.println("M1_9_RELEASE_COUNT="+releases);
             System.out.println("M1_9_REPEAT_COUNT="+repeats);
