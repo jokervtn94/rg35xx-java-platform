@@ -21,12 +21,12 @@ public final class M19LifecycleLauncher {
         if (!midletJar.isFile()) { mark("M1_9_MIDLET_JAR_MISSING=" + midletJar.getPath()); System.exit(3); }
         mark("M1_9_MIDLET_FILE=PASS");
 
-        /*
-         * Bounded diagnostic only. Device evidence stops inside
-         * MobilePlatform(640,480). Probe the first resizeLCD operations in the
-         * same order without changing pinned FreeJ2ME or any locked M1.6-M1.8
-         * source. Temporary images are released before the real constructor.
-         */
+        // M1.9A primary variable only: prevent PlatformFont from constructing
+        // host java.awt.Font/FontMetrics. The workflow patches only
+        // PlatformFont for this property; locked M1.6-M1.8 remain unchanged.
+        System.setProperty("rg35xx.headless.font", "true");
+        mark("M1_9_HEADLESS_FONT=ENABLED");
+
         mark("M1_9_RESIZE_PROBE_BEGIN=YES");
         mark("M1_9_FONT_SIZE_BEGIN=YES");
         PlatformFont.setScreenSize(640, 480);
