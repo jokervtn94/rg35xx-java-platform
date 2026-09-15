@@ -2,7 +2,7 @@ package org.recompile.mobile;
 
 import java.io.File;
 
-/** M1.9 standalone real MIDP Canvas acceptance entry point. */
+/** M1.9 standalone rendering acceptance entry point. */
 public final class M19LifecycleLauncher {
     private M19LifecycleLauncher() {}
 
@@ -20,33 +20,43 @@ public final class M19LifecycleLauncher {
         System.setProperty("rg35xx.headless.font", "true");
         System.setProperty("rg35xx.headless.image.probe", "true");
         System.setProperty("rg35xx.headless.graphics.probe", "true");
-        mark("M1_9D_HEADLESS_RENDER=ENABLED");
+        mark("M1_9E_HEADLESS_RENDER=ENABLED");
 
         PlatformFont.setScreenSize(640, 480);
         mark("M1_9_FONT_SIZE_END=YES");
         PlatformImage image = new PlatformImage(640, 480);
         javax.microedition.lcdui.Graphics graphics = image.getMIDPGraphics();
         int[] fb = graphics.getFrameBuffer();
-        mark("M1_9D_BUFFER_LENGTH=" + fb.length);
+        mark("M1_9E_BUFFER_LENGTH=" + fb.length);
 
-        // Primary variable: MIDP setColor + fillRect only.
-        graphics.setColor(0x00FF00);
-        graphics.fillRect(10, 20, 30, 40);
+        // Keep the M1.9D-proven software raster primitive unchanged.
+        graphics.setColor(0x000000FF);
+        graphics.fillRect(0, 0, 640, 480);
+        graphics.setColor(0x0000FF00);
+        graphics.fillRect(160, 120, 320, 240);
 
-        int inside = fb[(20 * 640) + 10];
-        int inside2 = fb[(59 * 640) + 39];
-        int outside = fb[(19 * 640) + 10];
-        int outside2 = fb[(60 * 640) + 40];
-        mark("M1_9D_PIXEL_INSIDE_1=" + Integer.toHexString(inside));
-        mark("M1_9D_PIXEL_INSIDE_2=" + Integer.toHexString(inside2));
-        mark("M1_9D_PIXEL_OUTSIDE_1=" + Integer.toHexString(outside));
-        mark("M1_9D_PIXEL_OUTSIDE_2=" + Integer.toHexString(outside2));
+        int blue = fb[0];
+        int green = fb[(120 * 640) + 160];
+        boolean rasterPass = blue == 0xFF0000FF && green == 0xFF00FF00;
+        mark("M1_9E_RASTER_BLUE=" + Integer.toHexString(blue));
+        mark("M1_9E_RASTER_GREEN=" + Integer.toHexString(green));
+        mark("M1_9E_RASTER_PRECHECK=" + (rasterPass ? "PASS" : "FAIL"));
+        if (!rasterPass) System.exit(20);
 
-        boolean pass = inside == 0xFF00FF00 && inside2 == 0xFF00FF00 &&
-                       outside == 0xFFFFFFFF && outside2 == 0xFFFFFFFF;
-        mark("M1_9D_SETCOLOR_FILLRECT=" + (pass ? "PASS" : "FAIL"));
-        if (!pass) System.exit(20);
-        mark("M1_9D_RENDER_ACCEPTANCE_MARKER=PASS");
-        mark("M1_9D_STOP_BEFORE_SDL_PRESENTER=YES");
+        // Primary M1.9E variable: Java int[] -> exact M1.6-style SDL1/fbcon presenter.
+        int init = M19SdlPresenter.initDisplay();
+        mark("M1_9E_NATIVE_INIT_RC=" + init);
+        if (init != 0) System.exit(30);
+        int present = M19SdlPresenter.presentARGB(fb, 640, 480);
+        mark("M1_9E_PRESENT_RC=" + present);
+        if (present != 0) {
+            M19SdlPresenter.shutdownDisplay();
+            System.exit(31);
+        }
+        mark("M1_9E_SDL_PRESENTER_MARKER=PASS");
+        Thread.sleep(5000L);
+        M19SdlPresenter.shutdownDisplay();
+        mark("M1_9E_NORMAL_EXIT=PASS");
+        mark("M1_9E_DEVICE_ACCEPTANCE_MARKER=PASS");
     }
 }
