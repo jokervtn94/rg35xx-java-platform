@@ -33,6 +33,9 @@ public final class M19LifecycleLauncher {
         }
         mark("M1_9_MIDLET_FILE=PASS");
 
+        // Device evidence stops inside MobilePlatform construction. Keep the
+        // production constructor unchanged, but request bounded source-level
+        // markers from the M1.9 workflow around resizeLCD's three allocations.
         mark("M1_9_PLATFORM_CREATE_BEGIN=YES");
         MobilePlatform platform = new MobilePlatform(640, 480);
         mark("M1_9_PLATFORM_CREATE_END=YES");
