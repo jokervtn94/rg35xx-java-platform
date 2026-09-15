@@ -1,13 +1,15 @@
 package org.recompile.mobile;
 
 /**
- * M1.8 semantic-control -> FreeJ2ME MIDP adapter.
+ * M1.8 semantic-control -> canonical FreeJ2ME-Plus MIDP adapter.
  *
  * Contract:
- *  - M1.7/JNI remains the sole raw js0 owner.
+ *  - M1.8/JNI is the sole raw js0 owner in the production M1.8 runtime.
  *  - MobilePlatform remains the sole MIDP event owner.
- *  - This class converts each semantic bit exactly once and never calls a
- *    Displayable directly.
+ *  - Raw RG35XX semantic controls are converted to canonical Libretro logical
+ *    slots, then Mobile.getMobileKey(slot) performs the phone-specific MIDP
+ *    mapping already owned by FreeJ2ME-Plus.
+ *  - This class never calls a Displayable directly.
  *  - Repeat is generated only for held directional/FIRE controls and is
  *    bounded by time; press/release are edge-triggered.
  */
@@ -18,16 +20,10 @@ public final class M1InputDispatch {
     private static final int REPEAT_DELAY_MS = 400;
     private static final int REPEAT_PERIOD_MS = 100;
 
-    private final MobilePlatform platform;
     private int previous;
     private final long[] nextRepeat = new long[13];
 
-    public M1InputDispatch(MobilePlatform platform) {
-        if (platform == null) throw new NullPointerException("platform");
-        this.platform = platform;
-    }
-
-    /** Poll exactly once. Call from the existing platform/input tick only. */
+    /** Poll exactly once. Call from the existing canonical frontend input tick only. */
     public void poll(long nowMs) {
         final int state = M1Input.rawGetState();
         dispatchState(state, nowMs);
@@ -39,18 +35,19 @@ public final class M1InputDispatch {
             final int bit = 1 << (id - 1);
             final boolean wasDown = (previous & bit) != 0;
             final boolean isDown = (state & bit) != 0;
-            final int key = toMidpKey(id);
-            if (key == 0) continue;
+            final int slot = toLibretroSlot(id);
+            if (slot < 0) continue;
+            final int key = Mobile.getMobileKey(slot);
 
             if (!wasDown && isDown) {
-                platform.keyPressed(key);
+                MobilePlatform.keyPressed(key);
                 nextRepeat[id] = repeatable(id) ? nowMs + REPEAT_DELAY_MS : 0;
             } else if (wasDown && !isDown) {
-                platform.keyReleased(key);
+                MobilePlatform.keyReleased(key);
                 nextRepeat[id] = 0;
             } else if (isDown && repeatable(id) && nextRepeat[id] != 0 && nowMs >= nextRepeat[id]) {
-                platform.keyRepeated(key);
-                // At most one repeat per poll: no burst after a stalled frame/tick.
+                MobilePlatform.keyRepeated(key);
+                // At most one repeat per control per poll: no catch-up burst after a stalled tick.
                 nextRepeat[id] = nowMs + REPEAT_PERIOD_MS;
             }
         }
@@ -61,21 +58,29 @@ public final class M1InputDispatch {
         return id == UP || id == DOWN || id == LEFT || id == RIGHT || id == A;
     }
 
-    private static int toMidpKey(int id) {
+    /**
+     * Canonical FreeJ2ME-Plus Libretro logical slots (Mobile.java):
+     * 0 Up, 1 Down, 2 Left, 3 Right, 4=9, 5=7, 6=0, 7 Fire,
+     * 8 RightSoft, 9 LeftSoft, 10=1, 11=3, 12=*, 13=#, ...
+     *
+     * Physical RG35XX labels are mapped only to these frontend-neutral slots;
+     * Mobile.getMobileKey() remains responsible for device/profile keycodes.
+     */
+    private static int toLibretroSlot(int id) {
         switch (id) {
-            case UP:     return Mobile.NOKIA_UP;
-            case DOWN:   return Mobile.NOKIA_DOWN;
-            case LEFT:   return Mobile.NOKIA_LEFT;
-            case RIGHT:  return Mobile.NOKIA_RIGHT;
-            case A:      return Mobile.NOKIA_SOFT3; // FIRE; updateKeyState maps SOFT3 to FIRE_PRESSED.
-            case B:      return Mobile.NOKIA_SOFT2;
-            case X:      return Mobile.KEY_NUM7;    // GAME_A
-            case Y:      return Mobile.KEY_NUM9;    // GAME_B
-            case L1:     return Mobile.KEY_STAR;    // GAME_C
-            case R1:     return Mobile.KEY_POUND;   // GAME_D
-            case START:  return Mobile.NOKIA_SOFT1;
-            case SELECT: return Mobile.NOKIA_END;
-            default:     return 0;
+            case UP:     return 0;
+            case DOWN:   return 1;
+            case LEFT:   return 2;
+            case RIGHT:  return 3;
+            case A:      return 7;  // Fire
+            case B:      return 8;  // RightSoft
+            case X:      return 5;  // 7 / GAME_A-compatible slot
+            case Y:      return 4;  // 9 / GAME_B-compatible slot
+            case L1:     return 12; // * / GAME_C-compatible slot
+            case R1:     return 13; // # / GAME_D-compatible slot
+            case START:  return 9;  // LeftSoft
+            case SELECT: return 6;  // 0; canonical slot, device behavior still needs RG35XX test
+            default:     return -1;
         }
     }
 }
