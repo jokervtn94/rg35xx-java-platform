@@ -1,0 +1,35 @@
+MIYOO M1.8 STANDALONE DEVICE ACCEPTANCE
+
+Evidence level before test: DEVICE-TEST-PENDING
+
+Run only on the original RG35XX using the already DEVICE-PASS M1.6/M1.7 standalone foundation.
+Do not install the Libretro production-integration JAR from Run 34946875598.
+
+Required controls:
+UP DOWN LEFT RIGHT A B X Y START SELECT L R
+
+Required assertions:
+1. Exactly one keyPressed transition for each physical press.
+2. Exactly one keyReleased transition for each release.
+3. UP/DOWN/LEFT/RIGHT map to the corresponding GameCanvas game action.
+4. A maps to FIRE.
+5. Hold a direction and A: repeat begins after the configured delay and remains bounded; no event flood.
+6. No stuck key after release.
+7. No duplicate MIDP dispatch.
+8. M1.6 display still presents normally.
+9. Process exits normally; hard reset is FAIL.
+10. JamVM L and glibj.zip SHA256 remain unchanged.
+
+Protected hashes:
+JamVM L  eea1b97cebfaca67b69ed365e966d80cdac22d8ff245c7a556137cfb2898ea34
+glibj.zip d7abe888d2980329434c30f18c0eec124be1f02284bf9ed28e88d7242a1f2bea
+
+Capture after test:
+- install/result report
+- Java/MIDP bounded transition log
+- native input log if emitted
+- before/after protected hashes
+- normal-exit vs hard-reset result
+- any display regression
+
+DEVICE-PASS is forbidden until these real-device assertions are evidenced.
