@@ -23,34 +23,25 @@ public final class M19LifecycleLauncher {
 
         System.setProperty("rg35xx.headless.font", "true");
         mark("M1_9_HEADLESS_FONT=ENABLED");
-
-        // M1.9B is allocation-only. It proves whether the two resizeLCD backing
-        // buffers can exist without BufferedImage/GTK. Rendering is not enabled.
         System.setProperty("rg35xx.headless.image.probe", "true");
         mark("M1_9_HEADLESS_IMAGE_PROBE=ENABLED");
+        System.setProperty("rg35xx.headless.graphics.probe", "true");
+        mark("M1_9_HEADLESS_GRAPHICS_PROBE=ENABLED");
 
-        mark("M1_9_RESIZE_PROBE_BEGIN=YES");
         mark("M1_9_FONT_SIZE_BEGIN=YES");
         PlatformFont.setScreenSize(640, 480);
         mark("M1_9_FONT_SIZE_END=YES");
 
-        mark("M1_9_FRONT_IMAGE_BEGIN=YES");
-        PlatformImage probeFront = new PlatformImage(640, 480);
-        mark("M1_9_FRONT_IMAGE_END=YES");
-        mark("M1_9_FRONT_BUFFER_LENGTH=" + probeFront.getDataBuffer().length);
+        mark("M1_9C_IMAGE_BEGIN=YES");
+        PlatformImage image = new PlatformImage(640, 480);
+        mark("M1_9C_IMAGE_END=YES");
+        mark("M1_9C_BUFFER_LENGTH=" + image.getDataBuffer().length);
 
-        mark("M1_9_BACK_IMAGE_BEGIN=YES");
-        PlatformImage probeBack = new PlatformImage(640, 480);
-        mark("M1_9_BACK_IMAGE_END=YES");
-        mark("M1_9_BACK_BUFFER_LENGTH=" + probeBack.getDataBuffer().length);
-        probeFront = null;
-        probeBack = null;
-        mark("M1_9_RESIZE_PROBE_END=YES");
-
-        // Stop deliberately here for M1.9B. MobilePlatform constructor would
-        // immediately create PlatformGraphics, whose Graphics2D path is the next
-        // independent AWT boundary and must not be mixed into this checkpoint.
-        mark("M1_9B_ALLOCATION_ACCEPTANCE_MARKER=PASS");
-        mark("M1_9B_STOP_BEFORE_PLATFORMGRAPHICS=YES");
+        mark("M1_9C_GRAPHICS_BEGIN=YES");
+        javax.microedition.lcdui.Graphics graphics = image.getMIDPGraphics();
+        mark("M1_9C_GRAPHICS_END=YES");
+        mark("M1_9C_GRAPHICS_BUFFER_LENGTH=" + graphics.getFrameBuffer().length);
+        mark("M1_9C_GRAPHICS_ACCEPTANCE_MARKER=PASS");
+        mark("M1_9C_STOP_BEFORE_RENDER_METHODS=YES");
     }
 }
