@@ -32,7 +32,7 @@ jobs:
           python3 miyoo-m1/m1_9/patch_headless_platformgraphics_fillrect.py
           python3 miyoo-m1/m1_9/patch_mobileplatform_resize_diagnostics.py
           python3 miyoo-m1/m1_10/patch_mobileplatform_headless_flush.py
-          python3 miyoo-m1/m1_11/patch_headless_drawstring_ascii.py
+          python3 miyoo-m1/m1_11/patch_headless_ascii_text.py
       - name: Build locked platform boundary and text MIDlet
         run: |
           set -euo pipefail
