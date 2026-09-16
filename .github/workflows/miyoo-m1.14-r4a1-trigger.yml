@@ -1,0 +1,9 @@
+name: Miyoo M1.14 r4A.1 Trigger
+on:
+  push:
+    branches:
+      - miyoo-m1.14-r4a1-capture-fix
+  workflow_dispatch:
+jobs:
+  trigger-capture-build:
+    uses: ./.github/workflows/miyoo-m1.14-r2d-size-diagnostic.yml
