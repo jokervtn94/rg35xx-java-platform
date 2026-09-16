@@ -31,6 +31,7 @@ jobs:
           python3 miyoo-m1/m1_9/patch_headless_platformgraphics_probe.py
           python3 miyoo-m1/m1_9/patch_headless_platformgraphics_fillrect.py
           python3 miyoo-m1/m1_9/patch_mobileplatform_resize_diagnostics.py
+          python3 miyoo-m1/m1_10/patch_mobileplatform_headless_flush.py
       - name: Build locked platform boundary and GameCanvas MIDlet
         run: |
           set -euo pipefail
