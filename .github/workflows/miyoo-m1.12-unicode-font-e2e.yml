@@ -1,10 +1,10 @@
-name: Miyoo M1.12 Unicode Font E2E
+name: Miyoo M1.12 r4E Experimental Unicode E2E
 on:
   workflow_dispatch:
   push:
-    branches: [miyoo-m1.12-unicode-font-e2e]
+    branches: [miyoo-m1.12-r4e-experimental-unicode]
 jobs:
-  m112:
+  m112r4e:
     runs-on: ubuntu-22.04
     timeout-minutes: 20
     env:
@@ -20,7 +20,7 @@ jobs:
           docker pull "$TOOLCHAIN_IMAGE"
           cid=$(docker create "$TOOLCHAIN_IMAGE" true); trap 'docker rm -f "$cid" >/dev/null 2>&1 || true' EXIT
           sudo rm -rf /opt/miyoo; sudo docker cp "$cid:/opt/miyoo" /opt/miyoo; sudo chown -R "$(id -u):$(id -g)" /opt/miyoo
-      - name: Fetch pinned FreeJ2ME and apply locked M1.11 baseline
+      - name: Fetch pinned FreeJ2ME and apply locked baseline plus r4E Unicode
         run: |
           set -euo pipefail
           git clone -q https://github.com/TASEmulators/freej2me-plus.git upstream
@@ -33,7 +33,12 @@ jobs:
           python3 miyoo-m1/m1_9/patch_mobileplatform_resize_diagnostics.py
           python3 miyoo-m1/m1_10/patch_mobileplatform_headless_flush.py
           python3 miyoo-m1/m1_11/patch_headless_ascii_text.py
-      - name: Build locked platform boundary and live-frame diagnostic MIDlet
+          python3 miyoo-m1/m1_12/patch_headless_unicode_bitmap_text.py
+          grep -q 'M1.12-r4E EXPERIMENTAL Unicode bitmap backend' upstream/src/org/recompile/mobile/PlatformGraphics.java
+          echo M1_12_R4E_RESOURCE_STATUS=EXPERIMENTAL_EXTERNAL_DEVICE_GATE
+          echo M1_12_R4E_RESOURCE_SHA256=20c2e59d063282d4b6a0d612dea3cba2c0b5bd7fafe85a05729951bd38902db9
+          echo M1_12_R4E_UNICODE_PATCH=PASS
+      - name: Build platform and standardized visual diagnostic
         run: |
           set -euo pipefail
           cp miyoo-m1/m1_8/M1Input.java upstream/src/org/recompile/mobile/
@@ -48,49 +53,58 @@ jobs:
           mkdir -p midlet-classes
           JAVA8=/usr/lib/jvm/java-8-openjdk-amd64
           "$JAVA8/bin/javac" -source 1.5 -target 1.5 -bootclasspath "$JAVA8/jre/lib/rt.jar" -classpath upstream/build/freej2me_plus.jar -d midlet-classes miyoo-m1/m1_12/M112UnicodeFontMIDlet.java
-          printf 'Manifest-Version: 1.0\nMIDlet-1: M1.12,,org.recompile.mobile.M112UnicodeFontMIDlet\nMIDlet-Name: M1.12\nMIDlet-Vendor: RG35XX\nMIDlet-Version: 1.0\nMicroEdition-Configuration: CLDC-1.1\nMicroEdition-Profile: MIDP-2.0\n' >/tmp/m112.mf
-          jar cfm m1.12-unicode-font.jar /tmp/m112.mf -C midlet-classes .
-          echo M1_12_BUILD_GATE=PASS
-      - name: Package RG35XX device test with live Java framebuffer evidence
+          printf 'Manifest-Version: 1.0\nMIDlet-1: M1.12-r4E,,org.recompile.mobile.M112UnicodeFontMIDlet\nMIDlet-Name: M1.12-r4E\nMIDlet-Vendor: RG35XX\nMIDlet-Version: 1.0\nMicroEdition-Configuration: CLDC-1.1\nMicroEdition-Profile: MIDP-2.0\n' >/tmp/m112.mf
+          jar cfm m1.12-r4e-unicode-font.jar /tmp/m112.mf -C midlet-classes .
+          echo M1_12_R4E_BUILD_GATE=PASS
+      - name: Package RG35XX device test with BMP screenshot and raw ARGB evidence
         run: |
           set -euo pipefail
           APP=out/garlicos/Roms/APPS; mkdir -p "$APP"
-          cp upstream/build/freej2me_plus.jar "$APP/m1.12-freej2me-platform.jar"
-          cp libm1_9e_presenter.so m1.12-unicode-font.jar "$APP/"
-          cat > "$APP/M1.12-UNICODE-FONT-E2E.sh" <<'SH'
+          cp upstream/build/freej2me_plus.jar "$APP/m1.12-r4e-freej2me-platform.jar"
+          cp libm1_9e_presenter.so m1.12-r4e-unicode-font.jar "$APP/"
+          cat > "$APP/M1.12-R4E-EXPERIMENTAL-UNICODE-E2E.sh" <<'SH'
           #!/bin/sh
-          OUT=/mnt/mmc/RG35XX-MIYOO-M1.12-UNICODE-FONT-E2E-RESULT.txt
+          OUT=/mnt/mmc/RG35XX-MIYOO-M1.12-R4E-RESULT.txt
           LIVE=/mnt/mmc/RG35XX-MIYOO-M1.12-LIVE-FRAME.argb
+          BMP=/mnt/mmc/RG35XX-MIYOO-M1.12-SCREENSHOT.bmp
           META=/mnt/mmc/RG35XX-MIYOO-M1.12-LIVE-FRAME.txt
           APP="$(CDPATH= cd -- "$(dirname -- "$0")" 2>/dev/null && pwd)"
           JAMVM=/mnt/mmc/CFW/java/bin/jamvm
           GLIBJ=/mnt/mmc/CFW/java/share/classpath/glibj.zip
-          rm -f "$LIVE" "$META"
-          : >"$OUT"; echo 'RG35XX MIYOO M1.12 UNICODE FONT E2E R3 LIVE CAPTURE' >>"$OUT"
+          FONTJAR=/mnt/mmc/BIOS/freej2me-lr.jar
+          EXP=20c2e59d063282d4b6a0d612dea3cba2c0b5bd7fafe85a05729951bd38902db9
+          rm -f "$LIVE" "$BMP" "$META"; : >"$OUT"
+          echo 'RG35XX MIYOO M1.12-r4E EXPERIMENTAL UNICODE E2E' >>"$OUT"
+          echo M1_12_R4E_CLASSIFICATION=EXPERIMENTAL_NOT_GOLDEN >>"$OUT"
+          echo M1_12_TEST_PROFILE=ASCII_VIETNAMESE_SIZE_ANCHOR_V1 >>"$OUT"
+          [ -f "$FONTJAR" ] || { echo M1_12_R4E_RESOURCE_GATE=FAIL_FONTJAR_MISSING >>"$OUT"; exit 21; }
+          TMP=/tmp/m112-r4e-font.bin; rm -f "$TMP"
+          unzip -p "$FONTJAR" org/recompile/mobile/rg35xx-font.bin >"$TMP" 2>/dev/null || true
+          FS=$(wc -c <"$TMP" 2>/dev/null | tr -d ' '); FH=$(sha256sum "$TMP" 2>/dev/null|awk '{print $1}')
+          echo M1_12_R4E_FONT_SIZE=$FS >>"$OUT"; echo M1_12_R4E_FONT_SHA256=$FH >>"$OUT"
+          [ "$FS" = 727008 ] && [ "$FH" = "$EXP" ] || { echo M1_12_R4E_RESOURCE_GATE=FAIL_CLOSED >>"$OUT"; exit 22; }
+          echo M1_12_R4E_RESOURCE_GATE=PASS_EXPERIMENTAL_20C2 >>"$OUT"
           JB=$(sha256sum "$JAMVM"|awk '{print $1}'); GB=$(sha256sum "$GLIBJ"|awk '{print $1}')
           echo JAMVM_SHA256_BEFORE=$JB >>"$OUT"; echo GLIBJ_SHA256_BEFORE=$GB >>"$OUT"
-          echo VISUAL_INSTRUCTION='BLUE_BACKGROUND_ASCII_PLUS_VIETNAMESE_UNICODE' >>"$OUT"
-          echo LIVE_CAPTURE_INSTRUCTION='AUTOMATIC_JAVA_ARGB_CAPTURE_BEFORE_PRESENTER' >>"$OUT"
-          LD_LIBRARY_PATH="$APP${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "$JAMVM" -Xmx64m -cp "$GLIBJ:$APP/m1.12-freej2me-platform.jar" org.recompile.mobile.M19CanvasLifecycleLauncher "$APP/m1.12-unicode-font.jar" >>"$OUT" 2>&1
+          echo VISUAL_INSTRUCTION='BLUE_SCREEN: SMALL/MEDIUM/LARGE ASCII + VIETNAMESE + LEFT/CENTER/RIGHT/BASELINE' >>"$OUT"
+          echo SCREENSHOT_INSTRUCTION='AUTO BMP24 FROM JAVA ARGB BEFORE SDL PRESENTER' >>"$OUT"
+          LD_LIBRARY_PATH="$APP${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "$JAMVM" -Xmx64m -cp "$GLIBJ:$APP/m1.12-r4e-freej2me-platform.jar:$FONTJAR" org.recompile.mobile.M19CanvasLifecycleLauncher "$APP/m1.12-r4e-unicode-font.jar" >>"$OUT" 2>&1
           RC=$?
           JA=$(sha256sum "$JAMVM"|awk '{print $1}'); GA=$(sha256sum "$GLIBJ"|awk '{print $1}')
           echo JAMVM_EXIT_CODE=$RC >>"$OUT"; echo JAMVM_SHA256_AFTER=$JA >>"$OUT"; echo GLIBJ_SHA256_AFTER=$GA >>"$OUT"
           [ "$JB" = "$JA" ] && [ "$GB" = "$GA" ] && echo M1_12_PROTECTED_HASHES=PASS >>"$OUT" || echo M1_12_PROTECTED_HASHES=FAIL >>"$OUT"
           grep -q 'M1_12_DEVICE_ACCEPTANCE_MARKER=PASS' "$OUT" && [ "$RC" -eq 0 ] && echo M1_12_EXECUTION_RESULT=PASS >>"$OUT" || echo M1_12_EXECUTION_RESULT=FAIL >>"$OUT"
-          if [ -f "$META" ] && [ -f "$LIVE" ]; then
-            cat "$META" >>"$OUT"
-            echo M1_12_LIVE_CAPTURE_SHA256=$(sha256sum "$LIVE"|awk '{print $1}') >>"$OUT"
-          else
-            echo M1_12_LIVE_CAPTURE=NOT_AVAILABLE >>"$OUT"
-          fi
-          echo DEVICE_PASS=NO_DIAGNOSTIC_ONLY >>"$OUT"; echo FULL_PLATFORM_STABLE=NO >>"$OUT"; sync; exit "$RC"
+          [ -f "$META" ] && cat "$META" >>"$OUT"
+          [ -f "$LIVE" ] && echo M1_12_LIVE_CAPTURE_SHA256=$(sha256sum "$LIVE"|awk '{print $1}') >>"$OUT" || echo M1_12_LIVE_CAPTURE=NOT_AVAILABLE >>"$OUT"
+          [ -f "$BMP" ] && echo M1_12_SCREENSHOT_SHA256=$(sha256sum "$BMP"|awk '{print $1}') >>"$OUT" || echo M1_12_SCREENSHOT=NOT_AVAILABLE >>"$OUT"
+          echo DEVICE_PASS=NO_PENDING_VISUAL_REVIEW >>"$OUT"; echo FULL_PLATFORM_STABLE=NO >>"$OUT"; sync; exit "$RC"
           SH
-          chmod +x "$APP/M1.12-UNICODE-FONT-E2E.sh"
+          chmod +x "$APP/M1.12-R4E-EXPERIMENTAL-UNICODE-E2E.sh"
           (cd out/garlicos && find Roms -type f -print0 | sort -z | xargs -0 sha256sum) >out/garlicos/SHA256SUMS.txt
           (cd out/garlicos && sha256sum -c SHA256SUMS.txt)
           sha256sum "$APP"/*
       - uses: actions/upload-artifact@v4
         with:
-          name: miyoo-m1.12-unicode-font-e2e
+          name: miyoo-m1.12-r4e-experimental-unicode-e2e
           path: out/garlicos/
           if-no-files-found: error
