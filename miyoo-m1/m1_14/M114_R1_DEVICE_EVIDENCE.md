@@ -6,7 +6,7 @@ Commit under test: b3836548ba48e00a9881410d7f10f302e7e9e192
 
 ## Classification
 - BUILD-PASS: YES
-- DEVICE-PASS: YES for M1.14-r1 reported font metrics checkpoint
+- DEVICE-PASS: YES for the narrow/wide reported metrics exercised by this checkpoint
 - FULL PLATFORM STABLE: NO
 - Font resource: EXPERIMENTAL_NOT_GOLDEN
 
@@ -28,7 +28,7 @@ Commit under test: b3836548ba48e00a9881410d7f10f302e7e9e192
 - Screenshot SHA256: 9822cf8d3b2807afe3e99f7d77956bac90b0342698f12a1921d4be9224f93f3e
 
 ## Metrics observed on real RG35XX
-All three MIDP size requests currently report the same metrics:
+All three MIDP size requests reported:
 - height = 16
 - baseline = 13
 - stringWidth("ABC 123") = 56
@@ -38,7 +38,9 @@ All three MIDP size requests currently report the same metrics:
 - charWidth('ệ') = 8
 - charWidth('中') = 12
 
-The reported narrow/wide widths are internally consistent with the M1.13-r2 bitmap advance contract (8/12), and Unicode/Vietnamese/CJK remained visible in the device screenshot.
+These narrow/wide widths are internally consistent with the M1.13-r2 bitmap advance contract (8/12), and Unicode/Vietnamese/CJK remained visible in the device screenshot.
 
-## Important unresolved observation
-SMALL, MEDIUM and LARGE report identical API metrics even though the renderer has size-dependent bitmap scale behavior. This is not changed in r1. It is the next isolated compatibility question; do not alter raster/resource/SDL/GameCanvas/input/audio while investigating it.
+## Correction after source re-audit
+Do NOT infer from this result that SMALL/MEDIUM/LARGE must have different final metrics. The recovered experimental bitmap backend selects scale with `font.getHeight() >= 26 ? 2 : 1`, not directly from the MIDP size enum. Upstream `PlatformFont` point sizes also depend on screenType and Mobile.fontSizeOffset. Therefore a SIZE_SEMANTICS code change is not justified by r1 evidence alone.
+
+Also note that changing reported `getHeight()` can indirectly affect the bitmap scale selector. Any future work must first measure point size/offset/scale on-device or decouple that dependency under a separately scoped checkpoint. No raster/resource/SDL/GameCanvas/input/audio change is authorized from this observation alone.
