@@ -1,10 +1,10 @@
-name: Miyoo M1.14 r2D Size Diagnostic E2E
+name: Miyoo M1.14 r2D2 Raster Scale Trace E2E
 on:
   workflow_dispatch:
   push:
     branches: [miyoo-m1.14-font-metrics-semantics-v1]
 jobs:
-  m114r2d:
+  m114r2d2:
     runs-on: ubuntu-22.04
     timeout-minutes: 20
     env:
@@ -20,7 +20,7 @@ jobs:
           docker pull "$TOOLCHAIN_IMAGE"
           cid=$(docker create "$TOOLCHAIN_IMAGE" true); trap 'docker rm -f "$cid" >/dev/null 2>&1 || true' EXIT
           sudo rm -rf /opt/miyoo; sudo docker cp "$cid:/opt/miyoo" /opt/miyoo; sudo chown -R "$(id -u):$(id -g)" /opt/miyoo
-      - name: Apply proven baseline plus diagnostic telemetry only
+      - name: Apply proven baseline plus bounded raster trace only
         run: |
           set -euo pipefail
           git clone -q https://github.com/TASEmulators/freej2me-plus.git upstream
@@ -37,10 +37,11 @@ jobs:
           python3 miyoo-m1/m1_13/patch_hybrid_font_layout_v1.py
           python3 miyoo-m1/m1_13/patch_bitmap_raster_column_bound_r2.py
           python3 miyoo-m1/m1_14/patch_headless_font_metrics_v1.py
-          python3 miyoo-m1/m1_14/patch_font_size_diagnostic_r2d.py
-          grep -q 'M1_14_R2D_RENDER_SIZE=' upstream/src/org/recompile/mobile/PlatformGraphics.java
-          echo M1_14_R2D_PRIMARY_VARIABLE=DIAGNOSTIC_TELEMETRY_ONLY
-          echo M1_14_R2D_DIAGNOSTIC_PATCH=PASS
+          python3 miyoo-m1/m1_14/patch_raster_scale_trace_r2d2.py
+          grep -q 'rg35xxR2D2TraceBudget=12' upstream/src/org/recompile/mobile/PlatformGraphics.java
+          grep -q 'M1_14_R2D2_RASTER_SCALE' upstream/src/org/recompile/mobile/PlatformGraphics.java
+          echo M1_14_R2D2_PRIMARY_VARIABLE=BOUNDED_RASTER_SCALE_TRACE_ONLY
+          echo M1_14_R2D2_TRACE_BUDGET=12
           echo M1_14_RESOURCE_CLASSIFICATION=EXPERIMENTAL_NOT_GOLDEN
       - name: Build platform and diagnostic probe
         run: |
@@ -55,34 +56,34 @@ jobs:
           $CC -shared -fPIC -Os -pipe -fno-strict-aliasing -march=armv5te -mtune=arm926ej-s -mfloat-abi=soft -Wall -Wextra -I"$JH" -I"$JH/linux" miyoo-m1/m1_9/m1_9e_presenter_jni.c -Wl,--as-needed -ldl -o libm1_9e_presenter.so
           mkdir -p midlet-classes; JAVA8=/usr/lib/jvm/java-8-openjdk-amd64
           "$JAVA8/bin/javac" -source 1.5 -target 1.5 -bootclasspath "$JAVA8/jre/lib/rt.jar" -classpath upstream/build/freej2me_plus.jar -d midlet-classes miyoo-m1/m1_14/M114R2DSizeDiagnosticMIDlet.java
-          printf 'Manifest-Version: 1.0\nMIDlet-1: M1.14-r2D,,org.recompile.mobile.M114R2DSizeDiagnosticMIDlet\nMIDlet-Name: M1.14-r2D\nMIDlet-Vendor: RG35XX\nMIDlet-Version: 1.0\nMicroEdition-Configuration: CLDC-1.1\nMicroEdition-Profile: MIDP-2.0\n' >/tmp/m114r2d.mf
-          jar cfm m1.14-r2d-size-diagnostic.jar /tmp/m114r2d.mf -C midlet-classes .
-          echo M1_14_R2D_BUILD_GATE=PASS
+          printf 'Manifest-Version: 1.0\nMIDlet-1: M1.14-r2D2,,org.recompile.mobile.M114R2DSizeDiagnosticMIDlet\nMIDlet-Name: M1.14-r2D2\nMIDlet-Vendor: RG35XX\nMIDlet-Version: 1.0\nMicroEdition-Configuration: CLDC-1.1\nMicroEdition-Profile: MIDP-2.0\n' >/tmp/m114r2d2.mf
+          jar cfm m1.14-r2d2-raster-scale-trace.jar /tmp/m114r2d2.mf -C midlet-classes .
+          echo M1_14_R2D2_BUILD_GATE=PASS
       - name: Package diagnostic device test
         run: |
           set -euo pipefail
           APP=out/garlicos/Roms/APPS; mkdir -p "$APP"
-          cp upstream/build/freej2me_plus.jar "$APP/m1.14-r2d-freej2me-platform.jar"
-          cp libm1_9e_presenter.so m1.14-r2d-size-diagnostic.jar "$APP/"
-          cat > "$APP/M1.14-R2D-SIZE-DIAGNOSTIC.sh" <<'SH'
+          cp upstream/build/freej2me_plus.jar "$APP/m1.14-r2d2-freej2me-platform.jar"
+          cp libm1_9e_presenter.so m1.14-r2d2-raster-scale-trace.jar "$APP/"
+          cat > "$APP/M1.14-R2D2-RASTER-SCALE-TRACE.sh" <<'SH'
           #!/bin/sh
-          OUT=/mnt/mmc/RG35XX-MIYOO-M1.14-R2D-RESULT.txt
+          OUT=/mnt/mmc/RG35XX-MIYOO-M1.14-R2D2-RESULT.txt
           APP="$(CDPATH= cd -- "$(dirname -- "$0")" 2>/dev/null && pwd)"
           JAMVM=/mnt/mmc/CFW/java/bin/jamvm; GLIBJ=/mnt/mmc/CFW/java/share/classpath/glibj.zip; FONTJAR=/mnt/mmc/BIOS/freej2me-lr.jar
           EXP=20c2e59d063282d4b6a0d612dea3cba2c0b5bd7fafe85a05729951bd38902db9
-          : >"$OUT"; echo 'RG35XX M1.14-r2D SIZE DIAGNOSTIC' >>"$OUT"; echo M1_14_R2D_PRIMARY_VARIABLE=DIAGNOSTIC_TELEMETRY_ONLY >>"$OUT"; echo M1_14_RESOURCE_CLASSIFICATION=EXPERIMENTAL_NOT_GOLDEN >>"$OUT"
-          TMP=/tmp/m114r2d-font.bin; unzip -p "$FONTJAR" org/recompile/mobile/rg35xx-font.bin >"$TMP" 2>/dev/null || true; FS=$(wc -c <"$TMP"|tr -d ' '); FH=$(sha256sum "$TMP"|awk '{print $1}'); echo M1_14_FONT_SIZE=$FS >>"$OUT"; echo M1_14_FONT_SHA256=$FH >>"$OUT"; [ "$FS" = 727008 ] && [ "$FH" = "$EXP" ] || { echo M1_14_RESOURCE_GATE=FAIL_CLOSED >>"$OUT"; exit 22; }; echo M1_14_RESOURCE_GATE=PASS_EXPERIMENTAL_20C2 >>"$OUT"
+          : >"$OUT"; echo 'RG35XX M1.14-r2D2 RASTER SCALE TRACE' >>"$OUT"; echo M1_14_R2D2_PRIMARY_VARIABLE=BOUNDED_RASTER_SCALE_TRACE_ONLY >>"$OUT"; echo M1_14_R2D2_TRACE_BUDGET=12 >>"$OUT"; echo M1_14_RESOURCE_CLASSIFICATION=EXPERIMENTAL_NOT_GOLDEN >>"$OUT"
+          TMP=/tmp/m114r2d2-font.bin; unzip -p "$FONTJAR" org/recompile/mobile/rg35xx-font.bin >"$TMP" 2>/dev/null || true; FS=$(wc -c <"$TMP"|tr -d ' '); FH=$(sha256sum "$TMP"|awk '{print $1}'); echo M1_14_FONT_SIZE=$FS >>"$OUT"; echo M1_14_FONT_SHA256=$FH >>"$OUT"; [ "$FS" = 727008 ] && [ "$FH" = "$EXP" ] || { echo M1_14_RESOURCE_GATE=FAIL_CLOSED >>"$OUT"; exit 22; }; echo M1_14_RESOURCE_GATE=PASS_EXPERIMENTAL_20C2 >>"$OUT"
           JB=$(sha256sum "$JAMVM"|awk '{print $1}'); GB=$(sha256sum "$GLIBJ"|awk '{print $1}'); echo JAMVM_SHA256_BEFORE=$JB >>"$OUT"; echo GLIBJ_SHA256_BEFORE=$GB >>"$OUT"
-          LD_LIBRARY_PATH="$APP${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "$JAMVM" -Xmx64m -Drg35xx.font.size.diagnostic=true -cp "$GLIBJ:$APP/m1.14-r2d-freej2me-platform.jar:$FONTJAR" org.recompile.mobile.M19CanvasLifecycleLauncher "$APP/m1.14-r2d-size-diagnostic.jar" >>"$OUT" 2>&1 & PID=$!
+          LD_LIBRARY_PATH="$APP${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "$JAMVM" -Xmx64m -Drg35xx.font.size.diagnostic=true -cp "$GLIBJ:$APP/m1.14-r2d2-freej2me-platform.jar:$FONTJAR" org.recompile.mobile.M19CanvasLifecycleLauncher "$APP/m1.14-r2d2-raster-scale-trace.jar" >>"$OUT" 2>&1 & PID=$!
           sleep 5; kill "$PID" >/dev/null 2>&1 || true; wait "$PID" >/dev/null 2>&1 || true
-          JA=$(sha256sum "$JAMVM"|awk '{print $1}'); GA=$(sha256sum "$GLIBJ"|awk '{print $1}'); echo JAMVM_SHA256_AFTER=$JA >>"$OUT"; echo GLIBJ_SHA256_AFTER=$GA >>"$OUT"; [ "$JB" = "$JA" ] && [ "$GB" = "$GA" ] && echo M1_14_R2D_PROTECTED_HASHES=PASS >>"$OUT" || echo M1_14_R2D_PROTECTED_HASHES=FAIL >>"$OUT"; grep 'M1_14_R2D_' "$OUT" >/dev/null && echo M1_14_R2D_EXECUTION_RESULT=PASS >>"$OUT" || echo M1_14_R2D_EXECUTION_RESULT=FAIL >>"$OUT"; echo DEVICE_PASS=NO_DIAGNOSTIC_ONLY >>"$OUT"; echo FULL_PLATFORM_STABLE=NO >>"$OUT"; sync
+          JA=$(sha256sum "$JAMVM"|awk '{print $1}'); GA=$(sha256sum "$GLIBJ"|awk '{print $1}'); echo JAMVM_SHA256_AFTER=$JA >>"$OUT"; echo GLIBJ_SHA256_AFTER=$GA >>"$OUT"; [ "$JB" = "$JA" ] && [ "$GB" = "$GA" ] && echo M1_14_R2D2_PROTECTED_HASHES=PASS >>"$OUT" || echo M1_14_R2D2_PROTECTED_HASHES=FAIL >>"$OUT"; COUNT=$(grep -c 'M1_14_R2D2_RASTER_SCALE' "$OUT" 2>/dev/null || true); echo M1_14_R2D2_TRACE_COUNT=$COUNT >>"$OUT"; [ "$COUNT" -gt 0 ] && [ "$COUNT" -le 12 ] && echo M1_14_R2D2_TRACE_GATE=PASS >>"$OUT" || echo M1_14_R2D2_TRACE_GATE=FAIL >>"$OUT"; echo DEVICE_PASS=NO_DIAGNOSTIC_ONLY >>"$OUT"; echo FULL_PLATFORM_STABLE=NO >>"$OUT"; sync
           SH
-          chmod +x "$APP/M1.14-R2D-SIZE-DIAGNOSTIC.sh"
+          chmod +x "$APP/M1.14-R2D2-RASTER-SCALE-TRACE.sh"
           (cd out/garlicos && find Roms -type f -print0 | sort -z | xargs -0 sha256sum)>out/garlicos/SHA256SUMS.txt
           (cd out/garlicos && sha256sum -c SHA256SUMS.txt)
           sha256sum "$APP"/*
       - uses: actions/upload-artifact@v4
         with:
-          name: miyoo-m1.14-r2d-size-diagnostic-e2e
+          name: miyoo-m1.14-r2d2-raster-scale-trace-e2e
           path: out/garlicos/
           if-no-files-found: error
