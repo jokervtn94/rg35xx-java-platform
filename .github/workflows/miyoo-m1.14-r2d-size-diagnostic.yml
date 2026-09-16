@@ -1,10 +1,10 @@
-name: Miyoo M1.14 r2D3 Proven Draw Path Trace E2E
+name: Miyoo M1.14 r2D4 Size Coverage Trace E2E
 on:
   workflow_dispatch:
   push:
     branches: [miyoo-m1.14-font-metrics-semantics-v1]
 jobs:
-  m114r2d3:
+  m114r2d4:
     runs-on: ubuntu-22.04
     timeout-minutes: 20
     env:
@@ -20,7 +20,7 @@ jobs:
           docker pull "$TOOLCHAIN_IMAGE"
           cid=$(docker create "$TOOLCHAIN_IMAGE" true); trap 'docker rm -f "$cid" >/dev/null 2>&1 || true' EXIT
           sudo rm -rf /opt/miyoo; sudo docker cp "$cid:/opt/miyoo" /opt/miyoo; sudo chown -R "$(id -u):$(id -g)" /opt/miyoo
-      - name: Apply proven baseline plus existing bounded raster trace only
+      - name: Apply proven baseline plus per-size bounded trace only
         run: |
           set -euo pipefail
           git clone -q https://github.com/TASEmulators/freej2me-plus.git upstream
@@ -37,11 +37,13 @@ jobs:
           python3 miyoo-m1/m1_13/patch_hybrid_font_layout_v1.py
           python3 miyoo-m1/m1_13/patch_bitmap_raster_column_bound_r2.py
           python3 miyoo-m1/m1_14/patch_headless_font_metrics_v1.py
-          python3 miyoo-m1/m1_14/patch_raster_scale_trace_r2d2.py
-          grep -q 'rg35xxR2D2TraceBudget=12' upstream/src/org/recompile/mobile/PlatformGraphics.java
-          echo M1_14_R2D3_PRIMARY_VARIABLE=TEST_HARNESS_DRAW_PATH_ONLY
-          echo M1_14_R2D3_RENDERER_CHANGE=NONE
-          echo M1_14_R2D3_TRACE_BUDGET=12
+          python3 miyoo-m1/m1_14/patch_size_coverage_trace_r2d4.py
+          grep -q 'rg35xxR2D4SmallBudget=2' upstream/src/org/recompile/mobile/PlatformGraphics.java
+          grep -q 'rg35xxR2D4MediumBudget=2' upstream/src/org/recompile/mobile/PlatformGraphics.java
+          grep -q 'rg35xxR2D4LargeBudget=2' upstream/src/org/recompile/mobile/PlatformGraphics.java
+          echo M1_14_R2D4_PRIMARY_VARIABLE=PER_SIZE_TRACE_COVERAGE_ONLY
+          echo M1_14_R2D4_RENDERER_SEMANTICS_CHANGE=NONE
+          echo M1_14_R2D4_TRACE_BUDGET=2_PER_SIZE_MAX_6
           echo M1_14_RESOURCE_CLASSIFICATION=EXPERIMENTAL_NOT_GOLDEN
       - name: Build platform and proven presenter-loop probe
         run: |
@@ -56,38 +58,38 @@ jobs:
           $CC -shared -fPIC -Os -pipe -fno-strict-aliasing -march=armv5te -mtune=arm926ej-s -mfloat-abi=soft -Wall -Wextra -I"$JH" -I"$JH/linux" miyoo-m1/m1_9/m1_9e_presenter_jni.c -Wl,--as-needed -ldl -o libm1_9e_presenter.so
           mkdir -p midlet-classes; JAVA8=/usr/lib/jvm/java-8-openjdk-amd64
           "$JAVA8/bin/javac" -source 1.5 -target 1.5 -bootclasspath "$JAVA8/jre/lib/rt.jar" -classpath upstream/build/freej2me_plus.jar -d midlet-classes miyoo-m1/m1_14/M114FontMetricsMIDlet.java
-          printf 'Manifest-Version: 1.0\nMIDlet-1: M1.14-r2D3,,org.recompile.mobile.M114FontMetricsMIDlet\nMIDlet-Name: M1.14-r2D3\nMIDlet-Vendor: RG35XX\nMIDlet-Version: 1.0\nMicroEdition-Configuration: CLDC-1.1\nMicroEdition-Profile: MIDP-2.0\n' >/tmp/m114r2d3.mf
-          jar cfm m1.14-r2d3-draw-path-trace.jar /tmp/m114r2d3.mf -C midlet-classes .
-          echo M1_14_R2D3_BUILD_GATE=PASS
+          printf 'Manifest-Version: 1.0\nMIDlet-1: M1.14-r2D4,,org.recompile.mobile.M114FontMetricsMIDlet\nMIDlet-Name: M1.14-r2D4\nMIDlet-Vendor: RG35XX\nMIDlet-Version: 1.0\nMicroEdition-Configuration: CLDC-1.1\nMicroEdition-Profile: MIDP-2.0\n' >/tmp/m114r2d4.mf
+          jar cfm m1.14-r2d4-size-coverage-trace.jar /tmp/m114r2d4.mf -C midlet-classes .
+          echo M1_14_R2D4_BUILD_GATE=PASS
       - name: Package device diagnostic
         run: |
           set -euo pipefail
           APP=out/garlicos/Roms/APPS; mkdir -p "$APP"
-          cp upstream/build/freej2me_plus.jar "$APP/m1.14-r2d3-freej2me-platform.jar"
-          cp libm1_9e_presenter.so m1.14-r2d3-draw-path-trace.jar "$APP/"
-          cat > "$APP/M1.14-R2D3-DRAW-PATH-TRACE.sh" <<'SH'
+          cp upstream/build/freej2me_plus.jar "$APP/m1.14-r2d4-freej2me-platform.jar"
+          cp libm1_9e_presenter.so m1.14-r2d4-size-coverage-trace.jar "$APP/"
+          cat > "$APP/M1.14-R2D4-SIZE-COVERAGE-TRACE.sh" <<'SH'
           #!/bin/sh
-          OUT=/mnt/mmc/RG35XX-MIYOO-M1.14-R2D3-RESULT.txt
+          OUT=/mnt/mmc/RG35XX-MIYOO-M1.14-R2D4-RESULT.txt
           APP="$(CDPATH= cd -- "$(dirname -- "$0")" 2>/dev/null && pwd)"
           JAMVM=/mnt/mmc/CFW/java/bin/jamvm; GLIBJ=/mnt/mmc/CFW/java/share/classpath/glibj.zip; FONTJAR=/mnt/mmc/BIOS/freej2me-lr.jar
           EXP=20c2e59d063282d4b6a0d612dea3cba2c0b5bd7fafe85a05729951bd38902db9
-          : >"$OUT"; echo 'RG35XX M1.14-r2D3 PROVEN DRAW PATH TRACE' >>"$OUT"; echo M1_14_R2D3_PRIMARY_VARIABLE=TEST_HARNESS_DRAW_PATH_ONLY >>"$OUT"; echo M1_14_R2D3_RENDERER_CHANGE=NONE >>"$OUT"; echo M1_14_RESOURCE_CLASSIFICATION=EXPERIMENTAL_NOT_GOLDEN >>"$OUT"
-          TMP=/tmp/m114r2d3-font.bin; unzip -p "$FONTJAR" org/recompile/mobile/rg35xx-font.bin >"$TMP" 2>/dev/null || true; FS=$(wc -c <"$TMP"|tr -d ' '); FH=$(sha256sum "$TMP"|awk '{print $1}'); echo M1_14_FONT_SIZE=$FS >>"$OUT"; echo M1_14_FONT_SHA256=$FH >>"$OUT"; [ "$FS" = 727008 ] && [ "$FH" = "$EXP" ] || { echo M1_14_RESOURCE_GATE=FAIL_CLOSED >>"$OUT"; exit 22; }; echo M1_14_RESOURCE_GATE=PASS_EXPERIMENTAL_20C2 >>"$OUT"
+          : >"$OUT"; echo 'RG35XX M1.14-r2D4 SIZE COVERAGE TRACE' >>"$OUT"; echo M1_14_R2D4_PRIMARY_VARIABLE=PER_SIZE_TRACE_COVERAGE_ONLY >>"$OUT"; echo M1_14_R2D4_RENDERER_SEMANTICS_CHANGE=NONE >>"$OUT"; echo M1_14_RESOURCE_CLASSIFICATION=EXPERIMENTAL_NOT_GOLDEN >>"$OUT"
+          TMP=/tmp/m114r2d4-font.bin; unzip -p "$FONTJAR" org/recompile/mobile/rg35xx-font.bin >"$TMP" 2>/dev/null || true; FS=$(wc -c <"$TMP"|tr -d ' '); FH=$(sha256sum "$TMP"|awk '{print $1}'); echo M1_14_FONT_SIZE=$FS >>"$OUT"; echo M1_14_FONT_SHA256=$FH >>"$OUT"; [ "$FS" = 727008 ] && [ "$FH" = "$EXP" ] || { echo M1_14_RESOURCE_GATE=FAIL_CLOSED >>"$OUT"; exit 22; }; echo M1_14_RESOURCE_GATE=PASS_EXPERIMENTAL_20C2 >>"$OUT"
           JB=$(sha256sum "$JAMVM"|awk '{print $1}'); GB=$(sha256sum "$GLIBJ"|awk '{print $1}'); echo JAMVM_SHA256_BEFORE=$JB >>"$OUT"; echo GLIBJ_SHA256_BEFORE=$GB >>"$OUT"
           rm -f /mnt/mmc/RG35XX-MIYOO-M1.14-LIVE-FRAME.argb /mnt/mmc/RG35XX-MIYOO-M1.14-LIVE-FRAME.txt /mnt/mmc/RG35XX-MIYOO-M1.14-SCREENSHOT.bmp
-          LD_LIBRARY_PATH="$APP${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "$JAMVM" -Xmx64m -Drg35xx.font.size.diagnostic=true -cp "$GLIBJ:$APP/m1.14-r2d3-freej2me-platform.jar:$FONTJAR" org.recompile.mobile.M19CanvasLifecycleLauncher "$APP/m1.14-r2d3-draw-path-trace.jar" >>"$OUT" 2>&1
+          LD_LIBRARY_PATH="$APP${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "$JAMVM" -Xmx64m -Drg35xx.font.size.diagnostic=true -cp "$GLIBJ:$APP/m1.14-r2d4-freej2me-platform.jar:$FONTJAR" org.recompile.mobile.M19CanvasLifecycleLauncher "$APP/m1.14-r2d4-size-coverage-trace.jar" >>"$OUT" 2>&1
           RC=$?; echo JAMVM_EXIT_CODE=$RC >>"$OUT"
-          JA=$(sha256sum "$JAMVM"|awk '{print $1}'); GA=$(sha256sum "$GLIBJ"|awk '{print $1}'); echo JAMVM_SHA256_AFTER=$JA >>"$OUT"; echo GLIBJ_SHA256_AFTER=$GA >>"$OUT"; [ "$JB" = "$JA" ] && [ "$GB" = "$GA" ] && echo M1_14_R2D3_PROTECTED_HASHES=PASS >>"$OUT" || echo M1_14_R2D3_PROTECTED_HASHES=FAIL >>"$OUT"
-          COUNT=$(grep -c 'M1_14_R2D2_RASTER_SCALE' "$OUT" 2>/dev/null || true); echo M1_14_R2D3_TRACE_COUNT=$COUNT >>"$OUT"; [ "$COUNT" -gt 0 ] && [ "$COUNT" -le 12 ] && echo M1_14_R2D3_TRACE_GATE=PASS >>"$OUT" || echo M1_14_R2D3_TRACE_GATE=FAIL >>"$OUT"
-          [ -s /mnt/mmc/RG35XX-MIYOO-M1.14-SCREENSHOT.bmp ] && echo M1_14_R2D3_SCREENSHOT=PASS >>"$OUT" || echo M1_14_R2D3_SCREENSHOT=FAIL >>"$OUT"
+          JA=$(sha256sum "$JAMVM"|awk '{print $1}'); GA=$(sha256sum "$GLIBJ"|awk '{print $1}'); echo JAMVM_SHA256_AFTER=$JA >>"$OUT"; echo GLIBJ_SHA256_AFTER=$GA >>"$OUT"; [ "$JB" = "$JA" ] && [ "$GB" = "$GA" ] && echo M1_14_R2D4_PROTECTED_HASHES=PASS >>"$OUT" || echo M1_14_R2D4_PROTECTED_HASHES=FAIL >>"$OUT"
+          S=$(grep -c 'M1_14_R2D4_SIZE_COVERAGE SIZE=8 ' "$OUT" 2>/dev/null || true); M=$(grep -c 'M1_14_R2D4_SIZE_COVERAGE SIZE=0 ' "$OUT" 2>/dev/null || true); L=$(grep -c 'M1_14_R2D4_SIZE_COVERAGE SIZE=16 ' "$OUT" 2>/dev/null || true); T=$((S+M+L)); echo M1_14_R2D4_SMALL_COUNT=$S >>"$OUT"; echo M1_14_R2D4_MEDIUM_COUNT=$M >>"$OUT"; echo M1_14_R2D4_LARGE_COUNT=$L >>"$OUT"; echo M1_14_R2D4_TRACE_COUNT=$T >>"$OUT"; [ "$S" -gt 0 ] && [ "$M" -gt 0 ] && [ "$L" -gt 0 ] && [ "$T" -le 6 ] && echo M1_14_R2D4_COVERAGE_GATE=PASS >>"$OUT" || echo M1_14_R2D4_COVERAGE_GATE=FAIL >>"$OUT"
+          [ -s /mnt/mmc/RG35XX-MIYOO-M1.14-SCREENSHOT.bmp ] && echo M1_14_R2D4_SCREENSHOT=PASS >>"$OUT" || echo M1_14_R2D4_SCREENSHOT=FAIL >>"$OUT"
           echo DEVICE_PASS=NO_DIAGNOSTIC_ONLY >>"$OUT"; echo FULL_PLATFORM_STABLE=NO >>"$OUT"; sync
           SH
-          chmod +x "$APP/M1.14-R2D3-DRAW-PATH-TRACE.sh"
+          chmod +x "$APP/M1.14-R2D4-SIZE-COVERAGE-TRACE.sh"
           (cd out/garlicos && find Roms -type f -print0 | sort -z | xargs -0 sha256sum)>out/garlicos/SHA256SUMS.txt
           (cd out/garlicos && sha256sum -c SHA256SUMS.txt)
           sha256sum "$APP"/*
       - uses: actions/upload-artifact@v4
         with:
-          name: miyoo-m1.14-r2d3-proven-draw-path-trace-e2e
+          name: miyoo-m1.14-r2d4-size-coverage-trace-e2e
           path: out/garlicos/
           if-no-files-found: error
