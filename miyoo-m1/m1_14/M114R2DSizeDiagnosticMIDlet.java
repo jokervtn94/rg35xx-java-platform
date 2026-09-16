@@ -3,9 +3,9 @@ import javax.microedition.midlet.MIDlet;
 import javax.microedition.lcdui.*;
 public final class M114R2DSizeDiagnosticMIDlet extends MIDlet {
   protected void startApp(){
-    Font s=Font.getFont(Font.FACE_SYSTEM,Font.STYLE_PLAIN,Font.SIZE_SMALL);
-    Font m=Font.getFont(Font.FACE_SYSTEM,Font.STYLE_PLAIN,Font.SIZE_MEDIUM);
-    Font l=Font.getFont(Font.FACE_SYSTEM,Font.STYLE_PLAIN,Font.SIZE_LARGE);
+    final Font s=Font.getFont(Font.FACE_SYSTEM,Font.STYLE_PLAIN,Font.SIZE_SMALL);
+    final Font m=Font.getFont(Font.FACE_SYSTEM,Font.STYLE_PLAIN,Font.SIZE_MEDIUM);
+    final Font l=Font.getFont(Font.FACE_SYSTEM,Font.STYLE_PLAIN,Font.SIZE_LARGE);
     dump("SMALL",s); dump("MEDIUM",m); dump("LARGE",l);
     Canvas c=new Canvas(){protected void paint(Graphics g){
       g.setColor(0x0000FF);g.fillRect(0,0,getWidth(),getHeight());g.setColor(0xFFFFFF);
