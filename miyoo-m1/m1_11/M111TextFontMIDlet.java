@@ -11,9 +11,9 @@ public final class M111TextFontMIDlet extends MIDlet implements Runnable {
                 g.setColor(0x0000FF); g.fillRect(0,0,getWidth(),getHeight());
                 g.setColor(0xFFFFFF);
                 g.setFont(Font.getFont(Font.FACE_SYSTEM,Font.STYLE_PLAIN,Font.SIZE_SMALL));
-                g.drawString("M1.11 SMALL ASCII 123",20,40,Graphics.TOP|Graphics.LEFT);
+                g.drawString("SMALL ASCII 123",20,40,Graphics.TOP|Graphics.LEFT);
                 g.setFont(Font.getFont(Font.FACE_SYSTEM,Font.STYLE_BOLD,Font.SIZE_MEDIUM));
-                g.drawString("MIDP TEXT PASS",20,100,Graphics.TOP|Graphics.LEFT);
+                g.drawString("MEDIUM MIDP TEXT PASS",20,100,Graphics.TOP|Graphics.LEFT);
                 g.translate(40,40);
                 g.setClip(0,80,500,100);
                 g.setFont(Font.getFont(Font.FACE_MONOSPACE,Font.STYLE_PLAIN,Font.SIZE_LARGE));
