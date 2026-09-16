@@ -51,12 +51,58 @@ jobs:
           printf 'Manifest-Version: 1.0\nMIDlet-1: M1.12,,org.recompile.mobile.M112UnicodeFontMIDlet\nMIDlet-Name: M1.12\nMIDlet-Vendor: RG35XX\nMIDlet-Version: 1.0\nMicroEdition-Configuration: CLDC-1.1\nMicroEdition-Profile: MIDP-2.0\n' >/tmp/m112.mf
           jar cfm m1.12-unicode-font.jar /tmp/m112.mf -C midlet-classes .
           echo M1_12_BUILD_GATE=PASS
-      - name: Package RG35XX device test
+      - name: Package RG35XX device test with bounded screenshot evidence
         run: |
           set -euo pipefail
           APP=out/garlicos/Roms/APPS; mkdir -p "$APP"
           cp upstream/build/freej2me_plus.jar "$APP/m1.12-freej2me-platform.jar"
           cp libm1_9e_presenter.so m1.12-unicode-font.jar "$APP/"
+          cat > "$APP/M1.12-CAPTURE-SCREENSHOT.sh" <<'SH'
+          #!/bin/sh
+          OUT=/mnt/mmc/RG35XX-MIYOO-M1.12-SCREENSHOT.ppm
+          META=/mnt/mmc/RG35XX-MIYOO-M1.12-SCREENSHOT.txt
+          FB=/dev/fb0
+          : >"$META"
+          echo M1_12_SCREENSHOT_METHOD=FB0_RGB565_PPM >>"$META"
+          if [ ! -r "$FB" ]; then echo M1_12_SCREENSHOT_CAPTURE=FAIL_FB0_NOT_READABLE >>"$META"; exit 1; fi
+          W=$(fbset -fb "$FB" 2>/dev/null | sed -n 's/.*geometry \([0-9][0-9]*\) \([0-9][0-9]*\).*/\1/p' | head -n1)
+          H=$(fbset -fb "$FB" 2>/dev/null | sed -n 's/.*geometry \([0-9][0-9]*\) \([0-9][0-9]*\).*/\2/p' | head -n1)
+          [ -n "$W" ] || W=640; [ -n "$H" ] || H=480
+          TMP=/tmp/m112-fb.raw
+          dd if="$FB" of="$TMP" bs=2 count=$((W*H)) 2>/dev/null || { echo M1_12_SCREENSHOT_CAPTURE=FAIL_READ >>"$META"; rm -f "$TMP"; exit 1; }
+          python_bin=""
+          for p in python3 python; do command -v "$p" >/dev/null 2>&1 && { python_bin=$p; break; }; done
+          if [ -z "$python_bin" ]; then
+            cp "$TMP" /mnt/mmc/RG35XX-MIYOO-M1.12-SCREENSHOT.rgb565
+            echo M1_12_SCREENSHOT_CAPTURE=RAW_RGB565_ONLY >>"$META"
+            echo M1_12_SCREENSHOT_WIDTH=$W >>"$META"; echo M1_12_SCREENSHOT_HEIGHT=$H >>"$META"
+            sha256sum /mnt/mmc/RG35XX-MIYOO-M1.12-SCREENSHOT.rgb565 | awk '{print "M1_12_SCREENSHOT_SHA256=" $1}' >>"$META"
+            rm -f "$TMP"; sync; exit 0
+          fi
+          "$python_bin" - "$TMP" "$OUT" "$W" "$H" <<'PY'
+          import sys,struct
+          src,out,w,h=sys.argv[1],sys.argv[2],int(sys.argv[3]),int(sys.argv[4])
+          raw=open(src,'rb').read(w*h*2)
+          if len(raw)!=w*h*2: raise SystemExit(2)
+          f=open(out,'wb'); f.write(('P6\n%d %d\n255\n'%(w,h)).encode('ascii'))
+          row=bytearray(w*3)
+          for y in range(h):
+              off=y*w*2
+              for x in range(w):
+                  v=raw[off+x*2] | (raw[off+x*2+1]<<8)
+                  r=(v>>11)&31; g=(v>>5)&63; b=v&31
+                  j=x*3; row[j]=(r<<3)|(r>>2); row[j+1]=(g<<2)|(g>>4); row[j+2]=(b<<3)|(b>>2)
+              f.write(row)
+          f.close()
+          PY
+          RC=$?; rm -f "$TMP"
+          if [ "$RC" -ne 0 ]; then echo M1_12_SCREENSHOT_CAPTURE=FAIL_CONVERT >>"$META"; exit "$RC"; fi
+          echo M1_12_SCREENSHOT_CAPTURE=PASS >>"$META"
+          echo M1_12_SCREENSHOT_WIDTH=$W >>"$META"; echo M1_12_SCREENSHOT_HEIGHT=$H >>"$META"
+          sha256sum "$OUT" | awk '{print "M1_12_SCREENSHOT_SHA256=" $1}' >>"$META"
+          sync
+          SH
+          chmod +x "$APP/M1.12-CAPTURE-SCREENSHOT.sh"
           cat > "$APP/M1.12-UNICODE-FONT-E2E.sh" <<'SH'
           #!/bin/sh
           OUT=/mnt/mmc/RG35XX-MIYOO-M1.12-UNICODE-FONT-E2E-RESULT.txt
@@ -67,12 +113,14 @@ jobs:
           JB=$(sha256sum "$JAMVM"|awk '{print $1}'); GB=$(sha256sum "$GLIBJ"|awk '{print $1}')
           echo JAMVM_SHA256_BEFORE=$JB >>"$OUT"; echo GLIBJ_SHA256_BEFORE=$GB >>"$OUT"
           echo VISUAL_INSTRUCTION='BLUE_BACKGROUND_ASCII_PLUS_VIETNAMESE_UNICODE' >>"$OUT"
+          echo SCREENSHOT_INSTRUCTION='WHILE_BLUE_TEST_SCREEN_IS_VISIBLE_RUN_M1.12-CAPTURE-SCREENSHOT.sh_FROM_SECOND_TERMINAL_OR_AFTER_3_SECONDS_IF_LAUNCHER_SUPPORTS_BACKGROUND' >>"$OUT"
           LD_LIBRARY_PATH="$APP${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "$JAMVM" -Xmx64m -cp "$GLIBJ:$APP/m1.12-freej2me-platform.jar" org.recompile.mobile.M19CanvasLifecycleLauncher "$APP/m1.12-unicode-font.jar" >>"$OUT" 2>&1
           RC=$?
           JA=$(sha256sum "$JAMVM"|awk '{print $1}'); GA=$(sha256sum "$GLIBJ"|awk '{print $1}')
           echo JAMVM_EXIT_CODE=$RC >>"$OUT"; echo JAMVM_SHA256_AFTER=$JA >>"$OUT"; echo GLIBJ_SHA256_AFTER=$GA >>"$OUT"
           [ "$JB" = "$JA" ] && [ "$GB" = "$GA" ] && echo M1_12_PROTECTED_HASHES=PASS >>"$OUT" || echo M1_12_PROTECTED_HASHES=FAIL >>"$OUT"
           grep -q 'M1_12_DEVICE_ACCEPTANCE_MARKER=PASS' "$OUT" && [ "$RC" -eq 0 ] && echo M1_12_EXECUTION_RESULT=PASS >>"$OUT" || echo M1_12_EXECUTION_RESULT=FAIL >>"$OUT"
+          if [ -f /mnt/mmc/RG35XX-MIYOO-M1.12-SCREENSHOT.txt ]; then cat /mnt/mmc/RG35XX-MIYOO-M1.12-SCREENSHOT.txt >>"$OUT"; else echo M1_12_SCREENSHOT_CAPTURE=NOT_RUN >>"$OUT"; fi
           echo DEVICE_PASS=NO_DIAGNOSTIC_ONLY >>"$OUT"; echo FULL_PLATFORM_STABLE=NO >>"$OUT"; sync; exit "$RC"
           SH
           chmod +x "$APP/M1.12-UNICODE-FONT-E2E.sh"
