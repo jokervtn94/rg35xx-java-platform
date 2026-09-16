@@ -64,7 +64,11 @@ public final class M110GameCanvasE2EMIDlet extends MIDlet {
                 g.setColor(fire ? 0x00FF0000 : 0x0000FF00); g.fillRect(x, y, 80, 80);
                 flushGraphics();
 
-                PlatformImage image = MobilePlatform.getLcdBackbuffer();
+                // GameCanvas.flushGraphics() copies its private off-screen buffer into
+                // MobilePlatform's LCD FRONTBUFFER. M1.10-r1 incorrectly presented the
+                // LCD backbuffer, which remained white even though GameCanvas input and
+                // flush execution were healthy. Present exactly the flushed frontbuffer.
+                PlatformImage image = Mobile.getPlatform().getLcdFrontbuffer();
                 if (image != null) {
                     int[] fb = image.getMIDPGraphics().getFrameBuffer();
                     int rc = M19SdlPresenter.presentARGB(fb, 640, 480);
@@ -86,6 +90,7 @@ public final class M110GameCanvasE2EMIDlet extends MIDlet {
             if (inputPump != null) inputPump.stop();
             M19SdlPresenter.shutdownDisplay();
 
+            System.out.println("M1_10_PRESENT_BUFFER=FRONTBUFFER");
             System.out.println("M1_10_PRESENT_COUNT="+presents);
             System.out.println("M1_10_KEYSTATE_SAMPLE_COUNT="+samples);
             System.out.println("M1_10_DIRECTION_SAMPLE_COUNT="+directionalSamples);
