@@ -1,10 +1,13 @@
 package org.recompile.mobile;
 
+import java.io.FileOutputStream;
+import java.io.PrintStream;
 import javax.microedition.midlet.MIDlet;
 import javax.microedition.lcdui.*;
 
 public final class M112UnicodeFontMIDlet extends MIDlet implements Runnable {
     private Canvas canvas;
+    private boolean captured;
     protected void startApp() {
         canvas = new Canvas() {
             protected void paint(Graphics g) {
@@ -22,6 +25,31 @@ public final class M112UnicodeFontMIDlet extends MIDlet implements Runnable {
         System.out.println("M1_12_CANVAS_VISIBLE_READY=YES");
         new Thread(this,"m112-presenter").start();
     }
+    private void captureARGB(int[] pixels, int width, int height, int frame) {
+        if (captured || pixels == null || pixels.length < width*height) return;
+        captured=true;
+        String raw="/mnt/mmc/RG35XX-MIYOO-M1.12-LIVE-FRAME.argb";
+        String meta="/mnt/mmc/RG35XX-MIYOO-M1.12-LIVE-FRAME.txt";
+        try {
+            FileOutputStream out=new FileOutputStream(raw);
+            for(int i=0;i<width*height;i++) {
+                int v=pixels[i];
+                out.write((v>>>24)&255); out.write((v>>>16)&255); out.write((v>>>8)&255); out.write(v&255);
+            }
+            out.close();
+            PrintStream m=new PrintStream(new FileOutputStream(meta));
+            m.println("M1_12_LIVE_CAPTURE=PASS");
+            m.println("M1_12_LIVE_CAPTURE_METHOD=JAVA_ARGB_BEFORE_PRESENTER");
+            m.println("M1_12_LIVE_CAPTURE_FRAME="+frame);
+            m.println("M1_12_LIVE_CAPTURE_WIDTH="+width);
+            m.println("M1_12_LIVE_CAPTURE_HEIGHT="+height);
+            m.println("M1_12_LIVE_CAPTURE_BYTES="+(width*height*4));
+            m.close();
+            System.out.println("M1_12_LIVE_CAPTURE=PASS FRAME="+frame);
+        } catch(Throwable t) {
+            System.out.println("M1_12_LIVE_CAPTURE=FAIL "+t.getClass().getName()+":"+t.getMessage());
+        }
+    }
     public void run() {
         int init=M19SdlPresenter.initDisplay();
         System.out.println("M1_12_NATIVE_INIT_RC="+init);
@@ -31,7 +59,9 @@ public final class M112UnicodeFontMIDlet extends MIDlet implements Runnable {
             canvas.repaint(); canvas.serviceRepaints();
             PlatformImage image=MobilePlatform.getLcdBackbuffer();
             if(image!=null) {
-                int rc=M19SdlPresenter.presentARGB(image.getMIDPGraphics().getFrameBuffer(),640,480);
+                int[] frame=image.getMIDPGraphics().getFrameBuffer();
+                if(!captured && presents>=20) captureARGB(frame,640,480,presents);
+                int rc=M19SdlPresenter.presentARGB(frame,640,480);
                 if(rc!=0) break; presents++;
             }
             try { Thread.sleep(50L); } catch(Exception e) { break; }
@@ -39,6 +69,7 @@ public final class M112UnicodeFontMIDlet extends MIDlet implements Runnable {
         M19SdlPresenter.shutdownDisplay();
         System.out.println("M1_12_PRESENT_COUNT="+presents);
         System.out.println("M1_12_DRAWSTRING_CALLS=PASS");
+        System.out.println("M1_12_LIVE_CAPTURE_RESULT="+(captured?"ATTEMPTED":"NOT_ATTEMPTED"));
         System.out.println("M1_12_DEVICE_ACCEPTANCE_MARKER="+(presents>0?"PASS_PENDING_VISUAL":"FAIL"));
         System.out.println("M1_12_NORMAL_EXIT=PASS");
         System.exit(presents>0?0:2);
