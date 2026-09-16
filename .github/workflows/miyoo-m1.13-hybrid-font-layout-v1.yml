@@ -1,10 +1,10 @@
-name: Miyoo M1.13 Hybrid Font Layout v1 E2E
+name: Miyoo M1.13 r2 Raster Bound E2E
 on:
   workflow_dispatch:
   push:
     branches: [miyoo-m1.13-hybrid-font-layout-v1]
 jobs:
-  m113:
+  m113r2:
     runs-on: ubuntu-22.04
     timeout-minutes: 20
     env:
@@ -20,7 +20,7 @@ jobs:
           docker pull "$TOOLCHAIN_IMAGE"
           cid=$(docker create "$TOOLCHAIN_IMAGE" true); trap 'docker rm -f "$cid" >/dev/null 2>&1 || true' EXIT
           sudo rm -rf /opt/miyoo; sudo docker cp "$cid:/opt/miyoo" /opt/miyoo; sudo chown -R "$(id -u):$(id -g)" /opt/miyoo
-      - name: Fetch pinned FreeJ2ME and apply locked renderer plus M1.13 layout
+      - name: Apply locked baseline plus M1.13 r2 raster bound
         run: |
           set -euo pipefail
           git clone -q https://github.com/TASEmulators/freej2me-plus.git upstream
@@ -35,12 +35,12 @@ jobs:
           python3 miyoo-m1/m1_11/patch_headless_ascii_text.py
           python3 miyoo-m1/m1_12/patch_headless_unicode_bitmap_text.py
           python3 miyoo-m1/m1_13/patch_hybrid_font_layout_v1.py
-          grep -q 'M1.13-r1: Miyoo-inspired separation' upstream/src/org/recompile/mobile/PlatformGraphics.java
-          echo M1_13_PRIMARY_VARIABLE=LAYOUT_GEOMETRY_ONLY
+          python3 miyoo-m1/m1_13/patch_bitmap_raster_column_bound_r2.py
+          grep -q 'int rasterCols=rg35xxWideChar(ch)?12:8;' upstream/src/org/recompile/mobile/PlatformGraphics.java
+          echo M1_13_R2_PRIMARY_VARIABLE=RASTER_COLUMN_BOUND_ONLY
+          echo M1_13_R2_RASTER_BOUND=PASS
           echo M1_13_RESOURCE_STATUS=EXPERIMENTAL_NOT_GOLDEN
-          echo M1_13_RESOURCE_SHA256=20c2e59d063282d4b6a0d612dea3cba2c0b5bd7fafe85a05729951bd38902db9
-          echo M1_13_HYBRID_LAYOUT_PATCH=PASS
-      - name: Build platform and M1.13 visual probe
+      - name: Build platform and unchanged V2 visual probe
         run: |
           set -euo pipefail
           cp miyoo-m1/m1_8/M1Input.java upstream/src/org/recompile/mobile/
@@ -49,64 +49,33 @@ jobs:
           cp miyoo-m1/m1_9/M19SdlPresenter.java upstream/src/org/recompile/mobile/
           cp miyoo-m1/m1_9/M19CanvasLifecycleLauncher.java upstream/src/org/recompile/mobile/
           (cd upstream && JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64 ant -noinput -buildfile build.xml)
-          JH=/usr/lib/jvm/java-8-openjdk-amd64/include
-          CC=/opt/miyoo/bin/arm-miyoo-linux-uclibcgnueabi-gcc
+          JH=/usr/lib/jvm/java-8-openjdk-amd64/include; CC=/opt/miyoo/bin/arm-miyoo-linux-uclibcgnueabi-gcc
           $CC -shared -fPIC -Os -pipe -fno-strict-aliasing -march=armv5te -mtune=arm926ej-s -mfloat-abi=soft -Wall -Wextra -I"$JH" -I"$JH/linux" miyoo-m1/m1_9/m1_9e_presenter_jni.c -Wl,--as-needed -ldl -o libm1_9e_presenter.so
-          mkdir -p midlet-classes
-          JAVA8=/usr/lib/jvm/java-8-openjdk-amd64
+          mkdir -p midlet-classes; JAVA8=/usr/lib/jvm/java-8-openjdk-amd64
           "$JAVA8/bin/javac" -source 1.5 -target 1.5 -bootclasspath "$JAVA8/jre/lib/rt.jar" -classpath upstream/build/freej2me_plus.jar -d midlet-classes miyoo-m1/m1_13/M113HybridFontMIDlet.java
-          printf 'Manifest-Version: 1.0\nMIDlet-1: M1.13,,org.recompile.mobile.M113HybridFontMIDlet\nMIDlet-Name: M1.13\nMIDlet-Vendor: RG35XX\nMIDlet-Version: 1.0\nMicroEdition-Configuration: CLDC-1.1\nMicroEdition-Profile: MIDP-2.0\n' >/tmp/m113.mf
-          jar cfm m1.13-hybrid-font-layout.jar /tmp/m113.mf -C midlet-classes .
-          echo M1_13_BUILD_GATE=PASS
-      - name: Package RG35XX M1.13 device test
+          printf 'Manifest-Version: 1.0\nMIDlet-1: M1.13-r2,,org.recompile.mobile.M113HybridFontMIDlet\nMIDlet-Name: M1.13-r2\nMIDlet-Vendor: RG35XX\nMIDlet-Version: 1.0\nMicroEdition-Configuration: CLDC-1.1\nMicroEdition-Profile: MIDP-2.0\n' >/tmp/m113r2.mf
+          jar cfm m1.13-r2-raster-bound.jar /tmp/m113r2.mf -C midlet-classes .
+          echo M1_13_R2_BUILD_GATE=PASS
+      - name: Package RG35XX r2 device A-B test
         run: |
           set -euo pipefail
           APP=out/garlicos/Roms/APPS; mkdir -p "$APP"
-          cp upstream/build/freej2me_plus.jar "$APP/m1.13-freej2me-platform.jar"
-          cp libm1_9e_presenter.so m1.13-hybrid-font-layout.jar "$APP/"
-          cat > "$APP/M1.13-HYBRID-FONT-LAYOUT-V1-E2E.sh" <<'SH'
+          cp upstream/build/freej2me_plus.jar "$APP/m1.13-r2-freej2me-platform.jar"
+          cp libm1_9e_presenter.so m1.13-r2-raster-bound.jar "$APP/"
+          cat > "$APP/M1.13-R2-RASTER-BOUND-E2E.sh" <<'SH'
           #!/bin/sh
-          OUT=/mnt/mmc/RG35XX-MIYOO-M1.13-RESULT.txt
-          LIVE=/mnt/mmc/RG35XX-MIYOO-M1.13-LIVE-FRAME.argb
-          BMP=/mnt/mmc/RG35XX-MIYOO-M1.13-SCREENSHOT.bmp
-          META=/mnt/mmc/RG35XX-MIYOO-M1.13-LIVE-FRAME.txt
-          APP="$(CDPATH= cd -- "$(dirname -- "$0")" 2>/dev/null && pwd)"
-          JAMVM=/mnt/mmc/CFW/java/bin/jamvm
-          GLIBJ=/mnt/mmc/CFW/java/share/classpath/glibj.zip
-          FONTJAR=/mnt/mmc/BIOS/freej2me-lr.jar
-          EXP=20c2e59d063282d4b6a0d612dea3cba2c0b5bd7fafe85a05729951bd38902db9
+          OUT=/mnt/mmc/RG35XX-MIYOO-M1.13-RESULT.txt; LIVE=/mnt/mmc/RG35XX-MIYOO-M1.13-LIVE-FRAME.argb; BMP=/mnt/mmc/RG35XX-MIYOO-M1.13-SCREENSHOT.bmp; META=/mnt/mmc/RG35XX-MIYOO-M1.13-LIVE-FRAME.txt
+          APP="$(CDPATH= cd -- "$(dirname -- "$0")" 2>/dev/null && pwd)"; JAMVM=/mnt/mmc/CFW/java/bin/jamvm; GLIBJ=/mnt/mmc/CFW/java/share/classpath/glibj.zip; FONTJAR=/mnt/mmc/BIOS/freej2me-lr.jar; EXP=20c2e59d063282d4b6a0d612dea3cba2c0b5bd7fafe85a05729951bd38902db9
           rm -f "$LIVE" "$BMP" "$META"; : >"$OUT"
-          echo 'RG35XX MIYOO M1.13 HYBRID FONT LAYOUT V1 E2E' >>"$OUT"
-          echo M1_13_PRIMARY_VARIABLE=LAYOUT_GEOMETRY_ONLY >>"$OUT"
-          echo M1_13_RESOURCE_CLASSIFICATION=EXPERIMENTAL_NOT_GOLDEN >>"$OUT"
-          echo M1_13_TEST_PROFILE=ASCII_VIETNAMESE_SIZE_ANCHOR_V2 >>"$OUT"
-          [ -f "$FONTJAR" ] || { echo M1_13_RESOURCE_GATE=FAIL_FONTJAR_MISSING >>"$OUT"; exit 21; }
-          TMP=/tmp/m113-font.bin; rm -f "$TMP"
-          unzip -p "$FONTJAR" org/recompile/mobile/rg35xx-font.bin >"$TMP" 2>/dev/null || true
-          FS=$(wc -c <"$TMP" 2>/dev/null | tr -d ' '); FH=$(sha256sum "$TMP" 2>/dev/null|awk '{print $1}')
-          echo M1_13_FONT_SIZE=$FS >>"$OUT"; echo M1_13_FONT_SHA256=$FH >>"$OUT"
-          [ "$FS" = 727008 ] && [ "$FH" = "$EXP" ] || { echo M1_13_RESOURCE_GATE=FAIL_CLOSED >>"$OUT"; exit 22; }
-          echo M1_13_RESOURCE_GATE=PASS_EXPERIMENTAL_20C2 >>"$OUT"
-          JB=$(sha256sum "$JAMVM"|awk '{print $1}'); GB=$(sha256sum "$GLIBJ"|awk '{print $1}')
-          echo JAMVM_SHA256_BEFORE=$JB >>"$OUT"; echo GLIBJ_SHA256_BEFORE=$GB >>"$OUT"
-          echo VISUAL_INSTRUCTION='BLUE: ASCII+VN SMALL/MEDIUM/LARGE MIX LEFT/CENTER/RIGHT TOP/BASELINE/BOTTOM' >>"$OUT"
-          LD_LIBRARY_PATH="$APP${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "$JAMVM" -Xmx64m -cp "$GLIBJ:$APP/m1.13-freej2me-platform.jar:$FONTJAR" org.recompile.mobile.M19CanvasLifecycleLauncher "$APP/m1.13-hybrid-font-layout.jar" >>"$OUT" 2>&1
-          RC=$?
-          JA=$(sha256sum "$JAMVM"|awk '{print $1}'); GA=$(sha256sum "$GLIBJ"|awk '{print $1}')
-          echo JAMVM_EXIT_CODE=$RC >>"$OUT"; echo JAMVM_SHA256_AFTER=$JA >>"$OUT"; echo GLIBJ_SHA256_AFTER=$GA >>"$OUT"
-          [ "$JB" = "$JA" ] && [ "$GB" = "$GA" ] && echo M1_13_PROTECTED_HASHES=PASS >>"$OUT" || echo M1_13_PROTECTED_HASHES=FAIL >>"$OUT"
-          [ "$RC" -eq 0 ] && grep -q 'M1_13_NORMAL_EXIT=PASS' "$OUT" && echo M1_13_EXECUTION_RESULT=PASS >>"$OUT" || echo M1_13_EXECUTION_RESULT=FAIL >>"$OUT"
-          [ -f "$META" ] && cat "$META" >>"$OUT"
-          [ -f "$LIVE" ] && echo M1_13_LIVE_CAPTURE_SHA256=$(sha256sum "$LIVE"|awk '{print $1}') >>"$OUT" || echo M1_13_LIVE_CAPTURE=NOT_AVAILABLE >>"$OUT"
-          [ -f "$BMP" ] && echo M1_13_SCREENSHOT_SHA256=$(sha256sum "$BMP"|awk '{print $1}') >>"$OUT" || echo M1_13_SCREENSHOT=NOT_AVAILABLE >>"$OUT"
-          echo DEVICE_PASS=NO_PENDING_VISUAL_REVIEW >>"$OUT"; echo FULL_PLATFORM_STABLE=NO >>"$OUT"; sync; exit "$RC"
+          echo 'RG35XX MIYOO M1.13-r2 RASTER COLUMN BOUND E2E' >>"$OUT"; echo M1_13_R2_PRIMARY_VARIABLE=RASTER_COLUMN_BOUND_ONLY >>"$OUT"; echo M1_13_RESOURCE_CLASSIFICATION=EXPERIMENTAL_NOT_GOLDEN >>"$OUT"; echo M1_13_TEST_PROFILE=ASCII_VIETNAMESE_SIZE_ANCHOR_V2 >>"$OUT"
+          [ -f "$FONTJAR" ] || { echo M1_13_RESOURCE_GATE=FAIL_FONTJAR_MISSING >>"$OUT"; exit 21; }; TMP=/tmp/m113r2-font.bin; unzip -p "$FONTJAR" org/recompile/mobile/rg35xx-font.bin >"$TMP" 2>/dev/null || true; FS=$(wc -c <"$TMP"|tr -d ' '); FH=$(sha256sum "$TMP"|awk '{print $1}'); echo M1_13_FONT_SIZE=$FS >>"$OUT"; echo M1_13_FONT_SHA256=$FH >>"$OUT"; [ "$FS" = 727008 ] && [ "$FH" = "$EXP" ] || { echo M1_13_RESOURCE_GATE=FAIL_CLOSED >>"$OUT"; exit 22; }; echo M1_13_RESOURCE_GATE=PASS_EXPERIMENTAL_20C2 >>"$OUT"
+          JB=$(sha256sum "$JAMVM"|awk '{print $1}'); GB=$(sha256sum "$GLIBJ"|awk '{print $1}'); echo JAMVM_SHA256_BEFORE=$JB >>"$OUT"; echo GLIBJ_SHA256_BEFORE=$GB >>"$OUT"
+          LD_LIBRARY_PATH="$APP${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "$JAMVM" -Xmx64m -cp "$GLIBJ:$APP/m1.13-r2-freej2me-platform.jar:$FONTJAR" org.recompile.mobile.M19CanvasLifecycleLauncher "$APP/m1.13-r2-raster-bound.jar" >>"$OUT" 2>&1; RC=$?
+          JA=$(sha256sum "$JAMVM"|awk '{print $1}'); GA=$(sha256sum "$GLIBJ"|awk '{print $1}'); echo JAMVM_EXIT_CODE=$RC >>"$OUT"; echo JAMVM_SHA256_AFTER=$JA >>"$OUT"; echo GLIBJ_SHA256_AFTER=$GA >>"$OUT"; [ "$JB" = "$JA" ] && [ "$GB" = "$GA" ] && echo M1_13_PROTECTED_HASHES=PASS >>"$OUT" || echo M1_13_PROTECTED_HASHES=FAIL >>"$OUT"; [ "$RC" -eq 0 ] && grep -q 'M1_13_NORMAL_EXIT=PASS' "$OUT" && echo M1_13_EXECUTION_RESULT=PASS >>"$OUT" || echo M1_13_EXECUTION_RESULT=FAIL >>"$OUT"; [ -f "$META" ] && cat "$META" >>"$OUT"; [ -f "$LIVE" ] && echo M1_13_LIVE_CAPTURE_SHA256=$(sha256sum "$LIVE"|awk '{print $1}') >>"$OUT"; [ -f "$BMP" ] && echo M1_13_SCREENSHOT_SHA256=$(sha256sum "$BMP"|awk '{print $1}') >>"$OUT"; echo DEVICE_PASS=NO_PENDING_VISUAL_REVIEW >>"$OUT"; echo FULL_PLATFORM_STABLE=NO >>"$OUT"; sync; exit "$RC"
           SH
-          chmod +x "$APP/M1.13-HYBRID-FONT-LAYOUT-V1-E2E.sh"
-          (cd out/garlicos && find Roms -type f -print0 | sort -z | xargs -0 sha256sum) >out/garlicos/SHA256SUMS.txt
-          (cd out/garlicos && sha256sum -c SHA256SUMS.txt)
-          sha256sum "$APP"/*
+          chmod +x "$APP/M1.13-R2-RASTER-BOUND-E2E.sh"; (cd out/garlicos && find Roms -type f -print0 | sort -z | xargs -0 sha256sum) >out/garlicos/SHA256SUMS.txt; (cd out/garlicos && sha256sum -c SHA256SUMS.txt); sha256sum "$APP"/*
       - uses: actions/upload-artifact@v4
         with:
-          name: miyoo-m1.13-hybrid-font-layout-v1-e2e
+          name: miyoo-m1.13-r2-raster-bound-e2e
           path: out/garlicos/
           if-no-files-found: error
