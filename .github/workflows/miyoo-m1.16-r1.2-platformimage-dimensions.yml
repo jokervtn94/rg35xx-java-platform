@@ -52,6 +52,7 @@ jobs:
           echo M1_16_R12_GAME_LAYER_IMPLEMENTATION_CHANGE=NONE
           echo M1_16_R12_RENDERER_CHANGE=NONE
           echo M1_16_R12_PRIMARY_VARIABLE=BLANK_IMAGE_DIMENSION_SEMANTICS_ONLY
+          echo M1_16_R121_HARNESS_CHANGE=GATE_MARKERS_ONLY
           echo M1_16_R12_BUILD_GATE=PASS
       - name: Package RG35XX device test
         run: |
@@ -67,7 +68,8 @@ jobs:
           GLIBJ=/mnt/mmc/CFW/java/share/classpath/glibj.zip
           FONTJAR=/mnt/mmc/BIOS/freej2me-lr.jar
           : >"$OUT"
-          echo 'RG35XX M1.16-r1.2 PLATFORMIMAGE DIMENSIONS' >>"$OUT"
+          echo 'RG35XX M1.16-r1.2.1 PLATFORMIMAGE DIMENSIONS' >>"$OUT"
+          echo M1_16_R121_HARNESS_CHANGE=GATE_MARKERS_ONLY >>"$OUT"
           JB=$(sha256sum "$JAMVM"|awk '{print $1}'); GB=$(sha256sum "$GLIBJ"|awk '{print $1}')
           echo JAMVM_SHA256_BEFORE=$JB >>"$OUT"; echo GLIBJ_SHA256_BEFORE=$GB >>"$OUT"
           "$JAMVM" -Xmx64m -cp "$GLIBJ:$APP/m1.16-r1.2-freej2me-platform.jar:$FONTJAR" org.recompile.mobile.M19CanvasLifecycleLauncher "$APP/m1.16-r1.2-platformimage-dimensions.jar" >>"$OUT" 2>&1
@@ -75,7 +77,7 @@ jobs:
           JA=$(sha256sum "$JAMVM"|awk '{print $1}'); GA=$(sha256sum "$GLIBJ"|awk '{print $1}')
           echo JAMVM_SHA256_AFTER=$JA >>"$OUT"; echo GLIBJ_SHA256_AFTER=$GA >>"$OUT"
           if [ "$JB" = "$JA" ] && [ "$GB" = "$GA" ]; then echo M1_16_R12_PROTECTED_HASHES=PASS >>"$OUT"; else echo M1_16_R12_PROTECTED_HASHES=FAIL >>"$OUT"; fi
-          if [ "$RC" = 0 ] && grep -q 'M1_16_R12_DIMENSIONS=PASS' "$OUT" && grep -q 'M1_16_R12_MUTABLE=PASS' "$OUT" && grep -q 'M1_16_R12_GRAPHICS_OBJECT=PASS' "$OUT" && grep -q 'M1_16_R12_GATE=PASS' "$OUT" && grep -q 'M1_16_R12_PROTECTED_HASHES=PASS' "$OUT"; then echo M1_16_R12_DEVICE_RUNTIME_GATE=PASS >>"$OUT"; else echo M1_16_R12_DEVICE_RUNTIME_GATE=FAIL >>"$OUT"; fi
+          if [ "$RC" = 0 ] && grep -q 'M1_16_R12_CREATE_BLANK=PASS' "$OUT" && grep -q 'M1_16_R12_MUTABLE=PASS' "$OUT" && grep -q 'M1_16_R12_WIDTH=PASS' "$OUT" && grep -q 'M1_16_R12_HEIGHT=PASS' "$OUT" && grep -q 'M1_16_R12_GET_GRAPHICS=PASS' "$OUT" && grep -q 'M1_16_R12_DIMENSION_GATE=PASS' "$OUT" && grep -q 'M1_16_R12_RUNTIME_GATE=PASS' "$OUT" && grep -q 'M1_16_R12_PROTECTED_HASHES=PASS' "$OUT"; then echo M1_16_R12_DEVICE_RUNTIME_GATE=PASS >>"$OUT"; else echo M1_16_R12_DEVICE_RUNTIME_GATE=FAIL >>"$OUT"; fi
           echo DEVICE_PASS=NO_REVIEW_PENDING >>"$OUT"
           echo FULL_PLATFORM_STABLE=NO >>"$OUT"
           sync
@@ -86,6 +88,6 @@ jobs:
           sha256sum "$APP"/*
       - uses: actions/upload-artifact@v4
         with:
-          name: miyoo-m1.16-r1.2-platformimage-dimensions
+          name: miyoo-m1.16-r1.2.1-platformimage-dimensions
           path: out/garlicos/
           if-no-files-found: error
