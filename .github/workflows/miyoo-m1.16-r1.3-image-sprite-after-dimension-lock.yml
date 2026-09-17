@@ -1,6 +1,8 @@
 name: Miyoo M1.16 r1.3 Image Sprite After Dimension Lock
 on:
   workflow_dispatch:
+  push:
+    branches: [miyoo-m1.16-r1-game-layer-diagnostic]
 jobs:
   image-sprite-after-dimension-lock:
     runs-on: ubuntu-22.04
