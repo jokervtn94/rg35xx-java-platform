@@ -27,12 +27,16 @@ jobs:
           mkdir -p downloads/M1.14-r4C-UNDERLINE-ONLY-AB
           unzip -q /tmp/r4c.zip -d downloads/M1.14-r4C-UNDERLINE-ONLY-AB
           sha256sum downloads/M1.14-r4C-UNDERLINE-ONLY-AB/Roms/APPS/*
-      - name: Publish files into repository
+      - name: Publish complete files into repository
         run: |
           set -euo pipefail
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add downloads/M1.14-r4C-UNDERLINE-ONLY-AB
+          git add -f downloads/M1.14-r4C-UNDERLINE-ONLY-AB/Roms/APPS/M1.14-R4C-UNDERLINE-ONLY-AB.sh \
+                     downloads/M1.14-r4C-UNDERLINE-ONLY-AB/Roms/APPS/libm1_9e_presenter.so \
+                     downloads/M1.14-r4C-UNDERLINE-ONLY-AB/Roms/APPS/m1.14-r4c-freej2me-platform.jar \
+                     downloads/M1.14-r4C-UNDERLINE-ONLY-AB/Roms/APPS/m1.14-r4c-underline-only.jar \
+                     downloads/M1.14-r4C-UNDERLINE-ONLY-AB/SHA256SUMS.txt
           git diff --cached --quiet && exit 0
-          git commit -m 'Publish M1.14-r4C.1 corrected BUILD-PASS package [skip ci]'
+          git commit -m 'Publish complete M1.14-r4C.1 BUILD-PASS package [skip ci]'
           git push origin HEAD:miyoo-m1.14-r4c-underline-only-ab
