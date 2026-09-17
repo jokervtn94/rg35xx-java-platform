@@ -43,6 +43,7 @@ jobs:
           python3 miyoo-m1/m1_14/patch_underline_only_r4c.py
           grep -q 'Font.STYLE_UNDERLINED' upstream/src/org/recompile/mobile/PlatformGraphics.java
           echo M1_14_R4C_PRIMARY_VARIABLE=UNDERLINE_RASTER_ONLY
+          echo M1_14_R4C1_PACKAGING_FIX=M19_LAUNCHER_CLASSES_ONLY
           echo M1_14_R4A_BOLD_BASELINE=PRESERVED_DEVICE_PASS
           echo M1_14_R4B_ITALIC_BASELINE=PRESERVED_DEVICE_PASS
           echo M1_14_RESOURCE_CLASSIFICATION=EXPERIMENTAL_NOT_GOLDEN
@@ -55,9 +56,16 @@ jobs:
           cp miyoo-m1/m1_9/M19SdlPresenter.java upstream/src/org/recompile/mobile/
           cp miyoo-m1/m1_9/M19CanvasLifecycleLauncher.java upstream/src/org/recompile/mobile/
           (cd upstream && JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64 ant -noinput -buildfile build.xml)
+          JAVA8=/usr/lib/jvm/java-8-openjdk-amd64
+          mkdir -p helper-classes
+          "$JAVA8/bin/javac" -source 1.5 -target 1.5 -bootclasspath "$JAVA8/jre/lib/rt.jar" -classpath upstream/build/freej2me_plus.jar -d helper-classes miyoo-m1/m1_8/M1Input.java miyoo-m1/m1_8/M1InputDispatch.java miyoo-m1/m1_9/M19InputPump.java miyoo-m1/m1_9/M19SdlPresenter.java miyoo-m1/m1_9/M19CanvasLifecycleLauncher.java
+          jar uf upstream/build/freej2me_plus.jar -C helper-classes .
+          jar tf upstream/build/freej2me_plus.jar | grep -qx 'org/recompile/mobile/M19CanvasLifecycleLauncher.class'
+          jar tf upstream/build/freej2me_plus.jar | grep -qx 'org/recompile/mobile/M19SdlPresenter.class'
+          echo M1_14_R4C1_LAUNCHER_CLASS_GATE=PASS
           JH=/usr/lib/jvm/java-8-openjdk-amd64/include; CC=/opt/miyoo/bin/arm-miyoo-linux-uclibcgnueabi-gcc
           $CC -shared -fPIC -Os -pipe -fno-strict-aliasing -march=armv5te -mtune=arm926ej-s -mfloat-abi=soft -Wall -Wextra -I"$JH" -I"$JH/linux" miyoo-m1/m1_9/m1_9e_presenter_jni.c -Wl,--as-needed -ldl -o libm1_9e_presenter.so
-          mkdir -p midlet-classes; JAVA8=/usr/lib/jvm/java-8-openjdk-amd64
+          mkdir -p midlet-classes
           "$JAVA8/bin/javac" -source 1.5 -target 1.5 -bootclasspath "$JAVA8/jre/lib/rt.jar" -classpath upstream/build/freej2me_plus.jar -d midlet-classes miyoo-m1/m1_14/M114R4CUnderlineOnlyMIDlet.java
           printf 'Manifest-Version: 1.0\nMIDlet-1: M1.14-r4C,,org.recompile.mobile.M114R4CUnderlineOnlyMIDlet\nMIDlet-Name: M1.14-r4C\nMIDlet-Vendor: RG35XX\nMIDlet-Version: 1.0\nMicroEdition-Configuration: CLDC-1.1\nMicroEdition-Profile: MIDP-2.0\n' >/tmp/m114r4c.mf
           jar cfm m1.14-r4c-underline-only.jar /tmp/m114r4c.mf -C midlet-classes .
@@ -76,7 +84,7 @@ jobs:
           EXP=20c2e59d063282d4b6a0d612dea3cba2c0b5bd7fafe85a05729951bd38902db9
           SHOT=/mnt/mmc/RG35XX-MIYOO-M1.14-R4C-SCREENSHOT.bmp; META=/mnt/mmc/RG35XX-MIYOO-M1.14-R4C-LIVE-FRAME.txt
           rm -f "$SHOT" "$META"; : >"$OUT"
-          echo 'RG35XX M1.14-r4C UNDERLINE ONLY AB' >>"$OUT"; echo M1_14_R4C_PRIMARY_VARIABLE=UNDERLINE_RASTER_ONLY >>"$OUT"; echo M1_14_R4A_BOLD_BASELINE=PRESERVED_DEVICE_PASS >>"$OUT"; echo M1_14_R4B_ITALIC_BASELINE=PRESERVED_DEVICE_PASS >>"$OUT"; echo M1_14_RESOURCE_CLASSIFICATION=EXPERIMENTAL_NOT_GOLDEN >>"$OUT"
+          echo 'RG35XX M1.14-r4C UNDERLINE ONLY AB' >>"$OUT"; echo M1_14_R4C_PRIMARY_VARIABLE=UNDERLINE_RASTER_ONLY >>"$OUT"; echo M1_14_R4C1_PACKAGING_FIX=M19_LAUNCHER_CLASSES_ONLY >>"$OUT"; echo M1_14_R4A_BOLD_BASELINE=PRESERVED_DEVICE_PASS >>"$OUT"; echo M1_14_R4B_ITALIC_BASELINE=PRESERVED_DEVICE_PASS >>"$OUT"; echo M1_14_RESOURCE_CLASSIFICATION=EXPERIMENTAL_NOT_GOLDEN >>"$OUT"
           TMP=/tmp/m114r4c-font.bin; unzip -p "$FONTJAR" org/recompile/mobile/rg35xx-font.bin >"$TMP" 2>/dev/null || true; FS=$(wc -c <"$TMP"|tr -d ' '); FH=$(sha256sum "$TMP"|awk '{print $1}'); echo M1_14_FONT_SIZE=$FS >>"$OUT"; echo M1_14_FONT_SHA256=$FH >>"$OUT"; [ "$FS" = 727008 ] && [ "$FH" = "$EXP" ] || { echo M1_14_RESOURCE_GATE=FAIL_CLOSED >>"$OUT"; exit 22; }; echo M1_14_RESOURCE_GATE=PASS_EXPERIMENTAL_20C2 >>"$OUT"
           JB=$(sha256sum "$JAMVM"|awk '{print $1}'); GB=$(sha256sum "$GLIBJ"|awk '{print $1}'); echo JAMVM_SHA256_BEFORE=$JB >>"$OUT"; echo GLIBJ_SHA256_BEFORE=$GB >>"$OUT"
           LD_LIBRARY_PATH="$APP${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "$JAMVM" -Xmx64m -cp "$GLIBJ:$APP/m1.14-r4c-freej2me-platform.jar:$FONTJAR" org.recompile.mobile.M19CanvasLifecycleLauncher "$APP/m1.14-r4c-underline-only.jar" >>"$OUT" 2>&1
