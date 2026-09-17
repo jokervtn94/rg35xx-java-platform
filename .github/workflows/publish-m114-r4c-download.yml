@@ -1,0 +1,38 @@
+name: Publish M1.14 r4C Direct Download
+on:
+  workflow_dispatch:
+  push:
+    branches: [miyoo-m1.14-r4c-underline-only-ab]
+    paths: [.github/workflows/publish-m114-r4c-download.yml]
+permissions:
+  actions: read
+  contents: write
+jobs:
+  publish:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: miyoo-m1.14-r4c-underline-only-ab
+      - name: Download verified BUILD-PASS artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          curl -fL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/jokervtn94/rg35xx-java-platform/actions/artifacts/10474489281/zip \
+            -o /tmp/r4c.zip
+          echo '14f6c64c2d4211dbbc153b2eff92e345808b7089ff5b37a575fc3801807f366a  /tmp/r4c.zip' | sha256sum -c -
+          rm -rf downloads/M1.14-r4C-UNDERLINE-ONLY-AB
+          mkdir -p downloads/M1.14-r4C-UNDERLINE-ONLY-AB
+          unzip -q /tmp/r4c.zip -d downloads/M1.14-r4C-UNDERLINE-ONLY-AB
+          sha256sum downloads/M1.14-r4C-UNDERLINE-ONLY-AB/Roms/APPS/*
+      - name: Publish files into repository
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add downloads/M1.14-r4C-UNDERLINE-ONLY-AB
+          git diff --cached --quiet && exit 0
+          git commit -m 'Publish M1.14-r4C BUILD-PASS package [skip ci]'
+          git push origin HEAD:miyoo-m1.14-r4c-underline-only-ab
