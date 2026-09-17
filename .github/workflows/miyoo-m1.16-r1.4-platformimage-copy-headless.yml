@@ -1,0 +1,97 @@
+name: Miyoo M1.16 r1.4 PlatformImage Copy Headless
+on:
+  workflow_dispatch:
+  push:
+    branches: [miyoo-m1.16-r1-game-layer-diagnostic]
+jobs:
+  platformimage-copy-headless:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Preserve locked boundary
+        run: sh miyoo-m1/m1_8/verify_standalone_boundary.sh
+      - name: Build locked baseline plus r1.2 and r1.4 copy fix
+        run: |
+          set -euo pipefail
+          sudo apt-get update >/dev/null && sudo apt-get install -y openjdk-8-jdk-headless ant >/dev/null
+          git clone -q https://github.com/TASEmulators/freej2me-plus.git upstream
+          git -C upstream checkout -q 13ec186903087156c145268f8706eecfaf9f1e50
+          test "$(git -C upstream rev-parse HEAD^{tree})" = ad47ab16e9025f0eb3d2067bc3b1897dc71987df
+          python3 miyoo-m1/m1_9/patch_headless_platformfont.py
+          python3 miyoo-m1/m1_9/patch_headless_platformimage_probe.py
+          python3 miyoo-m1/m1_9/patch_headless_platformgraphics_probe.py
+          python3 miyoo-m1/m1_9/patch_headless_platformgraphics_fillrect.py
+          python3 miyoo-m1/m1_9/patch_mobileplatform_resize_diagnostics.py
+          python3 miyoo-m1/m1_10/patch_mobileplatform_headless_flush.py
+          python3 miyoo-m1/m1_11/patch_headless_ascii_text.py
+          python3 miyoo-m1/m1_12/patch_headless_unicode_bitmap_text.py
+          python3 miyoo-m1/m1_13/patch_hybrid_font_layout_v1.py
+          python3 miyoo-m1/m1_13/patch_bitmap_raster_column_bound_r2.py
+          python3 miyoo-m1/m1_14/patch_headless_font_metrics_v1.py
+          python3 miyoo-m1/m1_14/patch_decoupled_size_semantics_r3.py
+          python3 miyoo-m1/m1_14/patch_bold_only_r4a.py
+          python3 miyoo-m1/m1_14/patch_italic_only_r4b.py
+          python3 miyoo-m1/m1_14/patch_underline_only_r4c.py
+          python3 miyoo-m1/m1_14/patch_monospace_face_semantics_r5a.py
+          python3 miyoo-m1/m1_14/patch_proportional_glyph_bounds_r5c.py
+          python3 miyoo-m1/m1_16/patch_platformimage_blank_dimensions_r12.py
+          python3 miyoo-m1/m1_16/patch_platformimage_copy_headless_r14.py
+          cp miyoo-m1/m1_8/M1Input.java upstream/src/org/recompile/mobile/
+          cp miyoo-m1/m1_8/M1InputDispatch.java upstream/src/org/recompile/mobile/
+          cp miyoo-m1/m1_9/M19InputPump.java upstream/src/org/recompile/mobile/
+          cp miyoo-m1/m1_9/M19SdlPresenter.java upstream/src/org/recompile/mobile/
+          cp miyoo-m1/m1_9/M19CanvasLifecycleLauncher.java upstream/src/org/recompile/mobile/
+          (cd upstream && JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64 ant -noinput -buildfile build.xml)
+          JAVA8=/usr/lib/jvm/java-8-openjdk-amd64; mkdir -p helper-classes midlet-classes
+          "$JAVA8/bin/javac" -source 1.5 -target 1.5 -bootclasspath "$JAVA8/jre/lib/rt.jar" -classpath upstream/build/freej2me_plus.jar -d helper-classes miyoo-m1/m1_8/M1Input.java miyoo-m1/m1_8/M1InputDispatch.java miyoo-m1/m1_9/M19InputPump.java miyoo-m1/m1_9/M19SdlPresenter.java miyoo-m1/m1_9/M19CanvasLifecycleLauncher.java
+          jar uf upstream/build/freej2me_plus.jar -C helper-classes .
+          "$JAVA8/bin/javac" -source 1.5 -target 1.5 -bootclasspath "$JAVA8/jre/lib/rt.jar" -classpath upstream/build/freej2me_plus.jar -d midlet-classes miyoo-m1/m1_16/M116R11ImageSpriteIsolationMIDlet.java
+          printf 'Manifest-Version: 1.0\nMIDlet-1: M1.16-r1.4,,org.recompile.mobile.M116R11ImageSpriteIsolationMIDlet\nMIDlet-Name: M1.16-r1.4 PlatformImage Copy Headless\nMIDlet-Vendor: RG35XX\nMIDlet-Version: 1.0\nMicroEdition-Configuration: CLDC-1.1\nMicroEdition-Profile: MIDP-2.0\n' >/tmp/m116r14.mf
+          jar cfm m1.16-r1.4-platformimage-copy-headless.jar /tmp/m116r14.mf -C midlet-classes .
+          echo M1_16_R14_R12_DIMENSION_LOCK=PRESERVED
+          echo M1_16_R14_PLATFORMIMAGE_IMPLEMENTATION_CHANGE=LCDUI_COPY_HEADLESS_ONLY
+          echo M1_16_R14_SPRITE_IMPLEMENTATION_CHANGE=NONE
+          echo M1_16_R14_TILEDLAYER_IMPLEMENTATION_CHANGE=NONE
+          echo M1_16_R14_RENDERER_CHANGE=NONE
+          echo M1_16_R14_PRIMARY_VARIABLE=PLATFORMIMAGE_LCDUI_COPY_HEADLESS_ONLY
+          echo M1_16_R14_BUILD_GATE=PASS
+      - name: Package RG35XX device diagnostic
+        run: |
+          set -euo pipefail
+          APP=out/garlicos/Roms/APPS; mkdir -p "$APP"
+          cp upstream/build/freej2me_plus.jar "$APP/m1.16-r1.4-freej2me-platform.jar"
+          cp m1.16-r1.4-platformimage-copy-headless.jar "$APP/"
+          cat > "$APP/M1.16-R1.4-PLATFORMIMAGE-COPY-HEADLESS.sh" <<'SH'
+          #!/bin/sh
+          OUT=/mnt/mmc/RG35XX-MIYOO-M1.16-R1.4-PLATFORMIMAGE-COPY-HEADLESS-RESULT.txt
+          APP="$(CDPATH= cd -- "$(dirname -- "$0")" 2>/dev/null && pwd)"
+          JAMVM=/mnt/mmc/CFW/java/bin/jamvm
+          GLIBJ=/mnt/mmc/CFW/java/share/classpath/glibj.zip
+          FONTJAR=/mnt/mmc/BIOS/freej2me-lr.jar
+          : >"$OUT"
+          echo 'RG35XX M1.16-r1.4 PLATFORMIMAGE COPY HEADLESS' >>"$OUT"
+          echo M1_16_R14_PRIMARY_VARIABLE=PLATFORMIMAGE_LCDUI_COPY_HEADLESS_ONLY >>"$OUT"
+          echo M1_16_R14_SPRITE_IMPLEMENTATION_CHANGE=NONE >>"$OUT"
+          JB=$(sha256sum "$JAMVM"|awk '{print $1}'); GB=$(sha256sum "$GLIBJ"|awk '{print $1}')
+          echo JAMVM_SHA256_BEFORE=$JB >>"$OUT"; echo GLIBJ_SHA256_BEFORE=$GB >>"$OUT"
+          "$JAMVM" -Xmx64m -cp "$GLIBJ:$APP/m1.16-r1.4-freej2me-platform.jar:$FONTJAR" org.recompile.mobile.M19CanvasLifecycleLauncher "$APP/m1.16-r1.4-platformimage-copy-headless.jar" >>"$OUT" 2>&1
+          RC=$?; echo JAMVM_EXIT_CODE=$RC >>"$OUT"
+          JA=$(sha256sum "$JAMVM"|awk '{print $1}'); GA=$(sha256sum "$GLIBJ"|awk '{print $1}')
+          echo JAMVM_SHA256_AFTER=$JA >>"$OUT"; echo GLIBJ_SHA256_AFTER=$GA >>"$OUT"
+          if [ "$JB" = "$JA" ] && [ "$GB" = "$GA" ]; then echo M1_16_R14_PROTECTED_HASHES=PASS >>"$OUT"; else echo M1_16_R14_PROTECTED_HASHES=FAIL >>"$OUT"; fi
+          if grep -q 'M1_16_R11_A_MUTABLE_SPRITE_CTOR=PASS' "$OUT" && grep -q 'M1_16_R11_B_COPY_SPRITE_CTOR=PASS' "$OUT"; then echo M1_16_R14_COPY_BOUNDARY=PASS >>"$OUT"; else echo M1_16_R14_COPY_BOUNDARY=FAIL >>"$OUT"; fi
+          if [ "$RC" = 0 ] && grep -q 'M1_16_R11_DIAGNOSTIC_GATE=PASS' "$OUT" && grep -q 'M1_16_R11_RUNTIME_GATE=PASS' "$OUT" && grep -q 'M1_16_R14_PROTECTED_HASHES=PASS' "$OUT"; then echo M1_16_R14_DEVICE_RUNTIME_GATE=PASS >>"$OUT"; else echo M1_16_R14_DEVICE_RUNTIME_GATE=FAIL >>"$OUT"; fi
+          echo DEVICE_PASS=NO_DIAGNOSTIC_ONLY >>"$OUT"
+          echo FULL_PLATFORM_STABLE=NO >>"$OUT"
+          sync
+          SH
+          chmod +x "$APP/M1.16-R1.4-PLATFORMIMAGE-COPY-HEADLESS.sh"
+          (cd out/garlicos && find Roms -type f -print0 | sort -z | xargs -0 sha256sum)>out/garlicos/SHA256SUMS.txt
+          (cd out/garlicos && sha256sum -c SHA256SUMS.txt)
+          sha256sum "$APP"/*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: miyoo-m1.16-r1.4-platformimage-copy-headless
+          path: out/garlicos/
+          if-no-files-found: error
