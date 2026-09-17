@@ -7,8 +7,22 @@ from pathlib import Path
 
 pf=Path('upstream/src/org/recompile/mobile/PlatformFont.java')
 s=pf.read_text()
-anchor='''\tpublic int stringWidth(String str)
-\t{'''
+# Anchor on the exact r5A width block rather than the method declaration because
+# upstream PlatformFont formatting differs across the pinned source/patch chain.
+old='''\t\t\t\tint rg35xxPublicScale = (size == Font.SIZE_LARGE) ? 2 : 1;
+\t\t\t\t// M1.14-r5A: MONOSPACE uses one fixed 12-cell advance for every glyph.
+\t\t\t\t// SYSTEM/PROPORTIONAL preserve the proven hybrid 8/12 contract.
+\t\t\t\twidth += ((face == Font.FACE_MONOSPACE) ? 12 : (wide ? 12 : 8)) * rg35xxPublicScale;'''
+new='''\t\t\t\tint rg35xxPublicScale = (size == Font.SIZE_LARGE) ? 2 : 1;
+\t\t\t\t// M1.14-r5A: MONOSPACE uses one fixed 12-cell advance for every glyph.
+\t\t\t\t// M1.14-r5C: PROPORTIONAL derives advance from bitmap glyph bounds.
+\t\t\t\twidth += ((face == Font.FACE_MONOSPACE) ? 12 : ((face == Font.FACE_PROPORTIONAL) ? rg35xxProportionalAdvance(ch) : (wide ? 12 : 8))) * rg35xxPublicScale;'''
+if s.count(old)!=1: raise SystemExit('M1_14_R5C_PATCH=FAIL_PUBLIC_WIDTH_ANCHOR')
+s=s.replace(old,new,1)
+# Insert helpers immediately before the known public stringWidth implementation.
+# Use a formatting-tolerant marker that exists in the pinned PlatformFont.
+marker='''\tpublic int stringWidth(String str)'''
+if s.count(marker)!=1: raise SystemExit('M1_14_R5C_PATCH=FAIL_FONT_HELPER_ANCHOR')
 helper='''\tprivate static byte[] rg35xxMetricFont;
 \tprivate static boolean rg35xxMetricFontTried;
 \tprivate static final int[] RG35XX_METRIC_RANGE_START={0x0020,0x00A0,0x0370,0x0400,0x1E00,0x3000,0x3040,0x30A0,0x4E00,0xFF00};
@@ -28,12 +42,7 @@ helper='''\tprivate static byte[] rg35xxMetricFont;
 \t}
 
 '''
-if s.count(anchor)!=1: raise SystemExit('M1_14_R5C_PATCH=FAIL_FONT_HELPER_ANCHOR')
-s=s.replace(anchor,helper+anchor,1)
-old='''width += ((face == Font.FACE_MONOSPACE) ? 12 : (wide ? 12 : 8)) * rg35xxPublicScale;'''
-new='''width += ((face == Font.FACE_MONOSPACE) ? 12 : ((face == Font.FACE_PROPORTIONAL) ? rg35xxProportionalAdvance(ch) : (wide ? 12 : 8))) * rg35xxPublicScale;'''
-if s.count(old)!=1: raise SystemExit('M1_14_R5C_PATCH=FAIL_PUBLIC_WIDTH_ANCHOR')
-s=s.replace(old,new,1);pf.write_text(s)
+s=s.replace(marker,helper+marker,1);pf.write_text(s)
 
 pg=Path('upstream/src/org/recompile/mobile/PlatformGraphics.java');g=pg.read_text()
 old2='''\tprivate int rg35xxLayoutAdvance(char ch,int scale) {
