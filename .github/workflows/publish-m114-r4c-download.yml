@@ -14,15 +14,15 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: miyoo-m1.14-r4c-underline-only-ab
-      - name: Download verified BUILD-PASS artifact
+      - name: Download verified r4C.1 BUILD-PASS artifact
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           curl -fL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
-            https://api.github.com/repos/jokervtn94/rg35xx-java-platform/actions/artifacts/10474489281/zip \
+            https://api.github.com/repos/jokervtn94/rg35xx-java-platform/actions/artifacts/10477272462/zip \
             -o /tmp/r4c.zip
-          echo '14f6c64c2d4211dbbc153b2eff92e345808b7089ff5b37a575fc3801807f366a  /tmp/r4c.zip' | sha256sum -c -
+          echo '615e8bfbf7b848bbc579c0576476e33781b9d8db7d63e0d7cb183dbaa8e0a7cf  /tmp/r4c.zip' | sha256sum -c -
           rm -rf downloads/M1.14-r4C-UNDERLINE-ONLY-AB
           mkdir -p downloads/M1.14-r4C-UNDERLINE-ONLY-AB
           unzip -q /tmp/r4c.zip -d downloads/M1.14-r4C-UNDERLINE-ONLY-AB
@@ -34,5 +34,5 @@ jobs:
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add downloads/M1.14-r4C-UNDERLINE-ONLY-AB
           git diff --cached --quiet && exit 0
-          git commit -m 'Publish M1.14-r4C BUILD-PASS package [skip ci]'
+          git commit -m 'Publish M1.14-r4C.1 corrected BUILD-PASS package [skip ci]'
           git push origin HEAD:miyoo-m1.14-r4c-underline-only-ab
