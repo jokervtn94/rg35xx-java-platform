@@ -25,8 +25,9 @@ function Resolve-SdRoot([string]$Raw) {
     if ($Raw -match '^[A-Za-z]:$') { $Raw = $Raw + '\' }
     if (-not (Test-Path -LiteralPath $Raw -PathType Container)) { Fail "SD root not found: $Raw" }
     $resolved = (Resolve-Path -LiteralPath $Raw).Path
-    if ($resolved -notmatch '^[A-Za-z]:\\?) { Fail "Refusing non-drive-root path: $resolved" }
-    return ($resolved.TrimEnd('\') + '\')
+    $trimmed = $resolved.TrimEnd('\')
+    if ($trimmed.Length -ne 2 -or $trimmed[1] -ne ':') { Fail "Refusing non-drive-root path: $resolved" }
+    return ($trimmed + '\')
 }
 
 function Read-Manifest([string]$Path) {
