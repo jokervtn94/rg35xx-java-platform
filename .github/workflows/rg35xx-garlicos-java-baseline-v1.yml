@@ -113,4 +113,5 @@ jobs:
         with:
           name: rg35xx-garlicos-java-baseline-v1
           path: out/RG35XX-GARLICOS-JAVA-BASELINE-V1/
+          include-hidden-files: true
           if-no-files-found: error
