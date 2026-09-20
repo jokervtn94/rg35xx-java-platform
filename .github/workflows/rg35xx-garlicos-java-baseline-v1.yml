@@ -86,7 +86,7 @@ jobs:
 
           (
             cd "$PAY"
-            find . -type f -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS.txt
+            find . -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS.txt
             sha256sum -c SHA256SUMS.txt
           )
 
