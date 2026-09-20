@@ -1,0 +1,116 @@
+name: RG35XX GarlicOS Java Baseline v1
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [rg35xx-garlicos-java-baseline-v1]
+
+jobs:
+  package:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch exact B4 device-evidence checkpoint
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: 34317318204
+          name: rg35xx-verified-clean-b4-checkpoint
+          path: b4
+
+      - name: Verify locked binaries
+        run: |
+          set -euo pipefail
+          CORE=b4/CFW/retroarch/.retroarch/cores/freej2me_plus_libretro.so
+          RUNTIME=b4/BIOS/freej2me-lr.jar
+          test -f "$CORE"
+          test -f "$RUNTIME"
+          echo '56bb3b972337dd40b342c1881f6599c53eebf66a29f920a1aa2e2839eb29a07c  '"$CORE" | sha256sum -c -
+          echo 'e8706495bfaed6a9020b395cc65347c76ca3a3d1bd5a1880aed593379fa9f4ed  '"$RUNTIME" | sha256sum -c -
+          grep -q 'B3_RUNTIME_CONTENT_SHA256=52e809ecf5d23f4c2c0989075270680248299bbc02e7cb8ca665bee002942783' b4/STATUS.txt
+          echo GARLICOS_BASELINE_SOURCE_ARTIFACT=10090552777
+          echo GARLICOS_BASELINE_SOURCE_RUN=34317318204
+          echo GARLICOS_BASELINE_LOCKED_BINARY_GATE=PASS
+
+      - name: Package canonical GarlicOS tree
+        run: |
+          set -euo pipefail
+          ROOT=out/RG35XX-GARLICOS-JAVA-BASELINE-V1
+          PAY="$ROOT/payload"
+          CORE=b4/CFW/retroarch/.retroarch/cores/freej2me_plus_libretro.so
+          RUNTIME=b4/BIOS/freej2me-lr.jar
+
+          mkdir -p "$PAY/CFW/retroarch/.retroarch/cores"
+          mkdir -p "$PAY/BIOS"
+          mkdir -p "$PAY/CFW/java/share/freej2me"
+          mkdir -p "$PAY/CFW/retroarch/.retroarch/system"
+          mkdir -p "$PAY/CFW/retroarch/system"
+
+          cp "$CORE" "$PAY/CFW/retroarch/.retroarch/cores/freej2me_plus_libretro.so"
+          cp "$CORE" "$PAY/CFW/retroarch/.retroarch/cores/freej2me_libretro.so"
+          cp "$RUNTIME" "$PAY/BIOS/freej2me-lr.jar"
+          cp "$RUNTIME" "$PAY/BIOS/freej2me_plus-lr.jar"
+          cp "$RUNTIME" "$PAY/CFW/java/share/freej2me/freej2me-lr.jar"
+          cp "$RUNTIME" "$PAY/CFW/retroarch/.retroarch/system/freej2me-lr.jar"
+          cp "$RUNTIME" "$PAY/CFW/retroarch/system/freej2me-lr.jar"
+
+          cp release/garlicos-java-baseline-v1/*.ps1 "$ROOT/"
+          cp release/garlicos-java-baseline-v1/*.cmd "$ROOT/"
+
+          cat > "$ROOT/README.txt" <<'EOF'
+          RG35XX GARLICOS JAVA BASELINE V1
+          Launch model:
+            GarlicOS JAVA console
+              -> /mnt/mmc/Roms/JAVA/<game>.jar
+              -> RetroArch
+              -> freej2me_plus_libretro.so
+              -> JamVM
+              -> freej2me-lr.jar
+
+          DO NOT move game JARs to Roms/APPS.
+          DO NOT use per-game APP wrappers.
+          Installer preserves Roms/JAVA unchanged.
+
+          Binary basis:
+          B4 run 34317318204 / artifact 10090552777
+          Core SHA256 56bb3b972337dd40b342c1881f6599c53eebf66a29f920a1aa2e2839eb29a07c
+          Runtime SHA256 e8706495bfaed6a9020b395cc65347c76ca3a3d1bd5a1880aed593379fa9f4ed
+
+          Status:
+          native startup/IPC/deinit = DEVICE-PASS scoped
+          complete game compatibility = DEVICE TEST PENDING
+          full platform STABLE = NO
+          EOF
+
+          (
+            cd "$PAY"
+            find . -type f -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS.txt
+            sha256sum -c SHA256SUMS.txt
+          )
+
+          for f in "$ROOT"/*.ps1; do
+            pwsh -NoProfile -Command "[scriptblock]::Create((Get-Content -Raw '$f')) | Out-Null"
+          done
+
+          (
+            cd "$ROOT"
+            find . -type f ! -name PACKAGE-SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > PACKAGE-SHA256SUMS.txt
+            sha256sum -c PACKAGE-SHA256SUMS.txt
+          )
+
+          echo RUNTIME_SHA256=$(sha256sum "$PAY/BIOS/freej2me-lr.jar" | awk '{print $1}')
+          echo CORE_SHA256=$(sha256sum "$PAY/CFW/retroarch/.retroarch/cores/freej2me_plus_libretro.so" | awk '{print $1}')
+          echo LAUNCH_MODEL=GARLICOS_ROM_BROWSER_DIRECT_JAR
+          echo APP_WRAPPERS=NO
+          echo R1_5_INCLUDED=NO
+          echo GARLICOS_BASELINE_BUILD_GATE=PASS
+          echo DEVICE_PASS=NO_NEW_PACKAGE_DEVICE_TEST_PENDING
+          echo FULL_PLATFORM_STABLE=NO
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rg35xx-garlicos-java-baseline-v1
+          path: out/RG35XX-GARLICOS-JAVA-BASELINE-V1/
+          if-no-files-found: error
