@@ -91,8 +91,7 @@ jobs:
           FULL PLATFORM STABLE = NO.
           EOF
 
-          sha256sum "$PAY/freej2me-lr-vc7r22.jar" > "$PAY/SHA256SUMS.txt"
-          (cd "$PAY" && sha256sum -c SHA256SUMS.txt)
+          (cd "$PAY" && sha256sum freej2me-lr-vc7r22.jar > SHA256SUMS.txt && sha256sum -c SHA256SUMS.txt)
 
           for f in "$ROOT"/*.ps1; do
             pwsh -NoProfile -Command "[scriptblock]::Create((Get-Content -Raw '$f')) | Out-Null"
