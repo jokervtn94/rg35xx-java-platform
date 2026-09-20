@@ -135,7 +135,7 @@ try {
 
   $BaseDst = Join-Path $Sd "Roms\APPS\RG35XX-JAVA-BASELINE"
   New-Item -ItemType Directory -Force -Path $BaseDst | Out-Null
-  Copy-Item -LiteralPath (Join-Path $PayloadRoot "Roms\APPS\RG35XX-JAVA-BASELINE\*") -Destination $BaseDst -Recurse -Force
+  Copy-Item -Path (Join-Path $PayloadRoot "Roms\APPS\RG35XX-JAVA-BASELINE\*") -Destination $BaseDst -Recurse -Force
 
   $fontTree = Join-Path $FontTmpDir "jarroot\org\recompile\mobile"
   New-Item -ItemType Directory -Force -Path $fontTree | Out-Null
@@ -161,12 +161,12 @@ try {
       $pathFile = [System.IO.Path]::ChangeExtension($sh, ".path")
       $gameUnix = "/mnt/mmc/Roms/JAVA/" + $relUnix
       $script = @(
-        "#!/bin/sh",
-        "# RG35XX-JAVA-INSTALLABLE-BASELINE-V1",
-        "BASE=/mnt/mmc/Roms/APPS/RG35XX-JAVA-BASELINE",
-        "PATHFILE=`"${0%.sh}.path`"",
-        "GAME=`$(cat `"$PATHFILE`")",
-        "exec `"$BASE/run-java.sh`" `"$GAME`""
+        '#!/bin/sh',
+        '# RG35XX-JAVA-INSTALLABLE-BASELINE-V1',
+        'BASE=/mnt/mmc/Roms/APPS/RG35XX-JAVA-BASELINE',
+        'PATHFILE="${0%.sh}.path"',
+        'GAME=$(cat "$PATHFILE")',
+        'exec "$BASE/run-java.sh" "$GAME"'
       ) -join "`n"
       [System.IO.File]::WriteAllText($sh, $script + "`n", (New-Object System.Text.UTF8Encoding($false)))
       [System.IO.File]::WriteAllText($pathFile, $gameUnix + "`n", (New-Object System.Text.UTF8Encoding($false)))
