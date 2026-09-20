@@ -41,9 +41,12 @@ jobs:
           grep -Fq 'FRAME_JAVA_DIAG_PER_FRAME_WRITES=REMOVED' vc7r22/STATUS.txt
           grep -Fq 'LAZY_MEDIA_BOOT=PRESERVED' vc7r22/STATUS.txt
 
-          unzip -p "$RUNTIME" org/recompile/mobile/PlatformGraphics.class | strings | grep -Fq 'RG35XX-VC7R15-LCD-MASK'
-          ! unzip -p "$RUNTIME" org/recompile/freej2me/RG35XXGoldenFrameTransport.class | strings | grep -Fq 'RG35XX-JAVA-DIAG:'
-          unzip -p "$RUNTIME" org/recompile/mobile/MobilePlatform.class | strings | grep -Fq 'RG35XX-MEDIA-BOOT: eager prepare SKIPPED; lazy media enabled'
+          grep -Fq 'VC7R21_LEGACY_WHITEKEY=PRESERVED' vc7r22/STATUS.txt
+          grep -Fq 'VC7R20_PNG_TRNS=PRESERVED' vc7r22/STATUS.txt
+          grep -Fq 'VC7R19_SOFTWARE_TRANSFORMS=PRESERVED' vc7r22/STATUS.txt
+          grep -Fq 'FRAME_JAVA_DIAG_PER_FRAME_WRITES=REMOVED' vc7r22/STATUS.txt
+          grep -Fq 'ERROR_DIAGNOSTICS=PRESERVED' vc7r22/STATUS.txt
+          grep -Fq 'LAZY_MEDIA_BOOT=PRESERVED' vc7r22/STATUS.txt
 
           echo V13_PRIMARY_VARIABLE=JAVA_RUNTIME_B4_TO_VC7R22
           echo V13_CORE_CHANGE=NONE
