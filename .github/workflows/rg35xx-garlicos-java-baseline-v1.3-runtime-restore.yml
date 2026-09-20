@@ -1,0 +1,118 @@
+name: RG35XX GarlicOS Java Baseline v1.3 Runtime Restore
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [rg35xx-garlicos-java-baseline-v1.3-runtime-restore]
+
+jobs:
+  package-runtime-restore:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch exact B4 core checkpoint
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: 34317318204
+          name: rg35xx-verified-clean-b4-checkpoint
+          path: b4
+
+      - name: Fetch exact VC7R22 cleaned Java runtime
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: 34695957733
+          name: rg35xx-vc7r22-hotpath-clean-runtime
+          path: vc7r22
+
+      - name: Verify history identities and runtime regression fixes
+        run: |
+          set -euo pipefail
+          CORE=b4/CFW/retroarch/.retroarch/cores/freej2me_plus_libretro.so
+          RUNTIME=vc7r22/freej2me-lr-vc7r22.jar
+
+          echo '56bb3b972337dd40b342c1881f6599c53eebf66a29f920a1aa2e2839eb29a07c  '"$CORE" | sha256sum -c -
+          echo 'cb8926539749535a53cb4a627e814e198aaa0eba3cce8cac1bb213957e37189b  '"$RUNTIME" | sha256sum -c -
+
+          grep -Fq 'VC7R21_LEGACY_WHITEKEY=PRESERVED' vc7r22/STATUS.txt
+          grep -Fq 'FRAME_JAVA_DIAG_PER_FRAME_WRITES=REMOVED' vc7r22/STATUS.txt
+          grep -Fq 'LAZY_MEDIA_BOOT=PRESERVED' vc7r22/STATUS.txt
+
+          unzip -p "$RUNTIME" org/recompile/mobile/PlatformGraphics.class | strings | grep -Fq 'RG35XX-VC7R15-LCD-MASK'
+          ! unzip -p "$RUNTIME" org/recompile/freej2me/RG35XXGoldenFrameTransport.class | strings | grep -Fq 'RG35XX-JAVA-DIAG:'
+          unzip -p "$RUNTIME" org/recompile/mobile/MobilePlatform.class | strings | grep -Fq 'RG35XX-MEDIA-BOOT: eager prepare SKIPPED; lazy media enabled'
+
+          echo V13_PRIMARY_VARIABLE=JAVA_RUNTIME_B4_TO_VC7R22
+          echo V13_CORE_CHANGE=NONE
+          echo V13_VC7R15_LCD_MASK_GATE=RESTORED
+          echo V13_VC7R22_HOTPATH_CLEANUP=RESTORED
+          echo V13_HISTORY_GATE=PASS
+
+      - name: Package runtime-only installer
+        run: |
+          set -euo pipefail
+          ROOT=out/RG35XX-GARLICOS-JAVA-BASELINE-V1.3
+          PAY="$ROOT/payload"
+          mkdir -p "$PAY"
+
+          cp vc7r22/freej2me-lr-vc7r22.jar "$PAY/freej2me-lr-vc7r22.jar"
+          cp release/garlicos-java-baseline-v1.3/*.ps1 "$ROOT/"
+          cp release/garlicos-java-baseline-v1.3/*.cmd "$ROOT/"
+
+          cat > "$ROOT/README.txt" <<'EOF'
+          RG35XX GARLICOS JAVA BASELINE V1.3 - RUNTIME RESTORE
+
+          Trigger evidence:
+          - current B4 runtime produced per-frame RG35XX-JAVA-DIAG hotpath logging
+          - Real Football produced ~904 complete frame flushes before the captured log ended
+          - media exceptions included LineUnavailableException and NoSuchMethodError getSequencer
+          - historical VC7R15 fixed disabled LCD mask still tinting frames
+          - historical VC7R22 removed frame-transport hotpath diagnostics and preserved lazy media
+
+          PRIMARY VARIABLE:
+          Java runtime only:
+            old B4 runtime e8706495...
+            -> VC7R22 runtime cb892653...
+
+          PRESERVED:
+          B4 native core 56bb3b97... (installer verifies but does not write it)
+          JamVM L eea1b97c...
+          glibj d7abe888...
+          Roms/JAVA unchanged
+          GarlicOS direct JAR launch unchanged
+
+          DEVICE PASS for this combined runtime/core pairing is PENDING.
+          FULL PLATFORM STABLE = NO.
+          EOF
+
+          sha256sum "$PAY/freej2me-lr-vc7r22.jar" > "$PAY/SHA256SUMS.txt"
+          (cd "$PAY" && sha256sum -c SHA256SUMS.txt)
+
+          for f in "$ROOT"/*.ps1; do
+            pwsh -NoProfile -Command "[scriptblock]::Create((Get-Content -Raw '$f')) | Out-Null"
+          done
+
+          (
+            cd "$ROOT"
+            find . -type f ! -name PACKAGE-SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > PACKAGE-SHA256SUMS.txt
+            sha256sum -c PACKAGE-SHA256SUMS.txt
+          )
+
+          echo RUNTIME_SHA256=$(sha256sum "$PAY/freej2me-lr-vc7r22.jar" | awk '{print $1}')
+          echo CORE_REQUIRED_SHA256=56bb3b972337dd40b342c1881f6599c53eebf66a29f920a1aa2e2839eb29a07c
+          echo PRIMARY_VARIABLE=JAVA_RUNTIME_B4_TO_VC7R22
+          echo CORE_CHANGE=NONE
+          echo VC7R15_LCD_MASK_GATE=RESTORED
+          echo VC7R22_HOTPATH_CLEANUP=RESTORED
+          echo GARLICOS_V13_BUILD_GATE=PASS
+          echo DEVICE_PASS=NO_DEVICE_TEST_PENDING
+          echo FULL_PLATFORM_STABLE=NO
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rg35xx-garlicos-java-baseline-v1.3-runtime-restore
+          path: out/RG35XX-GARLICOS-JAVA-BASELINE-V1.3/
+          if-no-files-found: error
