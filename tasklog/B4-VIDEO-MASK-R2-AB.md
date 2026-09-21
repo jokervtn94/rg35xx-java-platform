@@ -157,3 +157,30 @@ The device evidence ZIP contains hashes and logs but no screenshot or explicit v
 
 Next action:
 Obtain a Real Football screenshot from the R2 run (preferably the same splash/logo scene used for R1) or explicit user confirmation of normal colors. Do not open a new code checkpoint before this visual criterion is resolved.
+
+
+## User visual confirmation — 2026-09-21
+
+The user reports that RG35XX screenshots do not faithfully capture the full image actually shown on the physical LCD, so screenshots are not a reliable visual acceptance source for this symptom.
+
+Direct observation on the physical RG35XX display confirms that the previous global green-screen / green-tint symptom is fixed with R2.
+
+Scope of acceptance:
+- green-screen / global green-tint symptom: DEVICE-PASS
+- protected JamVM/glibj/B4 core hashes: preserved
+- R2 runtime hash: verified
+- frame transport/native deinit: passed in collected evidence
+- hard reset/native deadlock: not observed in collected evidence
+- audio: still separate FAIL/unchanged
+- KDTT PNG ICC v4: still separate FAIL/unchanged
+- hot-path diagnostic logging: still pending cleanup
+- full platform STABLE: NO
+
+Important evidence note:
+For this display-color symptom, physical-LCD observation is authoritative over RG35XX screenshot output because the screenshot path does not reproduce the complete on-device image.
+
+Checkpoint classification:
+- BUILD-PASS: YES
+- DEVICE-EVIDENCE: YES
+- DEVICE-PASS: YES, scoped to B4-VIDEO-MASK-R2 green-tint fix
+- STABLE: NO
