@@ -1,6 +1,6 @@
 # B4-RMS-R2-DATA-QUARANTINE-AB
 
-Status: TOOL-BUILD-PENDING / DEVICE-TEST-PENDING / STABLE=NO
+Status: TOOL-BUILD-PASS / DEVICE-TEST-PENDING / STABLE=NO
 Primary variable: ONLY_TWO_ZERO_LENGTH_DRAGON_MANIA_STORES_QUARANTINED
 
 ## Preflight
@@ -36,3 +36,16 @@ PASS signal:
 Screenshot behavior is not a criterion in this RMS A/B because baseline core intentionally retains the known screenshot-strip defect.
 
 STABLE remains NO.
+
+
+## Tool package result — 2026-09-21
+
+- commit: 91f8b01673ba135eca972977f6b97d0cb7e1f376
+- workflow/run: 35564978623
+- artifact: 10624295646
+- artifact SHA256: a8daac0b599c1476d8b288fe91194794aa5242afd418426c56b10dcb9e252df7
+- platform binary change: NONE
+- save mutation scope: exactly two known zero-length Dragon Mania metadata stores plus one payload sibling each
+- rollback: included
+- DEVICE-PASS: pending
+- STABLE: NO
