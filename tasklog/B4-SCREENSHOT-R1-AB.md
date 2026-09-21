@@ -1,6 +1,6 @@
 # B4-SCREENSHOT-R1-AB — Stable native presentation buffer for RG35XX screenshots
 
-Status: SOURCE-CREATED / BUILD-PENDING / DEVICE-TEST-PENDING / STABLE=NO
+Status: BUILD-PASS / DEVICE-TEST-PENDING / STABLE=NO
 Primary variable: NATIVE_PRESENTATION_CANVAS_LIFETIME_ONLY
 
 ## Preflight
@@ -128,3 +128,31 @@ Acceptance:
 
 BUILD-PASS does not imply DEVICE-PASS.
 STABLE remains NO.
+
+
+## Build result — 2026-09-21
+
+- source commit: 63b6392c1344df1303f06a7ad754b2fe5d77abdd
+- workflow/run ID: 35559834092
+- job ID: 106210465825
+- artifact ID: 10622120535
+- artifact digest / ZIP SHA256: d65c5368f28f34f8de8fc5d2cac0f3f2c6bddaab860d0f71ff3e94e64ca41d1e
+- old B4 core SHA256: 56bb3b972337dd40b342c1881f6599c53eebf66a29f920a1aa2e2839eb29a07c
+- new screenshot-R1 core SHA256: f6eb57bd38a021fd1ef1936293492ce21bb02dfc4d06a1a8f5cb7e47016310ca
+- required B4-HOTPATH-R2 runtime SHA256: 4f1f126c2e02b4fbc3b8985d3afd0cbb239d35e0f97512a4eb85f25fcbacbc9c
+- B4_SCREENSHOT_R1_PATCH: PASS
+- PRESENTATION: DOUBLE_BUFFERED
+- core ELF32 / ARM EABI5 / soft-float gates: PASS
+- Golden receiver / RGB565 / B4 lifecycle markers: PRESERVED
+- Java runtime packaged: NO
+- BUILD-PASS: YES
+- DEVICE-PASS: NO / DEVICE-TEST-PENDING
+- STABLE: NO
+
+Exact scope:
+- only native 640x480 presentation-canvas lifetime changed;
+- receiver front/back logical frames are unchanged;
+- Java frame protocol is unchanged;
+- Smart-Fit geometry/scaling is unchanged;
+- B4-HOTPATH-R2 runtime remains the required runtime and is not packaged;
+- JamVM/glibj/audio/font/PNG/game JARs are unchanged.
