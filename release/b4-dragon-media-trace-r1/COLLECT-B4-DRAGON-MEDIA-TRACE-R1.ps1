@@ -10,6 +10,7 @@ New-Item -ItemType Directory -Force -Path $out|Out-Null
 
 foreach($n in @(
  'RG35XX-B4-DRAGON-MEDIA-TRACE-R1-INSTALL-RESULT.txt',
+ 'RG35XX-B4-DRAGON-MEDIA-TRACE-R1-RMS-CURRENT.txt',
  'RG35XX-B4-RMS-R2-QUARANTINE-RESULT.txt',
  'freej2me-java-error.log',
  'freej2me-vc3-early.log',
