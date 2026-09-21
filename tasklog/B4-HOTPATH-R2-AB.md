@@ -129,3 +129,71 @@ Exact scope of change:
 - RG35XX-VIDEO JAVA real error diagnostics remain;
 - B4 native core is not packaged or changed;
 - JamVM/glibj/audio/font/resolution/game JARs are unchanged.
+
+
+## Device result — 2026-09-21 10:58
+
+Evidence package:
+B4-HOTPATH-R2-EVIDENCE-20260921-105839.zip
+
+Direct user observation on the physical RG35XX LCD:
+- previous global green tint remains fully fixed;
+- RG35XX screenshot capture is still incorrect and does not represent the complete physical LCD image.
+
+Installed/protected hashes:
+- JamVM L: eea1b97cebfaca67b69ed365e966d80cdac22d8ff245c7a556137cfb2898ea34
+- glibj.zip: d7abe888d2980329434c30f18c0eec124be1f02284bf9ed28e88d7242a1f2bea
+- B4 core: 56bb3b972337dd40b342c1881f6599c53eebf66a29f920a1aa2e2839eb29a07c
+- B4-HOTPATH-R2 runtime: 4f1f126c2e02b4fbc3b8985d3afd0cbb239d35e0f97512a4eb85f25fcbacbc9c
+
+Installer result: PASS.
+
+Hotpath result:
+- previous Java log lines: 25918
+- current Java log lines: 484
+- total Java-log reduction: 98.13%
+- previous RG35XX-JAVA-DIAG lines: 25840
+- current RG35XX-JAVA-DIAG lines: 12
+- RG35XX-JAVA-DIAG reduction: 99.95% (about 2153x fewer)
+- the 12 surviving RG35XX-JAVA-DIAG lines are bounded startup lifecycle markers only: constructor/LUT/worker enter/worker started, repeated across three sessions
+- RG35XX-VIDEO JAVA error lines: 0
+
+Captured sessions:
+1. Real Football 2015
+   - JAVA_READY
+   - LOAD_GAME / IPC_LOAD_SENT / IPC_RUN_SENT
+   - CORE_DEINIT
+2. NinjaSchool1
+   - JAVA_READY
+   - LOAD_GAME / IPC_LOAD_SENT / IPC_RUN_SENT
+   - CORE_DEINIT
+3. KDTT
+   - JAVA_READY
+   - LOAD_GAME / IPC_LOAD_SENT / IPC_RUN_SENT
+   - CORE_DEINIT
+
+Unrelated existing blockers remain:
+- LineUnavailableException: no Clip available: 2
+- NoSuchMethodError: getSequencer: 1
+- GNU AbstractGraphics2D/renderScanline NullPointerException: 23
+- PNG ICC v4 Wrong major version number:4: 1
+
+These are outside the B4-HOTPATH-R2 primary variable.
+
+Screenshot evidence note:
+The two uploaded 640x480 RG35XX screenshots are mostly black and contain only narrow image strips instead of the physical LCD image. This is now tracked as a separate screenshot-capture defect, not as a regression of the actual display framebuffer. Physical-LCD observation remains authoritative for the green-tint symptom.
+
+Checkpoint classification:
+- BUILD-PASS: YES
+- DEVICE-EVIDENCE: YES
+- DEVICE-PASS: YES, scoped to hotpath cleanup and preservation of the R2 display-color fix
+- STABLE: NO
+
+Reason:
+The primary hotpath objective is verified on device: unbounded per-frame diagnostics fell by 99.95%, protected hashes remained unchanged, three captured sessions reached CORE_DEINIT, no RG35XX-VIDEO JAVA error was emitted, and the device-proven green-tint fix remained intact.
+
+Next blocker candidates remain separate:
+- screenshot capture path
+- audio getClip/getSequencer
+- text/renderScanline NPE
+- PNG ICC v4 compatibility
