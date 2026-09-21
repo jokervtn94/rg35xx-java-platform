@@ -115,7 +115,7 @@ foreach($base in $PreviouslyCorruptStores){
 
     $tagName='tag:'+$idText
     if($propNames -notcontains $tagName){
-      Fail "Recreated RMS metadata missing $tagName for payload $idText: $($fi.Name)"
+      Fail "Recreated RMS metadata missing $tagName for payload ${idText}: $($fi.Name)"
     }
   }
 
