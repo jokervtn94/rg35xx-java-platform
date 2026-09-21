@@ -1,6 +1,6 @@
 # B4-DRAGON-CANONICAL-FRAMEBUFFER-R1-AB
 
-Status: SOURCE-CREATED / BUILD-PENDING / DEVICE-TEST-PENDING / STABLE=NO
+Status: BUILD-PASS / DEVICE-TEST-PENDING / STABLE=NO
 
 Primary variable:
 CURRENT_FRONTBUFFER_OBJECT_AND_DATA_BOUND_TOGETHER_AT_TRANSPORT_REQUEST
@@ -115,3 +115,29 @@ Interpretation:
 
 BUILD-PASS is not DEVICE-PASS.
 STABLE=NO.
+
+
+## Build result — 2026-09-21
+
+- source commit: c922ed49d49d7462654266e01d6c07eae90b0831
+- workflow/run: 35585012992
+- job: 106286210717
+- artifact: 10631972875
+- artifact SHA256: c09350a2829f979e4fa5134f740350ede58f36fd72e6d2d72e63d874789eb4fb
+- runtime SHA256: 9929d9ae95105bf296b1cae9cfe997b301ce1016f2813ad6265da21f13f6fd41
+- required current runtime before install: f4b88b2ee0787a74949732a0d5a754301ba49c707de726fab428930f98d33e92
+- protected core SHA256: 56bb3b972337dd40b342c1881f6599c53eebf66a29f920a1aa2e2839eb29a07c
+- Java classes: 1334
+- Java major 50 gate: PASS
+- canonical framebuffer source gate: PASS
+- canonical framebuffer bytecode marker gate: PASS
+- cached lcdData transport call: ABSENT
+- current frontbuffer object + current data pair: REQUIRED
+- PNG iCCP compatibility preserved: YES
+- Display/Canvas/network/media diagnostics preserved: YES
+- headless image normalization: NOT ADMITTED
+- GameCanvas flush bridge: NOT ADMITTED
+- native core change: NONE
+- BUILD-PASS: YES
+- DEVICE-PASS: NO / DEVICE-TEST-PENDING
+- STABLE: NO
