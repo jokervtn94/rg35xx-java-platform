@@ -242,3 +242,26 @@ Interpretation:
 - if they still freeze and reproduce the same Java-side exceptions, treat the game freeze as a separate compatibility blocker rather than a screenshot-R1 regression.
 
 No new code checkpoint should be opened until this rollback A/B is resolved.
+
+
+## Rollback A/B tool package — 2026-09-21
+
+No runtime/core behavior change is introduced by this package.
+
+Packaging workflow:
+- run: 35560648462
+- artifact: 10622375886
+- artifact SHA256: e7593ac9a9ed44af8a47fcbc8ac6dadb4d7753ef2c8e8ec2b63c6782c78d5012
+
+Included:
+- RESTORE-B4-SCREENSHOT-R1.cmd/.ps1
+- VERIFY-B4-SCREENSHOT-R1-ROLLBACK.cmd/.ps1
+- COLLECT-B4-SCREENSHOT-R1-ROLLBACK.cmd/.ps1
+- README-FIRST.txt
+- SHA256SUMS.txt
+
+Rollback acceptance:
+- core must return to 56bb3b972337dd40b342c1881f6599c53eebf66a29f920a1aa2e2839eb29a07c
+- runtime must remain 4f1f126c2e02b4fbc3b8985d3afd0cbb239d35e0f97512a4eb85f25fcbacbc9c
+- JamVM/glibj must remain protected hashes
+- test dragon-mania-s40v6 and NinjaSchool1 before opening any new code checkpoint.
