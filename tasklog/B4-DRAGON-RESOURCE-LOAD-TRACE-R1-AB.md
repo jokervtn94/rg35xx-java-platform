@@ -1,6 +1,6 @@
 # B4-DRAGON-RESOURCE-LOAD-TRACE-R1-AB
 
-Status: EXPERIMENTAL / BUILD-PENDING / DEVICE-TEST-PENDING / STABLE=NO
+Status: BUILD-PASS / DEVICE-TEST-PENDING / STABLE=NO
 
 Primary variable:
 BOUNDED_RESOURCE_AND_IMAGE_DECODE_OBSERVABILITY_ONLY
@@ -137,3 +137,52 @@ If a reset is required, checkpoint is FAIL and cannot be DEVICE-PASS.
 
 BUILD-PASS is not DEVICE-PASS.
 STABLE=NO.
+
+
+## Build result — 2026-09-21
+
+Source/head commit:
+1fa21f0743dff859d9aa449e6d98a55fe7f4b990
+
+Workflow:
+- name: B4 Dragon Resource Load Trace R1 A-B
+- run: 35590268671
+- job: 106302834637
+- conclusion: SUCCESS
+
+Artifact:
+- id: 10634595413
+- name: b4-dragon-resource-load-trace-r1-ab
+- artifact ZIP SHA256/digest: 86a6b2479a1fe302ea87925fe82ba78b58840c6c2260655f7e022545c750740e
+
+Runtime:
+- freej2me-lr.jar SHA256: ac027e8ac5f5cf0360aa509d966d7f7c40323a595b34fea85003d2c80d0c7c10
+- previous required runtime: fa953382169425b087418a09a6d496c142a86f5e2e5c75af760d0b8d263a41f0
+- Java classes: 1334
+- Java major 50 gate: PASS
+
+Protected native foundation:
+- core SHA256: 56bb3b972337dd40b342c1881f6599c53eebf66a29f920a1aa2e2839eb29a07c
+- core packaged: NO
+- JamVM L expected: eea1b97cebfaca67b69ed365e966d80cdac22d8ff245c7a556137cfb2898ea34
+- glibj expected: d7abe888d2980329434c30f18c0eec124be1f02284bf9ed28e88d7242a1f2bea
+
+Gates:
+- exact current B4 trace source reproduction: PASS
+- resource/image trace source scope gate: PASS
+- Java 6-compatible build: PASS
+- bytecode marker gate: PASS
+- fail-closed installer package: PASS
+- package SHA256SUMS verification: PASS
+
+Exact scope of change:
+- bounded resource read BEGIN/END/FALLBACK diagnostics.
+- bounded PlatformImage decode BEGIN/END diagnostics.
+- no resource-path behavior change.
+- no image decode/normalization behavior change.
+- no GameCanvas/render/framebuffer/native/audio/font/network/RMS behavior change.
+
+BUILD-PASS=YES
+DEVICE-PASS=NO
+DEVICE-TEST-PENDING=YES
+STABLE=NO
