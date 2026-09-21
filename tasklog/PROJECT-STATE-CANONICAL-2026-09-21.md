@@ -2,7 +2,7 @@
 
 Date: 2026-09-21
 Rules: RG35XX Hard Project Rules 1.0.0 / strict
-Active branch: b4-video-mask-r1-ab
+Active branch: b4-screenshot-r1-ab
 Foundation: verified-clean-platform-v1
 Overall: BUILD-PASS / DEVICE-TEST-PENDING / STABLE=NO
 FULL_PLATFORM_STABLE=NO
@@ -15,7 +15,7 @@ GarlicOS -> Roms/JAVA/<game>.jar -> RetroArch -> FreeJ2ME core -> JamVM -> glibj
 Current device hashes:
 - JamVM L: eea1b97cebfaca67b69ed365e966d80cdac22d8ff245c7a556137cfb2898ea34 [DEVICE-PASS / LOCKED]
 - glibj.zip: d7abe888d2980329434c30f18c0eec124be1f02284bf9ed28e88d7242a1f2bea [IMMUTABLE]
-- B4 runtime: e8706495bfaed6a9020b395cc65347c76ca3a3d1bd5a1880aed593379fa9f4ed [BUILD-PASS / INSTALLED]
+- B4-HOTPATH-R2 runtime: 4f1f126c2e02b4fbc3b8985d3afd0cbb239d35e0f97512a4eb85f25fcbacbc9c [DEVICE-PASS / INSTALLED]
 - B4 core: 56bb3b972337dd40b342c1881f6599c53eebf66a29f920a1aa2e2839eb29a07c [BUILD-PASS / INSTALLED]
 - B3 runtime deterministic content identity: 52e809ecf5d23f4c2c0989075270680248299bbc02e7cb8ca665bee002942783
 - Roms/JAVA count in latest evidence: 20
@@ -39,32 +39,46 @@ The current stall/hang report must therefore be split into at least:
 
 ## Current active checkpoint
 
-B4-VIDEO-MASK-R1-AB
+B4-SCREENSHOT-R1-AB
 
 Primary variable:
-PLATFORMGRAPHICS_LCD_MASK_GATE_ONLY
+NATIVE_PRESENTATION_CANVAS_LIFETIME_ONLY
+
+Protected/admitted state entering this checkpoint:
+- B4-VIDEO-MASK-R2 green-tint fix: DEVICE-PASS
+- B4-HOTPATH-R2 cleanup: DEVICE-PASS
+- JamVM L: DEVICE-PASS / locked
+- glibj.zip: immutable
+- current Java runtime SHA256: 4f1f126c2e02b4fbc3b8985d3afd0cbb239d35e0f97512a4eb85f25fcbacbc9c
+- current installed core before R1 screenshot test: 56bb3b972337dd40b342c1881f6599c53eebf66a29f920a1aa2e2839eb29a07c
+
+Screenshot defect evidence:
+- physical LCD is complete and green tint remains fixed;
+- RG35XX screenshot PNGs are 640x480 but capture only narrow horizontal strips;
+- Real Football 240x320 Smart-Fit target is exactly 360x480 at x=140,y=0;
+- capture 1 non-black bbox: x=140..499,y=0..33;
+- capture 2 non-black bbox: x=140..499,y=35..40.
+
+R1 hypothesis:
+the single native 640x480 presentation canvas is reused for the next memset+blit while the frontend screenshot path may still read the previously presented pointer.
+
+R1 change:
+- core-only double-buffered presentation canvas;
+- build complete next frame into alternate buffer;
+- swap before video_cb;
+- do not modify Java runtime, protocol, Smart-Fit, audio, font, PNG or input.
 
 Build:
-- commit 2f8b0304486b9dd0b72f77774e9d73b08cf4bde8
-- run 35526844881
-- job 106120388150
-- artifact 10609718197
-- artifact digest a46bdc1e7dd8b783ac65081acc3ddf26ae4fe9301e1baf18bf0a44843c61e4e7
-- candidate runtime b8d56694887e578a4d3a2e84effab6fe768806486e230b11b582f33a89a60753
-- preserved core 56bb3b972337dd40b342c1881f6599c53eebf66a29f920a1aa2e2839eb29a07c
+- commit: 63b6392c1344df1303f06a7ad754b2fe5d77abdd
+- run: 35559834092
+- job: 106210465825
+- artifact: 10622120535
+- artifact digest: d65c5368f28f34f8de8fc5d2cac0f3f2c6bddaab860d0f71ff3e94e64ca41d1e
+- candidate core: f6eb57bd38a021fd1ef1936293492ce21bb02dfc4d06a1a8f5cb7e47016310ca
+- required runtime: 4f1f126c2e02b4fbc3b8985d3afd0cbb239d35e0f97512a4eb85f25fcbacbc9c
 - BUILD-PASS=YES
 - DEVICE-PASS=NO_DEVICE_TEST_PENDING
 - STABLE=NO
-- AUDIO_CHANGE=NONE
-- HOTPATH_CLEANUP=NOT_INCLUDED
-- CORE_CHANGE=NONE
-
-Historical root cause for green tint:
-renderLCDMask=false but upstream flushGraphics ignored this flag while maskIndex defaulted to 1 and lcdMaskColors[1]=0xFF77EF5A. Historical no-mask fix is DEVICE-PASS for the green-tint symptom.
-
-R1 restores only:
-fastBlit = (!Mobile.renderLCDMask || Mobile.maskIndex == 0) && !Mobile.funLightsEnabled
-and applies the LCD mask in the slow path only when renderLCDMask is true.
 
 ## Evidence hierarchy
 
@@ -235,32 +249,28 @@ Only active assembly workflows/gates define what enters a checkpoint. Historical
 
 ## Next steps
 
-STEP 1 — B4-VIDEO-MASK-R1-AB
-Run same green-tint game on device.
+STEP 1 — B4-SCREENSHOT-R1-AB
+Install the core-only candidate and test Real Football 2015.
 Acceptance:
-- green tint gone
-- render/input still usable
-- no new hard hang/reset
-- JamVM/glibj/core unchanged
-- runtime == b8d56694887e578a4d3a2e84effab6fe768806486e230b11b582f33a89a60753
-- collect evidence
+- physical LCD unchanged
+- green tint remains fixed
+- input/normal exit remain good
+- at least 3 screenshots contain the complete 360x480 Smart-Fit viewport, not scanline strips
+- runtime/JamVM/glibj remain unchanged
+- core == f6eb57bd38a021fd1ef1936293492ce21bb02dfc4d06a1a8f5cb7e47016310ca
 
-STEP 2 — B4-HOTPATH-R2-AB
-Only after Step 1.
-Primary variable: unbounded render/frame diagnostics only.
-Reuse VC7R22 cleanup concept, preserve real error diagnostics, no audio/core/font changes.
+STEP 2 — AUDIO
+Only after screenshot checkpoint is resolved.
+Isolate getSequencer/getClip and compare against exact Golden/CN worker-ring history.
 
-STEP 3 — AUDIO
-Isolate getSequencer/getClip and compare against exact Golden/CN worker-ring history. Check exact accepted binary recovery before large reconstruction.
-
-STEP 4 — TEXT/FONT
+STEP 3 — TEXT/FONT
 Address AbstractGraphics2D/renderScanline NPE separately. No glibj/media bundle.
 
-STEP 5 — SELECTIVE COMPATIBILITY RE-ADMISSION
-Dynamic resolution, PNG, GameCanvas, PlatformImage fixes only when current real-game evidence requires them.
+STEP 4 — PNG ICC
+Re-admit PNG iCCP compatibility only as its own A/B if current KDTT evidence still requires it.
 
-STEP 6 — FINAL REAL-GAME ACCEPTANCE
-Multiple games, long-duration sessions, normal exit/relaunch, audio/input/RMS/resolution, no unbounded logs, final SHA manifest. Only then consider STABLE.
+STEP 5 — FINAL REAL-GAME ACCEPTANCE
+Multiple games, long-duration sessions, normal exit/relaunch, audio/input/RMS/resolution, bounded logs and final SHA manifest. Only then consider STABLE.
 
 ## Final rule
 
