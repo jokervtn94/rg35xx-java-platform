@@ -1,6 +1,7 @@
 param([Parameter(Mandatory=$false, Position=0)][string]$SdRoot)
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
+# v3: force all Get-Content/Select-String results to arrays before reading .Count.
 
 if([string]::IsNullOrWhiteSpace($SdRoot)){$SdRoot=Read-Host 'Nhap ky tu o SD RG35XX'}
 $SdRoot=$SdRoot.Trim().Trim('"')
@@ -49,14 +50,14 @@ $summary=@(
  'COMPARE_AGAINST_SCREENSHOT_R1=YES'
 )
 if(Test-Path -LiteralPath $java -PathType Leaf){
- $lines=Get-Content -LiteralPath $java
- $summary+=("JAVA_LOG_LINES="+$lines.Count)
- $summary+=("STRING_INDEX_OOB="+(($lines|Select-String -SimpleMatch 'StringIndexOutOfBoundsException').Count))
- $summary+=("RMS_LOAD_RECORD_STORE="+(($lines|Select-String -SimpleMatch 'RecordStore.loadRecordStore').Count))
- $summary+=("RMS_OPEN_RECORD_STORE="+(($lines|Select-String -SimpleMatch 'RecordStore.openRecordStore').Count))
- $summary+=("RG35XX_VIDEO_JAVA_ERROR="+(($lines|Select-String -SimpleMatch 'RG35XX-VIDEO JAVA').Count))
- $summary+=("GETSEQUENCER_ERRORS="+(($lines|Select-String -SimpleMatch 'NoSuchMethodError: getSequencer').Count))
- $summary+=("CLIP_ERRORS="+(($lines|Select-String -SimpleMatch 'LineUnavailableException: no Clip available').Count))
+ $lines=@(Get-Content -LiteralPath $java)
+ $summary+=("JAVA_LOG_LINES="+@($lines).Count)
+ $summary+=("STRING_INDEX_OOB="+@($lines|Select-String -SimpleMatch 'StringIndexOutOfBoundsException').Count)
+ $summary+=("RMS_LOAD_RECORD_STORE="+@($lines|Select-String -SimpleMatch 'RecordStore.loadRecordStore').Count)
+ $summary+=("RMS_OPEN_RECORD_STORE="+@($lines|Select-String -SimpleMatch 'RecordStore.openRecordStore').Count)
+ $summary+=("RG35XX_VIDEO_JAVA_ERROR="+@($lines|Select-String -SimpleMatch 'RG35XX-VIDEO JAVA').Count)
+ $summary+=("GETSEQUENCER_ERRORS="+@($lines|Select-String -SimpleMatch 'NoSuchMethodError: getSequencer').Count)
+ $summary+=("CLIP_ERRORS="+@($lines|Select-String -SimpleMatch 'LineUnavailableException: no Clip available').Count)
 }
 $summary+=@(
  'TEST_GAME_1=dragon-mania-s40v6',
