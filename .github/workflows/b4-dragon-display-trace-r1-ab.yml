@@ -128,6 +128,7 @@ jobs:
                   or n.startswith('javax/microedition/lcdui/Display' + chr(36))
                   or n.startswith('javax/microedition/lcdui/Canvas' + chr(36))
                   or n.startswith('org/recompile/mobile/MobilePlatform' + chr(36))
+                  or n.startswith('org/recompile/freej2me/Libretro' + chr(36))
               )
           required=[
               b'RG35XX-R13E-EVENT',
