@@ -3,7 +3,7 @@ name: B4 Dragon Media Trace R1 A-B
 on:
   workflow_dispatch:
   push:
-    branches: [b4-dragon-media-trace-r1-v3]
+    branches: [b4-dragon-media-trace-r1-v4]
     paths:
       - '.github/workflows/b4-dragon-media-trace-r1-ab.yml'
       - 'scripts/b4_apply_nomask_green_tint_fix.py'
