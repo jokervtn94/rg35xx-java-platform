@@ -299,3 +299,29 @@ v2 package:
 - artifact SHA256: 5bfb395b9a439bb0a45d0e7b210200f8dfa25a147d11d256a02854ee37995e78
 
 No platform behavior change is introduced by this v2 tooling fix.
+
+
+## Rollback collector v2 failure and v3 fix — 2026-09-21
+
+Observed user failure:
+PropertyNotFoundException: The property 'Count' cannot be found on this object.
+
+Root cause:
+With Set-StrictMode -Version Latest, PowerShell pipeline expressions can return a scalar object when only one line/match exists. The v2 collector assumed array semantics and accessed .Count directly on:
+- Get-Content result
+- Select-String result
+
+This is a collector/tooling defect only. It does not change SD runtime/core state.
+
+v3 fix:
+- wrap Get-Content in @(...)
+- wrap every Select-String pipeline in @(...)
+- Count is therefore valid for 0, 1, or many results under StrictMode
+
+v3 package:
+- commit: 717c32fc9167f5531559bdc079601caf39e52475
+- workflow/run: 35563968692
+- artifact: 10623163325
+- artifact SHA256: b2f62c7d07e125455cd7088ac13794b25f017775e71a43c8f8c51379d5400556
+
+No restore/reinstall is required merely because collector v2 failed. If rollback verification already passed and device tests were already performed, use only the v3 collector against the same SD state.
