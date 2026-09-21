@@ -1,6 +1,6 @@
 # B4-DRAGON-RESOURCE-LOAD-TRACE-R1-AB
 
-Status: BUILD-PASS / DEVICE-TEST-PENDING / STABLE=NO
+Status: DEVICE-EVIDENCE / DIAGNOSTIC-PASS / STABLE=NO
 
 Primary variable:
 BOUNDED_RESOURCE_AND_IMAGE_DECODE_OBSERVABILITY_ONLY
@@ -186,3 +186,69 @@ BUILD-PASS=YES
 DEVICE-PASS=NO
 DEVICE-TEST-PENDING=YES
 STABLE=NO
+
+
+## Device result — 2026-09-21 21:59
+
+Evidence:
+B4-DRAGON-RESOURCE-LOAD-TRACE-R1-EVIDENCE-20260921-215929.zip
+
+Protected/install hashes:
+- JamVM L: eea1b97cebfaca67b69ed365e966d80cdac22d8ff245c7a556137cfb2898ea34
+- glibj.zip: d7abe888d2980329434c30f18c0eec124be1f02284bf9ed28e88d7242a1f2bea
+- protected B4 core: 56bb3b972337dd40b342c1881f6599c53eebf66a29f920a1aa2e2839eb29a07c
+- runtime: ac027e8ac5f5cf0360aa509d966d7f7c40323a595b34fea85003d2c80d0c7c10
+- RMS_PRECONDITION=PASS
+- total Dragon metadata=7
+- prior recreated store remains non-zero and structurally valid
+
+Observed:
+- RESOURCE_TRACE_LINES=36
+- RESOURCE_STREAM_BEGIN=18
+- RESOURCE_STREAM_END=18
+- RESOURCE_STREAM_FALLBACK=0
+- RESOURCE_BYTES_BEGIN/END/FAIL=0
+- IMAGE_DECODE_LINES=0
+- GAMECANVAS flush remains active
+- FRAME_BIND_MISMATCH_TRUE=0
+- PNG_ICCP_STRIP=0
+- NETWORK_TRACE_LINES=0
+- MEDIA_TRACE_LINES=0
+- StringIndexOutOfBoundsException=0
+- NullPointerException=0
+
+Resource timing:
+- /5: 157495 bytes, four reads, 171..222 ms each
+- /2: 37457 bytes, two reads, 34..35 ms
+- /16: 123441 bytes, twelve reads, 88..124 ms each
+- all 18 reads complete
+- min elapsed=34 ms
+- max elapsed=222 ms
+- total observed resource-read elapsed≈1934 ms
+- no unmatched BEGIN
+- no long-running/stuck read
+
+Thread/state correlation:
+- the first /5 reads occur on Thread-1 before the source framebuffer changes from c67c4940 to 8545ff47.
+- /2 is read on Thread-1 and EventProcessing-Thread.
+- /16 is then read repeatedly on Thread-1.
+- after the final /16 END, Thread-1 continues entering serviceRepaints and the EventProcessing thread continues paint/flush activity.
+- the source framebuffer remains 8545ff47; no later game-content transition occurs.
+- input down/up still traverses the full Java delivery path.
+
+Interpretation:
+- MIDlet resource I/O is not blocked.
+- observed resource preload completes successfully.
+- no PlatformImage/ImageIO decode occurs at the traced startup boundary.
+- the numeric resources /5, /2, /16 are therefore not evidence of a blocked LCDUI image decode path.
+- resource/image preload is DEPRIORITIZED as the logo blocker.
+- Dragon compatibility remains FAIL.
+- STABLE=NO.
+
+Next checkpoint:
+B4-DRAGON-TIMEBASE-TRACE-R1-AB
+
+Rationale:
+Pinned MIDletLoader rewrites game calls to System.currentTimeMillis(), System.nanoTime(), Thread.sleep() and Thread.yield() through MIDletEnhancements. The game thread remains alive after resource preload but does not advance content/state, making the virtual time/sleep boundary the next minimal observable dependency.
+
+No timing behavior change is authorized yet.
