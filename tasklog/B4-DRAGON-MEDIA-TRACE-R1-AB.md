@@ -1,6 +1,6 @@
 # B4-DRAGON-MEDIA-TRACE-R1-AB
 
-Status: SOURCE-CREATED / BUILD-PENDING / DEVICE-TEST-PENDING / STABLE=NO
+Status: BUILD-PASS / DEVICE-TRACE-PENDING / STABLE=NO
 Primary variable: BOUNDED_MEDIA_LIFECYCLE_OBSERVABILITY_ONLY
 
 ## CURRENT_SYMPTOM
@@ -89,3 +89,26 @@ Diagnostic acceptance:
 
 BUILD-PASS does not imply DEVICE-PASS.
 STABLE remains NO.
+
+
+## Build result — 2026-09-21
+
+- source commit: 1734e73ca220ba2aa6a93cf512034e48a4c22950
+- workflow/run ID: 35568159431
+- job ID: 106234015560
+- artifact ID: 10625430940
+- artifact digest / ZIP SHA256: e43fea8475b21761d1dcc9e01f50401f0246fd1c7964b6cccd557f0f57ea2033
+- runtime SHA256: fb719a9b841c7314c963b7f99959edf16f83b351f2c0272f1106046f67b9d462
+- required protected core SHA256: 56bb3b972337dd40b342c1881f6599c53eebf66a29f920a1aa2e2839eb29a07c
+- Java class count: 1334
+- Java major 50 gate: PASS
+- bounded media trace source gate: PASS
+- media trace inner-class bytecode gate: PASS
+- current Video Mask R2 source: reproduced/preserved
+- current Hotpath R2 source: reproduced/preserved
+- media behavior change: NONE
+- RMS behavior change: NONE
+- native core packaged: NO
+- BUILD-PASS: YES
+- DEVICE-PASS: NO / DEVICE-TRACE-PENDING
+- STABLE: NO
