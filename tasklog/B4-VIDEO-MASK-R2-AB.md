@@ -1,6 +1,6 @@
 # B4-VIDEO-MASK-R2-AB — RG35XX software LCD-mask hard bypass
 
-Status: SOURCE-CREATED / BUILD-PENDING / DEVICE-TEST-PENDING
+Status: BUILD-PASS / DEVICE-TEST-PENDING / STABLE=NO
 Primary variable: RG35XX_SOFTWARE_LCD_MASK_BYPASS_ONLY
 
 ## Preflight
@@ -87,3 +87,29 @@ Acceptance:
 
 BUILD-PASS does not imply DEVICE-PASS.
 STABLE remains NO.
+
+
+## Build result — 2026-09-21
+
+- Source commit: 224faae000543133b3576f098add84a313aa3a43
+- Workflow run: 35556841888
+- Job: 106201988774
+- Artifact: 10620302602
+- Artifact digest / ZIP SHA256: 6fa45472599962a905b66e1f919e003bcfa22f7f5d20ee52993fa53bef3352bd
+- Runtime SHA256: 90c4d9455e82ca8df5dce667c0a836356dfc69f8b756b6cafe1ea9ac0b9bc1ee
+- Preserved B4 core SHA256: 56bb3b972337dd40b342c1881f6599c53eebf66a29f920a1aa2e2839eb29a07c
+- Java class count: 1334
+- Java major: 50 gate PASS
+- R1 source reproduction gate: PASS
+- R2 software-mask bypass gate: PASS
+- Package SHA manifest: PASS
+- BUILD-PASS: YES
+- DEVICE-PASS: NO / DEVICE-TEST-PENDING
+- STABLE: NO
+
+Exact scope:
+- PlatformGraphics.flushGraphics() no longer uses lcdMaskColors[] to alter RG35XX framebuffer pixels.
+- Mobile.renderLCDMask state/API behavior is preserved.
+- FunLights overlay behavior is preserved.
+- Native core, audio, font, resolution, JamVM L and GNU Classpath are unchanged.
+- Hot-path cleanup is not included.
