@@ -1,6 +1,6 @@
 # B4-DRAGON-NETWORK-TRACE-R1-AB
 
-Status: SOURCE-CREATED / BUILD-PENDING / DEVICE-TRACE-PENDING / STABLE=NO
+Status: BUILD-PASS / DEVICE-TRACE-PENDING / STABLE=NO
 
 Primary variable:
 BOUNDED_NETWORK_DEPENDENCY_OBSERVABILITY_ONLY
@@ -81,3 +81,27 @@ No native core change.
 
 BUILD-PASS is not DEVICE-PASS.
 STABLE=NO.
+
+
+## Build result — 2026-09-21
+
+- source commit: 6bfeb289a7443a0d201f29ac933a1406fe416a4a
+- workflow/run: 35576780017
+- job: 106260296452
+- artifact: 10628707308
+- artifact SHA256: 252cd07d9c01cdff69996936465d2d90dd8973f26382f4b23fe8b39c210b192b
+- runtime SHA256: e92ac328772f0ed5aa359435b37a30aa58f5b490714b290ea2e5bb19b91dd8a0
+- required current runtime before install: c6f2c8c71fdb120dac1b8193952d0839dc4cd6877ba8c2e120f606cfb087faab
+- protected core SHA256: 56bb3b972337dd40b342c1881f6599c53eebf66a29f920a1aa2e2839eb29a07c
+- Java classes: 1334
+- Java major 50 gate: PASS
+- network trace source gate: PASS
+- network trace bytecode gate: PASS
+- Display/Canvas trace preserved: YES
+- media trace preserved: YES
+- network behavior change: NONE
+- RMS behavior change: NONE
+- native core change: NONE
+- BUILD-PASS: YES
+- DEVICE-PASS: NO / DEVICE-TRACE-PENDING
+- STABLE: NO
