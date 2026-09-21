@@ -112,3 +112,38 @@ STABLE remains NO.
 - BUILD-PASS: YES
 - DEVICE-PASS: NO / DEVICE-TRACE-PENDING
 - STABLE: NO
+
+
+## Installer v1 quarantine-marker failure and v2 fix — 2026-09-21
+
+Observed failure:
+B4-DRAGON-MEDIA-TRACE-R1 INSTALL FAIL: RMS R2 quarantine result missing.
+
+Evidence reconciliation:
+The previously collected B4-RMS-R2-QUARANTINE-EVIDENCE-20260921-131214.zip contains:
+- RG35XX-B4-RMS-R2-QUARANTINE-RESULT.txt
+- RESULT=PASS
+- quarantine folder: H:\RG35XX-JAVA-BACKUP\b4-rms-r2-quarantine-20260921-131022
+- quarantined metadata count: 2
+- quarantined payload count: 2
+- remaining Dragon Mania metadata count: 6
+- protected platform hashes unchanged
+
+Therefore the v1 install refusal was caused by depending on a single root marker file that is no longer present, not by evidence that quarantine was undone.
+
+v2 installer quarantine verification:
+1. use root RESULT=PASS marker when present;
+2. otherwise locate the single active Dragon Mania RMS directory;
+3. require both known zero-length metadata stores to be absent;
+4. require exactly six Dragon Mania metadata stores to remain;
+5. locate newest b4-rms-r2-quarantine-* backup with MANIFEST.csv;
+6. require manifest to contain exactly 2 META + 2 PAYLOAD rows for the known store basenames;
+7. hash-verify all four backup files before allowing trace runtime installation.
+
+v2 package:
+- commit: 2804c0605637e712c254ef130f0b6f4a2511e939
+- workflow/run: 35569712213
+- artifact: 10625318983
+- artifact SHA256: 8c97bf5dce4ae8874dd8447663bd2b005f062639e9722435259d6bf84c9c6078
+
+No media/core/RMS behavior change is introduced by this installer-tooling fix.
