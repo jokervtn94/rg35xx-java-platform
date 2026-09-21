@@ -44,7 +44,7 @@ new_exit = '''\t\t\tif(rg35xxLog)\n\t\t\t{\n\t\t\t\tSystem.err.println("RG35XX-B
 s = once(s, old_exit, new_exit, 'PlatformGraphics flush exit')
 
 # MobilePlatform: bounded high-level bridge evidence, including current LCD frontbuffer identity.
-field_anchor = '\tprivate Runnable postDraw = null;\n'
+field_anchor = '\tpublic static Runnable painter, postDraw;\n'
 if m.count(field_anchor) != 1:
     raise SystemExit('B4 GAMECANVAS FLUSH R1 FAIL MobilePlatform field anchor count=%d' % m.count(field_anchor))
 m = m.replace(
