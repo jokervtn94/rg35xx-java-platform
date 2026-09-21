@@ -241,3 +241,77 @@ v4 build:
 - BUILD-PASS: YES
 - DEVICE-TRACE: PENDING
 - STABLE: NO
+
+
+## Device trace result — 2026-09-21 14:50
+
+Evidence package:
+B4-DRAGON-MEDIA-TRACE-R1-EVIDENCE-20260921-145020.zip
+SHA256: 60c1e845c6f6db61f62958d2ff421bfd4913993fbbac2815ed9430fb94eb45f7
+
+Installed state:
+- runtime SHA256: 0c2f8658e7786cd3f97285c94c609623464cb8f04311b359bfd0a95a7109f11e
+- protected core SHA256: 56bb3b972337dd40b342c1881f6599c53eebf66a29f920a1aa2e2839eb29a07c
+- JamVM L SHA256: eea1b97cebfaca67b69ed365e966d80cdac22d8ff245c7a556137cfb2898ea34
+- glibj SHA256: d7abe888d2980329434c30f18c0eec124be1f02284bf9ed28e88d7242a1f2bea
+
+RMS state at install:
+- RMS_PRECONDITION=PASS
+- Dragon Mania metadata count: 7
+- ffffffff9c61314e09vhjlzvf1zxn0.rms recreated as structurally valid non-zero metadata
+  - length: 387
+  - SHA256: b51f52e3639dfa6bfa09b550f4b281356d6b6b1a9c8a57885d36961160906c74
+  - ids count: 0
+- ffffffff9c61314e14u2hvcf9vbmxvy2tozxc_ absent
+- installer RMS mutation: NONE
+
+Device observation:
+- dragon-mania-s40v6 remains visually frozen at the Gameloft startup screen.
+
+Native early log contains three sequential test sessions:
+1. dragon-mania-s40v6
+2. NinjaSchool1
+3. 240x320-zombie_infection-s60
+
+Important session correlation:
+- Dragon Mania is the first Java session. Its Java stderr contains only FrameTransport startup and the expected "eager prepare SKIPPED" marker.
+- Dragon Mania emits ZERO B4 media lifecycle trace records before the user exits the frozen logo screen.
+- Therefore Dragon Mania does not reach Manager.createPlayer / Player.realize / prefetch / start in the observed freeze window.
+
+Later sessions must not be attributed to Dragon Mania:
+- NinjaSchool1 is the second session and emits 23 repeated GNU java2d AbstractGraphics2D.renderScanline NullPointerExceptions while drawing text from a.paint -> Canvas.repaintRequest -> Display.processEvents.
+- 240x320-zombie_infection-s60 is the third session and emits the seven B4 media trace records:
+  - MANAGER_CREATE_STREAM_BEGIN audio/midi
+  - MANAGER_CREATE_STREAM_DONE
+  - PLAYER_REALIZE_BEGIN/DONE
+  - PLAYER_PREFETCH_BEGIN
+  - MIDI_PREFETCH_BEGIN exclusive0=null
+  - MIDI_GETSEQUENCER_BEGIN
+  followed by NoSuchMethodError: getSequencer on Thread-1.
+- The getSequencer error is therefore a Zombie Infection compatibility blocker, not evidence for the Dragon Mania logo freeze.
+
+Media trace conclusion for Dragon Mania:
+- MEDIA-CANDIDATE-AS-LOGO-FREEZE-CAUSE: DEPRIORITIZED / NOT REACHED
+- RMS StringIndexOutOfBounds storm: remains absent
+- Dragon logo freeze: persists
+- MEDIA TRACE checkpoint: DEVICE-EVIDENCE / DIAGNOSTIC PASS
+- game compatibility DEVICE-PASS: NO
+- STABLE: NO
+
+Next checkpoint:
+B4-DRAGON-DISPLAY-TRACE-R1-AB
+
+Primary variable:
+BOUNDED_DISPLAY_CANVAS_GAME_LOOP_OBSERVABILITY_ONLY
+
+Rationale:
+The next trace must localize whether Dragon Mania:
+- enters Display.setCurrent;
+- reaches Canvas showNotify;
+- requests/dispatches repaints;
+- enters/exits the game paint callback;
+- flushes frames;
+- blocks in serviceRepaints/paintLock;
+- receives/delivers input while the logo is displayed.
+
+No media/RMS/core behavior change is allowed.
