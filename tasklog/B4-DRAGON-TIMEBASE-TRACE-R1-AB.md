@@ -1,6 +1,6 @@
 # B4-DRAGON-TIMEBASE-TRACE-R1-AB
 
-Status: EXPERIMENTAL / BUILD-PENDING / DEVICE-TEST-PENDING / STABLE=NO
+Status: BUILD-PASS / DEVICE-TEST-PENDING / STABLE=NO
 
 Primary variable:
 BOUNDED_GAME_VIRTUAL_TIME_AND_SLEEP_OBSERVABILITY_ONLY
@@ -140,3 +140,53 @@ If reset is required, checkpoint is FAIL and cannot be DEVICE-PASS.
 
 BUILD-PASS is not DEVICE-PASS.
 STABLE=NO.
+
+
+## Build result — 2026-09-21
+
+Source/head commit used for artifact:
+bac82906ede5f2f48ba5af22dd8a3e29564c1c49
+
+Workflow:
+- name: B4 Dragon Timebase Trace R1 A-B
+- run: 35616903674
+- job: 106389806707
+- conclusion: SUCCESS
+
+Artifact:
+- id: 10645809647
+- name: b4-dragon-timebase-trace-r1-ab
+- artifact ZIP SHA256/digest: 01141124cf8a22eb10872f0be0508eb898dcd3f09ea4c56cafb960e334c80e8c
+
+Runtime:
+- freej2me-lr.jar SHA256: 86213649b09ce6fca7c55bd14131384a6f8eac07b9896c8a40d9fa1aa5538675
+- required previous runtime: ac027e8ac5f5cf0360aa509d966d7f7c40323a595b34fea85003d2c80d0c7c10
+- Java classes: 1334
+- Java major 50 gate: PASS
+
+Protected foundation:
+- core SHA256: 56bb3b972337dd40b342c1881f6599c53eebf66a29f920a1aa2e2839eb29a07c
+- core packaged: NO
+- JamVM L expected: eea1b97cebfaca67b69ed365e966d80cdac22d8ff245c7a556137cfb2898ea34
+- glibj expected: d7abe888d2980329434c30f18c0eec124be1f02284bf9ed28e88d7242a1f2bea
+
+Gates:
+- exact current B4 traced source reproduction: PASS
+- resource/image diagnostics preserved: PASS
+- timebase source scope gate: PASS
+- Java 6-compatible build: PASS
+- bytecode marker gate: PASS
+- fail-closed runtime-only installer: PASS
+- packaged SHA256SUMS verification outside CI: PASS
+
+Exact behavioral scope:
+- currentTimeMillis arithmetic unchanged
+- nanoTime arithmetic unchanged
+- sleep/drawSleep behavior unchanged
+- yieldOverride behavior unchanged
+- no native/core/audio/font/network/RMS/render behavior change
+
+BUILD-PASS=YES
+DEVICE-PASS=NO
+DEVICE-TEST-PENDING=YES
+STABLE=NO
