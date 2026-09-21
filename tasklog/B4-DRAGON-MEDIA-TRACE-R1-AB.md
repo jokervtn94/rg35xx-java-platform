@@ -184,3 +184,26 @@ v3 build:
 - BUILD-PASS: YES
 - DEVICE-TRACE: PENDING
 - STABLE: NO
+
+
+## Active-store reappearance evidence — 2026-09-21
+
+Observed installer v3 refusal:
+Known corrupt Dragon Mania store files are active again:
+ffffffff9c61314e09vhjlzvf1zxn0.rms
+
+Interpretation:
+- the known Dragon Mania RMS store basename has reappeared in the active freej2me/rms directory after the earlier quarantine/device run;
+- this is useful evidence that Dragon Mania can recreate at least one of the previously quarantined store paths;
+- the installer correctly refused to proceed because it is read-only with respect to RMS state;
+- the current evidence does NOT yet establish the recreated file length/content.
+
+Required next step:
+Run ENSURE-B4-DRAGON-RMS-PRECONDITION.cmd before the media-trace installer.
+
+ENSURE semantics:
+- if the recreated metadata is exactly the previously proven zero-length/empty-SHA state, it is backed up and re-quarantined;
+- if it is non-zero or otherwise different, ENSURE fails closed and preserves it for analysis;
+- only after ENSURE PASS may INSTALL-B4-DRAGON-MEDIA-TRACE-R1.cmd be run.
+
+No new platform code checkpoint is opened for this event.
