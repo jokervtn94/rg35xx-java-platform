@@ -1,6 +1,6 @@
 # B4-DRAGON-PNG-ICCP-R1-AB
 
-Status: SOURCE-CREATED / BUILD-PENDING / DEVICE-TEST-PENDING / STABLE=NO
+Status: BUILD-PASS / DEVICE-TEST-PENDING / STABLE=NO
 
 Primary variable:
 PNG_ICCP_COMPATIBILITY_ONLY
@@ -109,3 +109,26 @@ Interpretation:
 
 BUILD-PASS is not DEVICE-PASS.
 STABLE=NO.
+
+
+## Build result — 2026-09-21
+
+- source commit: b87c4cbfd0a5dbbb97ee020494884502bd8eace1
+- workflow/run: 35577843290
+- job: 106263603953
+- artifact: 10628563274
+- artifact SHA256: ccc4bea976f2e10720237707eaa19327c420ae892fdae040d77747ba57835f31
+- runtime SHA256: f4b88b2ee0787a74949732a0d5a754301ba49c707de726fab428930f98d33e92
+- required current runtime before install: e92ac328772f0ed5aa359435b37a30aa58f5b490714b290ea2e5bb19b91dd8a0
+- protected core SHA256: 56bb3b972337dd40b342c1881f6599c53eebf66a29f920a1aa2e2839eb29a07c
+- Java classes: 1334
+- Java major 50 gate: PASS
+- PNG iCCP source gate: PASS
+- PNG iCCP bytecode marker gate: PASS
+- network/display/media diagnostics preserved: YES
+- headless image normalization: NOT ADMITTED
+- GameCanvas/frontbuffer historical fix: NOT ADMITTED
+- audio/font/native-core behavior: unchanged
+- BUILD-PASS: YES
+- DEVICE-PASS: NO / DEVICE-TEST-PENDING
+- STABLE: NO
