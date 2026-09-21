@@ -37,10 +37,11 @@ if((Sha $glibj) -ne $ExpectedGlibj){Fail 'glibj precondition failed'}
 if((Sha $core) -ne $ExpectedCore){Fail 'Protected B4 core precondition failed'}
 if((Sha $current) -ne $ExpectedOldRuntime){Fail "B4-HOTPATH-R2 runtime precondition failed actual=$(Sha $current)"}
 
-# Validate the active RMS precondition only.
-# The separate ENSURE tool owns any reversible requarantine operation.
-# Installer itself must never mutate RMS save data.
-$BadStores=@(
+# Validate current Dragon Mania RMS state without assuming that a basename
+# which was corrupt earlier must remain absent forever. The game may legitimately
+# recreate the same store. Corruption is defined by the file state/content, not
+# by the basename alone.
+$PreviouslyCorruptStores=@(
  'ffffffff9c61314e09vhjlzvf1zxn0',
  'ffffffff9c61314e14u2hvcf9vbmxvy2tozxc_'
 )
@@ -55,35 +56,90 @@ $dragonDirs=@(
   }
 )
 if(@($dragonDirs).Count -ne 1){
-  Fail "Expected exactly one active Dragon Mania RMS directory, found $(@($dragonDirs).Count). Run ENSURE-B4-DRAGON-RMS-PRECONDITION.cmd first."
+  Fail "Expected exactly one active Dragon Mania RMS directory, found $(@($dragonDirs).Count)"
 }
 $Dragon=$dragonDirs[0].FullName
 
-$activeBad=@()
-foreach($base in $BadStores){
-  $activeBad += @(
-    Get-ChildItem -LiteralPath $Dragon -File -ErrorAction Stop |
-    Where-Object { $_.Name -like ($base+'.*') }
-  )
-}
-$remainingMeta=@(Get-ChildItem -LiteralPath $Dragon -File -Filter '*.rms' -ErrorAction Stop)
+$rmsState=@()
+foreach($base in $PreviouslyCorruptStores){
+  $meta=Join-Path $Dragon ($base+'.rms')
 
-if(@($activeBad).Count -ne 0){
-  $names=(@($activeBad | ForEach-Object {$_.Name}) -join ',')
-  Fail "Known corrupt Dragon Mania store files are active again: $names. Run ENSURE-B4-DRAGON-RMS-PRECONDITION.cmd first."
-}
-if(@($remainingMeta).Count -ne 6){
-  Fail "Dragon Mania metadata count=$(@($remainingMeta).Count), expected 6 after quarantine. Run ENSURE-B4-DRAGON-RMS-PRECONDITION.cmd for exact diagnostics."
-}
-
-$pre=Join-Path $Sd 'RG35XX-B4-DRAGON-MEDIA-TRACE-R1-RMS-PRECONDITION.txt'
-$quarantineSource='DIRECT_ACTIVE_STATE'
-if(Test-Path -LiteralPath $pre -PathType Leaf){
-  $pt=Get-Content -LiteralPath $pre -Raw
-  if($pt -match 'RESULT=PASS'){
-    $quarantineSource='ENSURE_PASS_AND_DIRECT_ACTIVE_STATE'
+  if(!(Test-Path -LiteralPath $meta -PathType Leaf)){
+    $rmsState += "$base=ABSENT"
+    continue
   }
+
+  $fi=Get-Item -LiteralPath $meta
+  if($fi.Length -eq 0){
+    Fail "Dragon Mania RMS store is currently ZERO-LENGTH again: $($fi.Name). Run ENSURE-B4-DRAGON-RMS-PRECONDITION.cmd to back up and quarantine only this proven corrupt state."
+  }
+
+  # A recreated non-zero store is not considered corrupt merely because it has
+  # the same basename. Validate the current metadata against the format emitted
+  # by pinned RecordStore.saveRecordStore().
+  $raw=[System.IO.File]::ReadAllText($meta)
+  $trim=$raw.Trim()
+  if($trim.Length -lt 2 -or !$trim.StartsWith('{') -or !$trim.EndsWith('}')){
+    Fail "Recreated RMS metadata has invalid outer JSON braces: $($fi.Name) length=$($fi.Length)"
+  }
+
+  try {
+    $obj=$trim | ConvertFrom-Json
+  } catch {
+    Fail "Recreated RMS metadata is not valid JSON: $($fi.Name) error=$($_.Exception.Message)"
+  }
+
+  $propNames=@($obj.PSObject.Properties | ForEach-Object {$_.Name})
+  foreach($req in @('rmsVersion','recordName','baseName','ownerName','compatibleLastId','ids')){
+    if($propNames -notcontains $req){
+      Fail "Recreated RMS metadata missing required key '$req': $($fi.Name)"
+    }
+  }
+
+  if([string]$obj.baseName -ne $base){
+    Fail "Recreated RMS baseName mismatch: file=$base metadata=$([string]$obj.baseName)"
+  }
+
+  $ids=@($obj.ids)
+  foreach($id in $ids){
+    if($null -eq $id){ continue }
+    $idText=[string]$id
+    if($idText -notmatch '^[0-9]+$'){
+      Fail "Recreated RMS ids contains non-integer value '$idText': $($fi.Name)"
+    }
+
+    $payload=Join-Path $Dragon ($base+'.'+$idText)
+    if(!(Test-Path -LiteralPath $payload -PathType Leaf)){
+      Fail "Recreated RMS metadata references missing payload: $([IO.Path]::GetFileName($payload))"
+    }
+
+    $tagName='tag:'+$idText
+    if($propNames -notcontains $tagName){
+      Fail "Recreated RMS metadata missing $tagName for payload $idText: $($fi.Name)"
+    }
+  }
+
+  $rmsState += "$base=RECREATED_NONZERO_STRUCTURALLY_VALID(length=$($fi.Length),sha=$(Sha $meta),ids=$(@($ids).Count))"
 }
+
+# Do not require exactly six stores anymore: the game is allowed to recreate
+# one or both stores. The two prior zero-byte instances were corrupt; the
+# basenames themselves are not forbidden.
+$currentMeta=@(Get-ChildItem -LiteralPath $Dragon -File -Filter '*.rms' -ErrorAction Stop)
+$rmsPrecondition='CURRENT_STATE_STRUCTURALLY_VALID'
+$rmsState += "TOTAL_DRAGON_METADATA=$(@($currentMeta).Count)"
+
+$rmsReport=Join-Path $Sd 'RG35XX-B4-DRAGON-MEDIA-TRACE-R1-RMS-CURRENT.txt'
+@(
+  'CHECKPOINT=B4-DRAGON-MEDIA-TRACE-R1-AB',
+  'RMS_PRECONDITION=PASS',
+  "TIME=$((Get-Date).ToString('s'))",
+  "DRAGON_RMS_DIR=$($Dragon.Substring($Sd.Length))",
+  "TOTAL_DRAGON_METADATA=$(@($currentMeta).Count)",
+  $rmsState,
+  'RMS_MUTATION_BY_INSTALLER=NONE',
+  'STABLE=NO'
+) | Set-Content -LiteralPath $rmsReport -Encoding ASCII
 
 $targets=@(
  'BIOS\freej2me-lr.jar',
@@ -145,7 +201,8 @@ try {
   'PRIMARY_VARIABLE=BOUNDED_MEDIA_LIFECYCLE_OBSERVABILITY_ONLY',
   'MEDIA_BEHAVIOR_CHANGE=NONE',
   'RMS_QUARANTINE_REQUIRED=YES',
-  "RMS_QUARANTINE_VERIFY_SOURCE=$quarantineSource",
+  "RMS_PRECONDITION=$rmsPrecondition",
+  "RMS_CURRENT_REPORT=$rmsReport",
   'CORE_CHANGE=NONE',
   'STABLE=NO'
  ) | Set-Content -LiteralPath (Join-Path $Sd 'RG35XX-B4-DRAGON-MEDIA-TRACE-R1-INSTALL-RESULT.txt') -Encoding ASCII
