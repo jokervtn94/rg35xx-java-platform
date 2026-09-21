@@ -325,3 +325,54 @@ v3 package:
 - artifact SHA256: b2f62c7d07e125455cd7088ac13794b25f017775e71a43c8f8c51379d5400556
 
 No restore/reinstall is required merely because collector v2 failed. If rollback verification already passed and device tests were already performed, use only the v3 collector against the same SD state.
+
+
+## Rollback A/B result — 2026-09-21 12:17
+
+Evidence package:
+B4-SCREENSHOT-R1-ROLLBACK-EVIDENCE-20260921-121753.zip
+
+Rollback verification:
+- RESULT=PASS
+- Screenshot-R1 core present: NO
+- baseline core restored: YES
+- core SHA256: 56bb3b972337dd40b342c1881f6599c53eebf66a29f920a1aa2e2839eb29a07c
+- runtime SHA256: 4f1f126c2e02b4fbc3b8985d3afd0cbb239d35e0f97512a4eb85f25fcbacbc9c
+- JamVM/glibj protected hashes preserved
+
+Observed after rollback:
+- dragon-mania-s40v6 still freezes visually after Run according to user observation.
+- screenshot strip defect returns.
+- uploaded dragon screenshot is 640x480 but non-black content is only x=140..499, y=0..36 (37 rows), matching the old single-presentation-buffer strip pattern.
+- therefore Screenshot-R1 was causally improving screenshot capture; rollback reintroduces the old capture defect as expected.
+
+Java log after rollback:
+- total lines: 4699
+- session 1 (Real Football): 20 lines; no RMS StringIndexOutOfBoundsException; existing audio errors only (Clip x2, getSequencer x1)
+- session 2 (dragon-mania-s40v6): 4679 lines
+- StringIndexOutOfBoundsException: 246
+- RecordStore.loadRecordStore in stack: 246
+- RecordStore.openRecordStore in stack: 246
+- RG35XX-VIDEO JAVA errors: 0
+
+Native early log after rollback:
+- Real Football reaches JAVA_READY, LOAD, RUN, CORE_DEINIT.
+- dragon-mania-s40v6 reaches JAVA_READY, LOAD, RUN, CORE_DEINIT.
+- rollback baseline core does not include Screenshot-R1 FIRST_FRAME/PRESENT instrumentation, so absence of those markers is expected.
+
+A/B conclusion:
+- The dragon-mania visual freeze persists with Screenshot-R1 fully removed.
+- Therefore the freeze observed for dragon-mania is NOT caused by Screenshot-R1 double-buffer presentation.
+- The screenshot strip defect does return when Screenshot-R1 is removed, supporting the Screenshot-R1 presentation-lifetime hypothesis.
+- General compatibility across every other game is not claimed because the uploaded rollback evidence contains Real Football and dragon-mania sessions only; NinjaSchool1 was not captured in this evidence.
+
+Screenshot checkpoint classification:
+- Screenshot-R1 target effect: CAUSAL A/B PASS for Real Football screenshot-strip symptom.
+- Screenshot-R1 causing dragon-mania freeze: DISPROVEN by rollback A/B.
+- General screenshot DEVICE-PASS across games: not yet claimed.
+- STABLE: NO.
+
+Next blocker:
+The strongest active failure is now RMS loading in dragon-mania. The exact pinned RecordStore implementation removes outer JSON braces with:
+jsonString.substring(1, jsonString.length() - 1)
+without first validating that the metadata file contains at least two characters. The repeated StringIndexOutOfBoundsException is therefore consistent with an empty/truncated/otherwise too-short .rms metadata file, but the current evidence does not include the actual RMS files. A read-only RMS storage audit is required before changing runtime behavior.
