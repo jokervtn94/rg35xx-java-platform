@@ -49,3 +49,57 @@ STABLE remains NO.
 - rollback: included
 - DEVICE-PASS: pending
 - STABLE: NO
+
+
+## Device result — 2026-09-21 13:12
+
+Evidence:
+B4-RMS-R2-QUARANTINE-EVIDENCE-20260921-131214.zip
+
+Quarantine result:
+- RESULT=PASS
+- 2 zero-length Dragon Mania metadata files quarantined
+- 2 matching payload siblings quarantined
+- 6 other Dragon Mania metadata stores preserved
+- platform/runtime/core unchanged
+
+Protected hashes:
+- JamVM L: eea1b97cebfaca67b69ed365e966d80cdac22d8ff245c7a556137cfb2898ea34
+- glibj.zip: d7abe888d2980329434c30f18c0eec124be1f02284bf9ed28e88d7242a1f2bea
+- baseline core: 56bb3b972337dd40b342c1881f6599c53eebf66a29f920a1aa2e2839eb29a07c
+- B4-HOTPATH-R2 runtime: 4f1f126c2e02b4fbc3b8985d3afd0cbb239d35e0f97512a4eb85f25fcbacbc9c
+
+Java result after quarantine:
+- total Java log lines: 5
+- StringIndexOutOfBoundsException: 0
+- RecordStore.loadRecordStore stack hits: 0
+- RecordStore.openRecordStore stack hits: 0
+- RG35XX-VIDEO JAVA errors: 0
+
+Native early lifecycle:
+- JAVA_READY
+- LOAD_GAME dragon-mania-s40v6.jar
+- IPC_LOAD_SENT
+- IPC_RUN_SENT
+- CORE_DEINIT
+
+Direct device observation:
+- Dragon Mania still freezes at the Gameloft logo.
+
+Conclusion:
+- the two zero-length RMS files were a real corruption/error source;
+- quarantining them causally removes the repeated RecordStore exception storm;
+- removing that RMS exception storm is NOT sufficient to resolve the Gameloft-logo freeze;
+- therefore RMS corruption is one blocker but not the sole/root cause of the current visual freeze.
+
+Checkpoint classification:
+- DATA-QUARANTINE ACTION: PASS
+- RMS exception storm removal: DEVICE-PASS for that symptom
+- Dragon Mania logo freeze: FAIL / persists
+- full checkpoint DEVICE-PASS for game compatibility: NO
+- STABLE: NO
+
+Next action:
+Keep the corrupt stores quarantined so they no longer pollute diagnostics.
+Do not modify more RMS behavior yet.
+Use a bounded trace-only media lifecycle checkpoint, because historical device evidence shows this same Dragon Mania JAR previously progressed through thousands of frames while native media/audio PLAY/END events were active, whereas current clean B4 deliberately contains only lazy boot suppression and no admitted native media implementation.
