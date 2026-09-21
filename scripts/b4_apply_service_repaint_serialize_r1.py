@@ -83,12 +83,12 @@ new_finally = """		finally
 once(old_finally, new_finally, "paint completion generation")
 
 pat = re.compile(
-    r'(?s)(?P<indent>\\s*)rg35xxR13HLog\\("SERVICE_WAIT_BEGIN", rg35xxR13HLocalService, 1\\);'
-    r'\\s*paintLock\\.wait\\(1000\\);'
-    r'\\s*rg35xxR13HLog\\("SERVICE_WAIT_WAKE", rg35xxR13HLocalService, needsRepaint \\? 1 : 0\\);'
-    r'\\s*// If it timed out and still needs repaint, force a repaint'
-    r'.*?if \\(needsRepaint && isShown\\(\\)\\)'
-    r'\\s*\\{\\s*repaintRequest\\(\\);\\s*break;\\s*\\}'
+    r'(?s)(?P<indent>\s*)rg35xxR13HLog\("SERVICE_WAIT_BEGIN", rg35xxR13HLocalService, 1\);'
+    r'\s*paintLock\.wait\(1000\);'
+    r'\s*rg35xxR13HLog\("SERVICE_WAIT_WAKE", rg35xxR13HLocalService, needsRepaint \? 1 : 0\);'
+    r'\s*// If it timed out and still needs repaint, force a repaint'
+    r'.*?if \(needsRepaint && isShown\(\)\)'
+    r'\s*\{\s*repaintRequest\(\);\s*break;\s*\}'
 )
 m = list(pat.finditer(s))
 if len(m) != 1:
