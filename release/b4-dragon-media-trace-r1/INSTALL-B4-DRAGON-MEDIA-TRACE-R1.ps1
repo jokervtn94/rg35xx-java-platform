@@ -37,9 +37,89 @@ if((Sha $glibj) -ne $ExpectedGlibj){Fail 'glibj precondition failed'}
 if((Sha $core) -ne $ExpectedCore){Fail 'Protected B4 core precondition failed'}
 if((Sha $current) -ne $ExpectedOldRuntime){Fail "B4-HOTPATH-R2 runtime precondition failed actual=$(Sha $current)"}
 
+# Validate RMS-R2 quarantine state. Prefer the result marker, but do not
+# depend on that single root file because it may have been collected/removed
+# or the SD may have been mounted under a different drive letter.
+$BadStores=@(
+ 'ffffffff9c61314e09vhjlzvf1zxn0',
+ 'ffffffff9c61314e14u2hvcf9vbmxvy2tozxc_'
+)
+$quarantineVerified=$false
+$quarantineSource=$null
+
 $q=Join-Path $Sd 'RG35XX-B4-RMS-R2-QUARANTINE-RESULT.txt'
-if(!(Test-Path -LiteralPath $q -PathType Leaf)){Fail 'RMS R2 quarantine result missing; keep the two corrupt Dragon Mania stores quarantined for this trace'}
-if(-not ((Get-Content -LiteralPath $q -Raw) -match 'RESULT=PASS')){Fail 'RMS R2 quarantine result is not PASS'}
+if(Test-Path -LiteralPath $q -PathType Leaf){
+  $qt=Get-Content -LiteralPath $q -Raw
+  if($qt -match 'RESULT=PASS'){
+    $quarantineVerified=$true
+    $quarantineSource='RESULT_FILE'
+  }
+}
+
+# Direct state verification fallback:
+# - exactly one Dragon Mania RMS directory
+# - both known corrupt metadata files are absent from active RMS
+# - exactly six metadata stores remain
+# - a quarantine backup manifest exists for the same two store basenames
+if(-not $quarantineVerified){
+  $dragonDirs=@(
+    Get-ChildItem -LiteralPath $Sd -Directory -Recurse -ErrorAction SilentlyContinue |
+    Where-Object {
+      $_.Name -eq 'Dragon Mania' -and
+      $_.Parent -and $_.Parent.Name -eq 'rms' -and
+      $_.Parent.Parent -and $_.Parent.Parent.Name -eq 'freej2me'
+    }
+  )
+  if(@($dragonDirs).Count -eq 1){
+    $Dragon=$dragonDirs[0].FullName
+    $badActive=@()
+    foreach($base in $BadStores){
+      $p=Join-Path $Dragon ($base+'.rms')
+      if(Test-Path -LiteralPath $p -PathType Leaf){$badActive+=$p}
+    }
+    $remainingMeta=@(Get-ChildItem -LiteralPath $Dragon -File -Filter '*.rms' -ErrorAction SilentlyContinue)
+
+    if(@($badActive).Count -eq 0 -and @($remainingMeta).Count -eq 6){
+      $backupRoot=Join-Path $Sd 'RG35XX-JAVA-BACKUP'
+      if(Test-Path -LiteralPath $backupRoot -PathType Container){
+        $candidates=@(
+          Get-ChildItem -LiteralPath $backupRoot -Directory -Filter 'b4-rms-r2-quarantine-*' -ErrorAction SilentlyContinue |
+          Sort-Object Name -Descending
+        )
+        foreach($dir in $candidates){
+          $manifest=Join-Path $dir.FullName 'MANIFEST.csv'
+          if(!(Test-Path -LiteralPath $manifest -PathType Leaf)){continue}
+          try{$rows=@(Import-Csv -LiteralPath $manifest)}catch{continue}
+          if(@($rows).Count -ne 4){continue}
+
+          $metaRows=@($rows | Where-Object {$_.Kind -eq 'META'})
+          $payloadRows=@($rows | Where-Object {$_.Kind -eq 'PAYLOAD'})
+          if(@($metaRows).Count -ne 2 -or @($payloadRows).Count -ne 2){continue}
+
+          $bases=@($metaRows | ForEach-Object {$_.Base} | Sort-Object)
+          $expectedBases=@($BadStores | Sort-Object)
+          if(($bases -join '|') -ne ($expectedBases -join '|')){continue}
+
+          $filesOk=$true
+          foreach($r in $rows){
+            $bp=Join-Path $dir.FullName $r.BackupRelativePath
+            if(!(Test-Path -LiteralPath $bp -PathType Leaf)){$filesOk=$false;break}
+            if((Sha $bp) -ne $r.SHA256.ToLowerInvariant()){$filesOk=$false;break}
+          }
+          if($filesOk){
+            $quarantineVerified=$true
+            $quarantineSource='DIRECT_STATE_AND_MANIFEST'
+            break
+          }
+        }
+      }
+    }
+  }
+}
+
+if(-not $quarantineVerified){
+  Fail 'RMS R2 quarantine cannot be verified: expected both corrupt Dragon Mania stores absent, six metadata stores remaining, and a valid 4-file quarantine manifest'
+}
 
 $targets=@(
  'BIOS\freej2me-lr.jar',
@@ -101,6 +181,7 @@ try {
   'PRIMARY_VARIABLE=BOUNDED_MEDIA_LIFECYCLE_OBSERVABILITY_ONLY',
   'MEDIA_BEHAVIOR_CHANGE=NONE',
   'RMS_QUARANTINE_REQUIRED=YES',
+  "RMS_QUARANTINE_VERIFY_SOURCE=$quarantineSource",
   'CORE_CHANGE=NONE',
   'STABLE=NO'
  ) | Set-Content -LiteralPath (Join-Path $Sd 'RG35XX-B4-DRAGON-MEDIA-TRACE-R1-INSTALL-RESULT.txt') -Encoding ASCII
