@@ -1,0 +1,59 @@
+name: B4 RMS R2 Data Quarantine Tools
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [b4-rms-r2-data-quarantine-ab]
+    paths:
+      - '.github/workflows/b4-rms-r2-data-quarantine.yml'
+      - 'release/b4-rms-r2-data-quarantine/**'
+      - 'tasklog/B4-RMS-R2-DATA-QUARANTINE-AB.md'
+
+jobs:
+  package:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Package reversible RMS data quarantine
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/rms-r2"
+          mkdir -p "$OUT"
+          cp release/b4-rms-r2-data-quarantine/* "$OUT/"
+
+          pwsh -NoProfile -Command "[scriptblock]::Create((Get-Content -Raw '$OUT/QUARANTINE-B4-RMS-R2.ps1')) | Out-Null"
+          pwsh -NoProfile -Command "[scriptblock]::Create((Get-Content -Raw '$OUT/RESTORE-B4-RMS-R2.ps1')) | Out-Null"
+          pwsh -NoProfile -Command "[scriptblock]::Create((Get-Content -Raw '$OUT/COLLECT-B4-RMS-R2.ps1')) | Out-Null"
+
+          cat > "$OUT/README-FIRST.txt" <<'EOF'
+          B4-RMS-R2-DATA-QUARANTINE-AB
+
+          This tool does NOT change Java runtime/core/JamVM/glibj.
+
+          It only quarantines the two proven zero-length Dragon Mania RMS metadata
+          stores and their exact one payload sibling each. All four files are first
+          copied into a hash-verified backup under RG35XX-JAVA-BACKUP.
+
+          Test:
+          1. Run QUARANTINE-B4-RMS-R2.cmd
+          2. Boot RG35XX
+          3. Run dragon-mania-s40v6 only
+          4. Observe whether the game continues animating after Run
+          5. Exit normally if possible
+          6. Run COLLECT-B4-RMS-R2.cmd
+          7. Send B4-RMS-R2-QUARANTINE-EVIDENCE-*.zip
+
+          To undo:
+          RESTORE-B4-RMS-R2.cmd
+
+          Screenshot correctness is NOT a criterion of this RMS test.
+          STABLE=NO.
+          EOF
+
+          (cd "$OUT" && sha256sum * > SHA256SUMS.txt)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: b4-rms-r2-data-quarantine-tools
+          path: ${{ runner.temp }}/rms-r2/
+          if-no-files-found: error
