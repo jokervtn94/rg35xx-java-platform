@@ -1,6 +1,6 @@
 # B4-RMS-R1-AUDIT — Read-only RMS metadata audit
 
-Status: AUDIT-TOOL-BUILD-PENDING / DEVICE-AUDIT-PENDING / STABLE=NO
+Status: AUDIT-TOOL-BUILD-PASS / DEVICE-AUDIT-PENDING / STABLE=NO
 Primary variable: NONE — READ-ONLY EVIDENCE COLLECTION
 
 ## Preflight
@@ -87,3 +87,15 @@ If one or more .rms files are zero-length/too-short/unbraced, correlate them wit
 If all metadata files are structurally normal, do not assume corruption; proceed to a trace-only RecordStore checkpoint.
 
 STABLE remains NO.
+
+
+## Audit tool build result — 2026-09-21
+
+- source commit: 121e83b25b6a213c57e85bfe5f051dd048bd2de4
+- workflow/run: 35564341657
+- artifact: 10622879884
+- artifact SHA256: ab21cc0ad0353a5b6d0eb9b02e5256a7fdec9d9b051166ac5acd12c40a971c33
+- mode: READ_ONLY
+- platform files installed: NONE
+- SD mutation: NONE
+- STABLE: NO
