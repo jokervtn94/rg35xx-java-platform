@@ -147,3 +147,40 @@ v2 package:
 - artifact SHA256: 8c97bf5dce4ae8874dd8447663bd2b005f062639e9722435259d6bf84c9c6078
 
 No media/core/RMS behavior change is introduced by this installer-tooling fix.
+
+
+## Installer v2 quarantine-state failure and v3 precondition design — 2026-09-21
+
+Observed v2 failure:
+RMS R2 quarantine cannot be verified: expected both corrupt Dragon Mania stores absent, six metadata stores remaining, and a valid 4-file quarantine manifest.
+
+Interpretation:
+The v2 message conflated active RMS state and historical backup discoverability. It did not identify which condition failed. Because Dragon Mania had been launched after the original quarantine, the proven zero-length stores may have been recreated; however this was not yet directly observed, so no assumption is promoted to fact.
+
+v3 separates concerns:
+
+ENSURE-B4-DRAGON-RMS-PRECONDITION:
+- validates protected baseline hashes;
+- locates only the active Dragon Mania freej2me/rms directory, excluding RG35XX-JAVA-BACKUP;
+- if the two known store basenames are already absent and exactly six metadata files remain: PASS with no mutation;
+- if known store files have reappeared, only zero-length metadata with the exact empty-file SHA256 may be re-quarantined;
+- any non-zero metadata at the known basenames causes fail-closed refusal;
+- all active files selected for requarantine are copied and hash-verified before removal;
+- final state requires zero active files for the two known basenames and exactly six Dragon Mania metadata files.
+
+Media Trace installer v3:
+- never mutates RMS;
+- validates only the exact active RMS state after ENSURE;
+- no longer depends on a historical marker or manifest to install the trace runtime.
+
+v3 build:
+- source commit: c4ede37820de262666d9f7249bf3d449c4106320
+- workflow/run: 35570953754
+- job: 106242287269
+- artifact: 10624929780
+- artifact SHA256: 84a9432082ca24916333ba2f670a23b69ad55b72c0f938015c46cfdd6f80075d
+- runtime SHA256: 44d6bbf894c6f83476f8ff89403ab3f5c205fc1f221dcc174d4f5a7039f91733
+- required core: 56bb3b972337dd40b342c1881f6599c53eebf66a29f920a1aa2e2839eb29a07c
+- BUILD-PASS: YES
+- DEVICE-TRACE: PENDING
+- STABLE: NO
