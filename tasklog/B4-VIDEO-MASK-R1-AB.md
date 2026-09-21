@@ -50,3 +50,27 @@ Do not apply VC7R22 hot-path cleanup in this checkpoint. The current device also
 5. No new hard hang/reset regression is introduced.
 
 BUILD-PASS does not imply DEVICE-PASS.
+
+
+## Device result — 2026-09-21
+
+R1 was installed and tested on a real RG35XX.
+
+Observed:
+- installer result PASS;
+- protected JamVM L / glibj / B4 core hashes remained correct;
+- R1 runtime hash matched b8d56694887e578a4d3a2e84effab6fe768806486e230b11b582f33a89a60753;
+- Real Football 2015 still showed the global green LCD-mask symptom;
+- captured sessions continued producing frames and reached native deinit; no hard native deadlock was established by this evidence.
+
+Classification:
+- BUILD-PASS: YES
+- DEVICE-EVIDENCE: YES
+- DEVICE-PASS: NO
+- Result: FAIL for the green-tint acceptance criterion
+- STABLE: NO
+
+R1 must not be promoted to the baseline as a DEVICE-PASS checkpoint.
+
+Follow-up:
+B4-VIDEO-MASK-R2-AB tests one narrower RG35XX policy change: preserve light API state but never apply lcdMaskColors[] to the actual RG35XX game framebuffer.
