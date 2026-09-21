@@ -132,3 +132,83 @@ STABLE=NO.
 - BUILD-PASS: YES
 - DEVICE-PASS: NO / DEVICE-TEST-PENDING
 - STABLE: NO
+
+
+## Device evidence — 2026-09-21 16:31
+
+Evidence package:
+B4-DRAGON-PNG-ICCP-R1-EVIDENCE-20260921-163104.zip
+
+Evidence ZIP contents:
+- DEVICE-HASHES.txt
+- freej2me-java-error.log
+- freej2me-vc3-early.log
+- PNG-ICCP-SUMMARY.txt
+- install result
+- RMS current-state report
+
+Installed state:
+- JamVM L: eea1b97cebfaca67b69ed365e966d80cdac22d8ff245c7a556137cfb2898ea34
+- glibj: d7abe888d2980329434c30f18c0eec124be1f02284bf9ed28e88d7242a1f2bea
+- protected B4 core: 56bb3b972337dd40b342c1881f6599c53eebf66a29f920a1aa2e2839eb29a07c
+- PNG-iCCP runtime: f4b88b2ee0787a74949732a0d5a754301ba49c707de726fab428930f98d33e92
+- installer RESULT=PASS
+
+RMS current state:
+- RMS_PRECONDITION=PASS
+- Dragon metadata count=7
+- ffffffff9c61314e09vhjlzvf1zxn0.rms remains 387-byte structurally-valid recreated metadata
+- second previously corrupt basename remains absent
+- no RMS mutation by checkpoint
+
+Java summary:
+- total lines=709
+- PNG_ICCP_STRIP=0
+- PNG_WRONG_MAJOR_VERSION=0
+- NETWORK_TRACE_LINES=0
+- MEDIA_TRACE_LINES=0
+- DISPLAY_EVENT_TRACE_LINES=124
+- CANVAS_LOOP_TRACE_LINES=575
+- STRING_INDEX_OOB=0
+- NULL_POINTER_EXCEPTION=0
+
+Session correlation:
+- native early log contains two sequential launches of the same dragon-mania-s40v6.jar
+- Java log contains two corresponding FrameTransport sessions
+- session 1: 347 lines; 0 PNG iCCP markers; 0 network; 0 media; 0 exceptions
+- session 2: 362 lines; 0 PNG iCCP markers; 0 network; 0 media; 0 exceptions
+- both sessions continue Canvas repaint/paint/flush/service activity through the bounded seq=120 sample
+- second session also delivers one action key down/up completely through the input callback path
+
+Conclusion:
+- PNG iCCP sanitizer is installed but NOT EXERCISED in either observed Dragon session.
+- Therefore missing iCCP compatibility does not explain the currently observed startup stall in this evidence.
+- The historical iCCP compatibility remains a valid independent compatibility fix, but this checkpoint provides no causal signal for Dragon's current logo behavior.
+- No current Java exception explains the stall.
+
+Checkpoint classification:
+- B4-DRAGON-PNG-ICCP-R1: DEVICE-EVIDENCE / NO-EXERCISE
+- iCCP as current logo-stall cause: DEPRIORITIZED
+- Dragon compatibility DEVICE-PASS: NO
+- STABLE: NO
+
+Next evidence-driven candidate:
+Canonical framebuffer binding.
+
+Current B4 Golden transport still passes the cached Libretro.lcdData int[] while separately fetching the current MobilePlatform LCD frontbuffer object as the frame lock. Historical VC7R11 device evidence proved that after JAR load these can diverge: PlatformGraphics can render into the current frontbuffer backing int[] while transport serializes a stale cached int[].
+
+Historical VC7R12 corrected exactly that ownership mismatch by fetching the current PlatformImage and its backing int[] together for each transport request.
+
+This directly matches the present symptom class:
+- Canvas/game paint remains alive;
+- flush calls complete;
+- input remains alive;
+- visible content can nevertheless remain stale if transport serializes an old backing array.
+
+Next checkpoint:
+B4-DRAGON-CANONICAL-FRAMEBUFFER-R1-AB
+
+Primary variable:
+CURRENT_FRONTBUFFER_OBJECT_AND_DATA_BOUND_TOGETHER_AT_TRANSPORT_REQUEST
+
+Do not add headless image normalization yet. Historical VC7R10 already showed varied decoded ARGB while presentation still remained wrong, and current evidence is more directly consistent with the later VC7R11/VC7R12 ownership finding.
