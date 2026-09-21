@@ -156,3 +156,89 @@ Exact scope:
 - Smart-Fit geometry/scaling is unchanged;
 - B4-HOTPATH-R2 runtime remains the required runtime and is not packaged;
 - JamVM/glibj/audio/font/PNG/game JARs are unchanged.
+
+
+## Device evidence — 2026-09-21 11:15
+
+Evidence package:
+B4-SCREENSHOT-R1-EVIDENCE-20260921-111537.zip
+
+Installed/protected hashes:
+- JamVM L: eea1b97cebfaca67b69ed365e966d80cdac22d8ff245c7a556137cfb2898ea34
+- glibj.zip: d7abe888d2980329434c30f18c0eec124be1f02284bf9ed28e88d7242a1f2bea
+- B4-HOTPATH-R2 runtime: 4f1f126c2e02b4fbc3b8985d3afd0cbb239d35e0f97512a4eb85f25fcbacbc9c
+- B4-SCREENSHOT-R1 core: f6eb57bd38a021fd1ef1936293492ce21bb02dfc4d06a1a8f5cb7e47016310ca
+
+Installer result: PASS.
+
+### Screenshot target result
+
+Real Football 2015 screenshot 1:
+- PNG: 640x480
+- non-black bbox: x=140..499, y=0..479
+- visible width: 360 px
+- visible rows: 480
+- this matches the expected full Smart-Fit viewport 360x480 at x=140,y=0.
+
+Real Football 2015 screenshot 2:
+- PNG: 640x480
+- non-black bbox: x=140..499, y=35..473
+- visible width: 360 px
+- the previous narrow scanline-strip failure is not present.
+
+Direct user report:
+- Real Football continues to run normally.
+- Other games are reported to freeze visually immediately after Run.
+
+### Native lifecycle evidence
+
+Real Football:
+- FIRST_FRAME_HEADER 240x320
+- FIRST_FRAME_PUBLISH generation=1
+- FIRST_PRESENT 360x480 at x=140,y=0
+- CORE_DEINIT
+- VIDEO_DEINIT generation=1490 presented=1490
+
+dragon-mania-s40v6:
+- FIRST_FRAME_HEADER 240x320
+- FIRST_FRAME_PUBLISH generation=1
+- FIRST_PRESENT 360x480 at x=140,y=0
+- CORE_DEINIT
+- VIDEO_DEINIT generation=221 presented=221
+
+There is no RG35XX-VIDEO JAVA error in the captured Java log.
+
+### Java-side evidence for dragon-mania session
+
+The second Java session contains:
+- StringIndexOutOfBoundsException: 102 occurrences
+- stack path repeatedly reaches javax.microedition.rms.RecordStore.loadRecordStore / openRecordStore
+- no RG35XX-VIDEO JAVA error
+
+This means the currently captured dragon-mania freeze cannot yet be attributed solely to the new native double-buffer core: native publish/present generations continue to advance, while the game is simultaneously hitting a repeated Java RMS exception.
+
+However, the user's broader report that multiple other games visually freeze is a regression signal and blocks promotion.
+
+### Classification
+
+- screenshot strip symptom on Real Football: TARGET-IMPROVED / DEVICE-EVIDENCE
+- full checkpoint DEVICE-PASS: NO
+- compatibility regression report: UNRESOLVED
+- STABLE: NO
+
+Do not promote R1.
+
+### Required next A/B
+
+Use the built-in R1 rollback with no other changes:
+1. run RESTORE-B4-SCREENSHOT-R1.cmd;
+2. confirm core returns exactly to 56bb3b972337dd40b342c1881f6599c53eebf66a29f920a1aa2e2839eb29a07c;
+3. keep runtime 4f1f126c2e02b4fbc3b8985d3afd0cbb239d35e0f97512a4eb85f25fcbacbc9c unchanged;
+4. rerun the same non-Real-Football game(s), preferably dragon-mania-s40v6 plus NinjaSchool1;
+5. collect logs after each.
+
+Interpretation:
+- if the same games resume normally after rollback, reject R1 as a native presentation regression;
+- if they still freeze and reproduce the same Java-side exceptions, treat the game freeze as a separate compatibility blocker rather than a screenshot-R1 regression.
+
+No new code checkpoint should be opened until this rollback A/B is resolved.
