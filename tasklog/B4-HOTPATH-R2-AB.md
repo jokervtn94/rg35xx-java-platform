@@ -1,6 +1,6 @@
 # B4-HOTPATH-R2-AB — Bound RG35XX Java frame diagnostics
 
-Status: SOURCE-CREATED / BUILD-PENDING / DEVICE-TEST-PENDING / STABLE=NO
+Status: BUILD-PASS / DEVICE-TEST-PENDING / STABLE=NO
 Primary variable: UNBOUNDED_FRAME_TRANSPORT_DIAGNOSTICS_ONLY
 
 ## Preflight
@@ -102,3 +102,30 @@ Acceptance:
 
 BUILD-PASS does not imply DEVICE-PASS.
 STABLE remains NO.
+
+
+## Build result — 2026-09-21
+
+- commit SHA: 523fdd083e7528e0414f66600a1aa1b91a69b298
+- workflow/run ID: 35558796926
+- job ID: 106207537663
+- artifact ID: 10620359213
+- artifact digest / ZIP SHA256: 6eb3101ab7c088f881ff06df42c42371133cf21a84b9a4081ba0ba99bc503c15
+- runtime SHA256: 4f1f126c2e02b4fbc3b8985d3afd0cbb239d35e0f97512a4eb85f25fcbacbc9c
+- preserved core SHA256: 56bb3b972337dd40b342c1881f6599c53eebf66a29f920a1aa2e2839eb29a07c
+- Java class count: 1334
+- Java major 50 gate: PASS
+- HOT_PRINTS_REMOVED: 13
+- BOUNDED_LIFECYCLE_DIAGNOSTICS_PRESERVED: 7
+- ERROR_DIAGNOSTICS: PRESERVED
+- BUILD-PASS: YES
+- DEVICE-PASS: NO / DEVICE-TEST-PENDING
+- STABLE: NO
+
+Exact scope of change:
+- current B4+R2 PlatformGraphics behavior is reproduced unchanged;
+- only unbounded RG35XXGoldenFrameTransport request/frame stderr diagnostics are removed;
+- bounded lifecycle diagnostics remain;
+- RG35XX-VIDEO JAVA real error diagnostics remain;
+- B4 native core is not packaged or changed;
+- JamVM/glibj/audio/font/resolution/game JARs are unchanged.
