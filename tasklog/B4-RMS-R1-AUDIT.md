@@ -1,6 +1,6 @@
 # B4-RMS-R1-AUDIT — Read-only RMS metadata audit
 
-Status: AUDIT-TOOL-BUILD-PASS / DEVICE-AUDIT-PENDING / STABLE=NO
+Status: DEVICE-AUDIT-PASS / ROOT-CAUSE-EVIDENCE / STABLE=NO
 Primary variable: NONE — READ-ONLY EVIDENCE COLLECTION
 
 ## Preflight
@@ -99,3 +99,60 @@ STABLE remains NO.
 - platform files installed: NONE
 - SD mutation: NONE
 - STABLE: NO
+
+
+## Device audit result — 2026-09-21 12:30
+
+Evidence:
+B4-RMS-R1-AUDIT-EVIDENCE-20260921-123045.zip
+
+Protected hashes:
+- JamVM L: eea1b97cebfaca67b69ed365e966d80cdac22d8ff245c7a556137cfb2898ea34
+- glibj.zip: d7abe888d2980329434c30f18c0eec124be1f02284bf9ed28e88d7242a1f2bea
+- B4 baseline core: 56bb3b972337dd40b342c1881f6599c53eebf66a29f920a1aa2e2839eb29a07c
+- B4-HOTPATH-R2 runtime: 4f1f126c2e02b4fbc3b8985d3afd0cbb239d35e0f97512a4eb85f25fcbacbc9c
+
+Audit totals:
+- RMS roots: 1
+- metadata files: 96
+- payload files: 110
+- suspicious metadata files: 2
+
+Both suspicious files are in the Dragon Mania suite and both are exactly zero bytes:
+
+1.
+Saves\CurrentProfile\saves\FreeJ2ME-Plus\freej2me\rms\Dragon Mania\ffffffff9c61314e09vhjlzvf1zxn0.rms
+- length: 0
+- SHA256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+- payload siblings: 1
+- reason: ZERO_LENGTH;OUTER_BRACES_INVALID
+
+2.
+Saves\CurrentProfile\saves\FreeJ2ME-Plus\freej2me\rms\Dragon Mania\ffffffff9c61314e14u2hvcf9vbmxvy2tozxc_.rms
+- length: 0
+- SHA256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+- payload siblings: 1
+- reason: ZERO_LENGTH;OUTER_BRACES_INVALID
+
+Dragon Mania contains 8 metadata stores total:
+- 6 structurally valid metadata files
+- 2 zero-length metadata files above
+
+Correlation:
+The rollback device log repeatedly reached RecordStore.loadRecordStore/openRecordStore with StringIndexOutOfBoundsException. The pinned source strips outer JSON braces using:
+jsonString.substring(1, jsonString.length() - 1)
+without validating length first.
+
+The on-SD audit therefore provides direct root-cause evidence for at least this Dragon Mania RMS failure path:
+zero-length metadata -> unsafe substring -> repeated exception.
+
+Classification:
+- B4-RMS-R1-AUDIT: DEVICE-AUDIT-PASS
+- ROOT-CAUSE-EVIDENCE: YES for Dragon Mania repeated RMS exception
+- runtime fix: NOT YET APPLIED
+- save repair: NOT YET APPLIED
+- STABLE: NO
+
+Next A/B:
+B4-RMS-R2-DATA-QUARANTINE-AB.
+Quarantine only these two zero-length Dragon Mania stores plus their exact sibling payload files into a reversible backup location. Do not alter the six valid Dragon Mania stores or any other suite.
