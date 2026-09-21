@@ -1,0 +1,253 @@
+name: B4 Dragon Resource Load Trace R1 A-B
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [b4-dragon-resource-load-trace-r1-ab]
+    paths:
+      - '.github/workflows/b4-dragon-resource-load-trace-r1-ab.yml'
+      - 'scripts/b4_apply_nomask_green_tint_fix.py'
+      - 'scripts/b4_apply_nomask_hard_bypass.py'
+      - 'scripts/b4_apply_hotpath_r2_cleanup.py'
+      - 'scripts/b4_apply_dragon_media_trace_r1.py'
+      - 'scripts/vc7r22r13e_apply_midlet_event_trace.py'
+      - 'scripts/vc7r22r13f_apply_setcurrent_trace.py'
+      - 'scripts/vc7r22r13h_apply_service_repaints_trace.py'
+      - 'scripts/vc7r22r13i_apply_network_dependency_trace.py'
+      - 'scripts/vc6_apply_png_iccp_compat.py'
+      - 'scripts/b4_apply_canonical_framebuffer_r1.py'
+      - 'scripts/b4_apply_gamecanvas_flush_r1.py'
+      - 'scripts/b4_apply_resource_load_trace_r1.py'
+      - 'release/b4-dragon-resource-load-trace-r1/**'
+      - 'tasklog/B4-DRAGON-RESOURCE-LOAD-TRACE-R1-AB.md'
+
+jobs:
+  runtime:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    env:
+      FREEJ2ME_PIN: 13ec186903087156c145268f8706eecfaf9f1e50
+      B4_CORE_SHA256: 56bb3b972337dd40b342c1881f6599c53eebf66a29f920a1aa2e2839eb29a07c
+      OLD_RUNTIME_SHA256: fa953382169425b087418a09a6d496c142a86f5e2e5c75af760d0b8d263a41f0
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/checkout@v4
+        with:
+          repository: TASEmulators/freej2me-plus
+          ref: 13ec186903087156c145268f8706eecfaf9f1e50
+          path: upstream
+
+      - run: |
+          sudo apt-get update >/dev/null
+          sudo apt-get install -y --no-install-recommends ant python3 unzip >/dev/null
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Assemble exact current B4 traced source
+        run: |
+          set -euo pipefail
+          VC_UPSTREAM="$GITHUB_WORKSPACE/upstream" B4_ASSEMBLY="$RUNNER_TEMP/b4resource" sh scripts/b4_verified_core_assemble.sh
+          echo "B4=$RUNNER_TEMP/b4resource" >> "$GITHUB_ENV"
+
+          python3 scripts/b4_apply_nomask_green_tint_fix.py "$RUNNER_TEMP/b4resource/src/org/recompile/mobile/PlatformGraphics.java"
+          python3 scripts/b4_apply_nomask_hard_bypass.py "$RUNNER_TEMP/b4resource/src/org/recompile/mobile/PlatformGraphics.java"
+          python3 scripts/b4_apply_hotpath_r2_cleanup.py "$RUNNER_TEMP/b4resource/src/org/recompile/freej2me/RG35XXGoldenFrameTransport.java"
+
+          python3 scripts/b4_apply_dragon_media_trace_r1.py \
+            "$RUNNER_TEMP/b4resource/src/javax/microedition/media/Manager.java" \
+            "$RUNNER_TEMP/b4resource/src/org/recompile/mobile/PlatformPlayer.java"
+
+          python3 scripts/vc7r22r13e_apply_midlet_event_trace.py \
+            "$RUNNER_TEMP/b4resource/src/org/recompile/freej2me/Libretro.java" \
+            "$RUNNER_TEMP/b4resource/src/org/recompile/mobile/MobilePlatform.java" \
+            "$RUNNER_TEMP/b4resource/src/javax/microedition/lcdui/Display.java"
+
+          python3 scripts/vc7r22r13f_apply_setcurrent_trace.py \
+            "$RUNNER_TEMP/b4resource/src/javax/microedition/lcdui/Display.java"
+
+          python3 scripts/vc7r22r13h_apply_service_repaints_trace.py \
+            "$RUNNER_TEMP/b4resource/src/javax/microedition/lcdui/Canvas.java"
+
+          python3 scripts/vc7r22r13i_apply_network_dependency_trace.py \
+            "$RUNNER_TEMP/b4resource/src/javax/microedition/io/Connector.java" \
+            "$RUNNER_TEMP/b4resource/src/javax/microedition/io/HttpConnectionImpl.java"
+
+          python3 scripts/vc6_apply_png_iccp_compat.py \
+            "$RUNNER_TEMP/b4resource/src/org/recompile/mobile/PlatformImage.java"
+
+          python3 scripts/b4_apply_canonical_framebuffer_r1.py \
+            "$RUNNER_TEMP/b4resource/src/org/recompile/freej2me/Libretro.java"
+
+          python3 scripts/b4_apply_gamecanvas_flush_r1.py \
+            "$RUNNER_TEMP/b4resource/src/org/recompile/mobile/PlatformGraphics.java" \
+            "$RUNNER_TEMP/b4resource/src/org/recompile/mobile/MobilePlatform.java"
+
+          echo B4_CURRENT_GAMECANVAS_TRACE_SOURCE_REPRODUCTION=PASS
+
+      - name: Apply bounded resource and image decode diagnostics only
+        run: |
+          set -euo pipefail
+          python3 scripts/b4_apply_resource_load_trace_r1.py \
+            "$B4/src/org/recompile/mobile/MIDletLoader.java" \
+            "$B4/src/org/recompile/mobile/PlatformImage.java"
+
+          grep -Fq 'RG35XX-B4-RESOURCE-TRACE stage=STREAM_BEGIN' "$B4/src/org/recompile/mobile/MIDletLoader.java"
+          grep -Fq 'RG35XX-B4-RESOURCE-TRACE stage=STREAM_END' "$B4/src/org/recompile/mobile/MIDletLoader.java"
+          grep -Fq 'RG35XX-B4-IMAGE-DECODE stage=NAME_BEGIN' "$B4/src/org/recompile/mobile/PlatformImage.java"
+          grep -Fq 'RG35XX-B4-IMAGE-DECODE stage=BYTES_END' "$B4/src/org/recompile/mobile/PlatformImage.java"
+          grep -Fq 'seq <= 128 || (seq > 0 && (seq & (seq - 1)) == 0)' "$B4/src/org/recompile/mobile/MIDletLoader.java"
+
+          # Preserve all current controls and proven fixes.
+          grep -Fq 'RG35XX-B4-GAMECANVAS-FLUSH stage=PG_BEFORE' "$B4/src/org/recompile/mobile/PlatformGraphics.java"
+          grep -Fq 'RG35XX-B4-FRAME-BIND stage=' "$B4/src/org/recompile/freej2me/Libretro.java"
+          grep -Fq 'RG35XX-PNG-ICCP: stripped ancillary iCCP chunk' "$B4/src/org/recompile/mobile/PlatformImage.java"
+          grep -Fq 'RG35XX-R13I-NET' "$B4/src/javax/microedition/io/Connector.java"
+          grep -Fq 'RG35XX-R13E-EVENT' "$B4/src/javax/microedition/lcdui/Display.java"
+          grep -Fq 'RG35XX-R13H-LOOP' "$B4/src/javax/microedition/lcdui/Canvas.java"
+          grep -Fq 'RG35XX-B4-MEDIA-TRACE' "$B4/src/org/recompile/mobile/PlatformPlayer.java"
+
+          # No behavioral experiments bundled.
+          ! grep -R -Fq 'RG35XX-VC7R10-IMAGE-NORMALIZE' "$B4/src"
+          ! grep -R -Fq 'RG35XX-VC7R14-FLUSH-BRIDGE' "$B4/src"
+          ! grep -R -Fq 'RG35XX-R13J-RMS' "$B4/src"
+          ! grep -R -Fq 'RG35XX-VC7R22R1-WORKER-RING' "$B4/src"
+          echo B4_DRAGON_RESOURCE_LOAD_TRACE_R1_SCOPE_GATE=PASS
+
+      - name: Build Java 6-compatible runtime
+        run: |
+          set -euo pipefail
+          cd "$B4"
+          ant
+          JAR="$B4/build/freej2me_plus-lr.jar"
+          test -f "$JAR"
+
+          python3 - "$B4/build/classes" <<'PY'
+          import os,struct,sys
+          n=0
+          for root,_,files in os.walk(sys.argv[1]):
+            for name in files:
+              if not name.endswith('.class'):
+                continue
+              n += 1
+              p=os.path.join(root,name)
+              h=open(p,'rb').read(8)
+              if len(h)!=8 or h[:4]!=b'\xca\xfe\xba\xbe' or struct.unpack('>H',h[6:8])[0]!=50:
+                raise SystemExit('Java major gate failed: '+p)
+          print('B4_DRAGON_RESOURCE_LOAD_TRACE_R1_CLASS_COUNT=%d'%n)
+          PY
+
+          echo "NEW_RUNTIME_SHA256=$(sha256sum "$JAR" | awk '{print $1}')" >> "$GITHUB_ENV"
+
+      - name: Bytecode marker gate
+        run: |
+          set -euo pipefail
+          JAR="$B4/build/freej2me_plus-lr.jar"
+          python3 - "$JAR" <<'PY'
+          import zipfile,sys
+          with zipfile.ZipFile(sys.argv[1]) as z:
+              names = z.namelist()
+              blobs=b'|'.join(
+                  z.read(n) for n in names
+                  if n in (
+                    'org/recompile/mobile/MIDletLoader.class',
+                    'org/recompile/mobile/PlatformImage.class',
+                    'org/recompile/mobile/PlatformGraphics.class',
+                    'org/recompile/mobile/MobilePlatform.class'
+                  )
+                  or n.startswith('org/recompile/mobile/MIDletLoader$')
+                  or n.startswith('org/recompile/mobile/PlatformImage$')
+              )
+          for tok in [
+              b'RG35XX-B4-RESOURCE-TRACE',
+              b'STREAM_BEGIN',
+              b'STREAM_END',
+              b'BYTES_BEGIN',
+              b'BYTES_END',
+              b'RG35XX-B4-IMAGE-DECODE',
+              b'NAME_BEGIN',
+              b'NAME_END',
+              b'elapsedMs=',
+              b'RG35XX-B4-GAMECANVAS-FLUSH'
+          ]:
+              if tok not in blobs:
+                  raise SystemExit('missing resource trace bytecode marker '+repr(tok))
+          print('B4_DRAGON_RESOURCE_LOAD_TRACE_R1_BYTECODE_GATE=PASS')
+          PY
+
+      - name: Package runtime-only fail-closed installer
+        run: |
+          set -euo pipefail
+          ROOT="$RUNNER_TEMP/pkg"
+          mkdir -p "$ROOT/payload"
+          cp "$B4/build/freej2me_plus-lr.jar" "$ROOT/payload/freej2me-lr.jar"
+          cp release/b4-dragon-resource-load-trace-r1/* "$ROOT/"
+
+          sed -i "s/__NEW_RUNTIME_SHA256__/$NEW_RUNTIME_SHA256/g" "$ROOT/INSTALL-B4-DRAGON-RESOURCE-LOAD-TRACE-R1.ps1"
+          ! grep -R -Fq '__NEW_RUNTIME_SHA256__' "$ROOT"
+
+          pwsh -NoProfile -Command "[scriptblock]::Create((Get-Content -Raw '$ROOT/INSTALL-B4-DRAGON-RESOURCE-LOAD-TRACE-R1.ps1')) | Out-Null"
+          pwsh -NoProfile -Command "[scriptblock]::Create((Get-Content -Raw '$ROOT/RESTORE-B4-DRAGON-RESOURCE-LOAD-TRACE-R1.ps1')) | Out-Null"
+          pwsh -NoProfile -Command "[scriptblock]::Create((Get-Content -Raw '$ROOT/COLLECT-B4-DRAGON-RESOURCE-LOAD-TRACE-R1.ps1')) | Out-Null"
+
+          cat > "$ROOT/README-FIRST.txt" <<EOF
+          B4-DRAGON-RESOURCE-LOAD-TRACE-R1-AB
+
+          1. Run INSTALL-B4-DRAGON-RESOURCE-LOAD-TRACE-R1.cmd
+          2. Boot RG35XX
+          3. Run ONLY dragon-mania-s40v6
+          4. Leave the Gameloft logo untouched for 30 seconds
+          5. Press one normal action key once
+          6. Wait about 5 seconds
+          7. Exit normally if possible
+          8. Do NOT launch another Java game
+          9. Run COLLECT-B4-DRAGON-RESOURCE-LOAD-TRACE-R1.cmd
+          10. Send B4-DRAGON-RESOURCE-LOAD-TRACE-R1-EVIDENCE-*.zip
+
+          This checkpoint adds bounded resource/image decode diagnostics only.
+          It does not change resource loading, image decoding, rendering, RMS,
+          media, network, native core, audio, font or game logic.
+          STABLE=NO.
+          EOF
+
+          cat > "$ROOT/STATUS.txt" <<EOF
+          CHECKPOINT=B4-DRAGON-RESOURCE-LOAD-TRACE-R1-AB
+          PRIMARY_VARIABLE=BOUNDED_RESOURCE_AND_IMAGE_DECODE_OBSERVABILITY_ONLY
+          SOURCE_COMMIT=$GITHUB_SHA
+          FREEJ2ME_PIN=$FREEJ2ME_PIN
+          OLD_RUNTIME_SHA256=$OLD_RUNTIME_SHA256
+          NEW_RUNTIME_SHA256=$NEW_RUNTIME_SHA256
+          REQUIRED_CORE_SHA256=$B4_CORE_SHA256
+          CORE_PACKAGED=NO
+          RESOURCE_LOAD_TRACE=ENABLED
+          IMAGE_DECODE_TRACE=ENABLED
+          RESOURCE_LOAD_BEHAVIOR_CHANGE=NONE
+          IMAGE_DECODE_BEHAVIOR_CHANGE=NONE
+          GAMECANVAS_FLUSH_DIAGNOSTICS=PRESERVED
+          CANONICAL_FRAMEBUFFER_BINDING=PRESERVED
+          PNG_ICCP_COMPATIBILITY=PRESERVED
+          NETWORK_BEHAVIOR_CHANGE=NONE
+          MEDIA_BEHAVIOR_CHANGE=NONE
+          RMS_BEHAVIOR_CHANGE=NONE
+          BUILD_PASS=YES
+          DEVICE_PASS=NO_DEVICE_TRACE_PENDING
+          STABLE=NO
+          EOF
+
+          (cd "$ROOT" && find . -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS.txt && sha256sum -c SHA256SUMS.txt)
+
+          echo B4_DRAGON_RESOURCE_LOAD_TRACE_R1_RUNTIME_SHA256=$NEW_RUNTIME_SHA256
+          echo B4_DRAGON_RESOURCE_LOAD_TRACE_R1_CORE_SHA256=$B4_CORE_SHA256
+          echo B4_DRAGON_RESOURCE_LOAD_TRACE_R1_BUILD_GATE=PASS
+          echo DEVICE_PASS=NO_DEVICE_TRACE_PENDING
+          echo STABLE=NO
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: b4-dragon-resource-load-trace-r1-ab
+          path: ${{ runner.temp }}/pkg/
+          if-no-files-found: error
