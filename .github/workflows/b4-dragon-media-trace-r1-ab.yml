@@ -106,7 +106,71 @@ jobs:
           jar=sys.argv[1]
           with zipfile.ZipFile(jar) as z:
               mgr=z.read('javax/microedition/media/Manager.class')
-              pp=z.read('org/recompile/mobile/PlatformPlayer.class')
+              pp=b'\n'.join(
+                  z.read(n) for n in z.namelist()
+                  if n == 'org/recompile/mobile/PlatformPlayer.class'
+                  or n.startswith('org/recompile/mobile/PlatformPlayer              b'RG35XX-B4-MEDIA-TRACE',
+              b'MANAGER_CREATE_STREAM_BEGIN',
+              b'PLAYER_START_BEGIN',
+              b'PLAYER_START_BLOCKED_STATE',
+              b'MIDI_GETSEQUENCER_BEGIN',
+              b'MIDI_PREFETCH_FAIL',
+              b'WAV_GETCLIP_BEGIN',
+              b'WAV_PREFETCH_FAIL',
+              b'PLAYER_EVENT'
+          ]:
+              if tok not in mgr and tok not in pp:
+                  raise SystemExit('missing bytecode marker '+repr(tok))
+          print('B4_DRAGON_MEDIA_TRACE_R1_BYTECODE_GATE=PASS')
+          PY
+
+      - name: Package runtime-only fail-closed installer
+        run: |
+          set -euo pipefail
+          ROOT="$RUNNER_TEMP/pkg"
+          mkdir -p "$ROOT/payload"
+          cp "$B4/build/freej2me_plus-lr.jar" "$ROOT/payload/freej2me-lr.jar"
+          cp release/b4-dragon-media-trace-r1/* "$ROOT/"
+          sed -i "s/__NEW_RUNTIME_SHA256__/$NEW_RUNTIME_SHA256/g" "$ROOT/INSTALL-B4-DRAGON-MEDIA-TRACE-R1.ps1"
+          ! grep -R -Fq '__NEW_RUNTIME_SHA256__' "$ROOT"
+
+          pwsh -NoProfile -Command "[scriptblock]::Create((Get-Content -Raw '$ROOT/INSTALL-B4-DRAGON-MEDIA-TRACE-R1.ps1')) | Out-Null"
+          pwsh -NoProfile -Command "[scriptblock]::Create((Get-Content -Raw '$ROOT/RESTORE-B4-DRAGON-MEDIA-TRACE-R1.ps1')) | Out-Null"
+          pwsh -NoProfile -Command "[scriptblock]::Create((Get-Content -Raw '$ROOT/COLLECT-B4-DRAGON-MEDIA-TRACE-R1.ps1')) | Out-Null"
+
+          cat > "$ROOT/STATUS.txt" <<EOF
+          CHECKPOINT=B4-DRAGON-MEDIA-TRACE-R1-AB
+          PRIMARY_VARIABLE=BOUNDED_MEDIA_LIFECYCLE_OBSERVABILITY_ONLY
+          SOURCE_COMMIT=$GITHUB_SHA
+          FREEJ2ME_PIN=$FREEJ2ME_PIN
+          OLD_RUNTIME_SHA256=$OLD_RUNTIME_SHA256
+          NEW_RUNTIME_SHA256=$NEW_RUNTIME_SHA256
+          REQUIRED_CORE_SHA256=$B4_CORE_SHA256
+          CORE_PACKAGED=NO
+          MEDIA_BEHAVIOR_CHANGE=NONE
+          RMS_CHANGE=NONE
+          VIDEO_MASK_R2=PRESERVED
+          HOTPATH_R2=PRESERVED
+          BUILD_PASS=YES
+          DEVICE_PASS=NO_DEVICE_TRACE_PENDING
+          STABLE=NO
+          EOF
+
+          (cd "$ROOT" && find . -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS.txt && sha256sum -c SHA256SUMS.txt)
+
+          echo B4_DRAGON_MEDIA_TRACE_R1_RUNTIME_SHA256=$NEW_RUNTIME_SHA256
+          echo B4_DRAGON_MEDIA_TRACE_R1_CORE_SHA256=$B4_CORE_SHA256
+          echo B4_DRAGON_MEDIA_TRACE_R1_BUILD_GATE=PASS
+          echo DEVICE_PASS=NO_DEVICE_TRACE_PENDING
+          echo STABLE=NO
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: b4-dragon-media-trace-r1-ab
+          path: ${{ runner.temp }}/pkg/
+          if-no-files-found: error
+)
+              )
           for tok in [
               b'RG35XX-B4-MEDIA-TRACE',
               b'MANAGER_CREATE_STREAM_BEGIN',
