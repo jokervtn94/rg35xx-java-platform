@@ -1,0 +1,143 @@
+name: B4 Hotpath R2 A-B
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [b4-hotpath-r2-ab]
+    paths:
+      - '.github/workflows/b4-hotpath-r2-ab.yml'
+      - 'scripts/b4_apply_nomask_green_tint_fix.py'
+      - 'scripts/b4_apply_nomask_hard_bypass.py'
+      - 'scripts/b4_apply_hotpath_r2_cleanup.py'
+      - 'release/b4-hotpath-r2/**'
+      - 'tasklog/B4-HOTPATH-R2-AB.md'
+
+jobs:
+  runtime:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    env:
+      FREEJ2ME_PIN: 13ec186903087156c145268f8706eecfaf9f1e50
+      B4_CORE_SHA256: 56bb3b972337dd40b342c1881f6599c53eebf66a29f920a1aa2e2839eb29a07c
+      R2_RUNTIME_SHA256: 90c4d9455e82ca8df5dce667c0a836356dfc69f8b756b6cafe1ea9ac0b9bc1ee
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: TASEmulators/freej2me-plus
+          ref: 13ec186903087156c145268f8706eecfaf9f1e50
+          path: upstream
+
+      - run: |
+          sudo apt-get update >/dev/null
+          sudo apt-get install -y --no-install-recommends ant python3 unzip >/dev/null
+
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: '8'}
+
+      - name: Assemble exact B4 Java foundation
+        run: |
+          set -euo pipefail
+          VC_UPSTREAM="$GITHUB_WORKSPACE/upstream" B4_ASSEMBLY="$RUNNER_TEMP/b4hotr2" sh scripts/b4_verified_core_assemble.sh
+          echo "B4=$RUNNER_TEMP/b4hotr2" >> "$GITHUB_ENV"
+
+      - name: Reproduce DEVICE-PASS B4 Video Mask R2 source
+        run: |
+          set -euo pipefail
+          python3 scripts/b4_apply_nomask_green_tint_fix.py "$B4/src/org/recompile/mobile/PlatformGraphics.java"
+          python3 scripts/b4_apply_nomask_hard_bypass.py "$B4/src/org/recompile/mobile/PlatformGraphics.java"
+          grep -Fq 'fastBlit = !Mobile.funLightsEnabled;' "$B4/src/org/recompile/mobile/PlatformGraphics.java"
+          grep -Fq 'canvasData[destRowIndex + i] = image.getDataBuffer()[srcRowIndex + i];' "$B4/src/org/recompile/mobile/PlatformGraphics.java"
+          ! grep -Fq '(Mobile.renderLCDMask ? Mobile.lcdMaskColors[Mobile.maskIndex] : 0xFFFFFFFF)' "$B4/src/org/recompile/mobile/PlatformGraphics.java"
+          echo B4_VIDEO_MASK_R2_SOURCE_REPRODUCTION=PASS
+
+      - name: Apply one-variable hotpath cleanup
+        run: |
+          set -euo pipefail
+          T="$B4/src/org/recompile/freej2me/RG35XXGoldenFrameTransport.java"
+          python3 scripts/b4_apply_hotpath_r2_cleanup.py "$T"
+          grep -Fq 'RG35XX-B4-HOTPATH-R2-CLEAN' "$T"
+
+          for bad in             'RG35XX-JAVA-DIAG: requestFrame ENTER'             'RG35XX-JAVA-DIAG: requestFrame SIGNALED'             'RG35XX-JAVA-DIAG: FrameWorker WAKE'             'RG35XX-JAVA-DIAG: sendFrame START pixels='             'RG35XX-JAVA-DIAG: snapshot LOCK waiting'             'RG35XX-JAVA-DIAG: snapshot COPIED'             'RG35XX-JAVA-DIAG: RGB565 ENCODED bytes='             'RG35XX-JAVA-DIAG: IPC WRITE header'             'RG35XX-JAVA-DIAG: IPC WRITE payload'             'RG35XX-JAVA-DIAG: IPC FLUSH PASS error='
+          do
+            ! grep -Fq "$bad" "$T"
+          done
+
+          for keep in             'RG35XX-JAVA-DIAG: FrameTransport constructor ENTER'             'RG35XX-JAVA-DIAG: FrameWorker STARTED daemon='             'RG35XX-JAVA-DIAG: FrameWorker ENTER'             'RG35XX-JAVA-DIAG: FrameWorker EXIT'             'RG35XX-VIDEO JAVA control-frame error:'             'RG35XX-VIDEO JAVA worker error:'             'RG35XX-VIDEO JAVA invalid snapshot pixels='
+          do
+            grep -Fq "$keep" "$T"
+          done
+
+          echo B4_HOTPATH_R2_SCOPE_GATE=PASS
+
+      - name: Build Java 6-compatible runtime
+        run: |
+          set -euo pipefail
+          cd "$B4"
+          ant
+          JAR="$B4/build/freej2me_plus-lr.jar"
+          test -f "$JAR"
+
+          python3 - "$B4/build/classes" <<'PY'
+          import os,struct,sys
+          n=0
+          for b,_,fs in os.walk(sys.argv[1]):
+            for f in fs:
+              if not f.endswith('.class'):
+                continue
+              n += 1
+              p=os.path.join(b,f)
+              h=open(p,'rb').read(8)
+              if len(h)!=8 or h[:4]!=b'\xca\xfe\xba\xbe' or struct.unpack('>H',h[6:8])[0]!=50:
+                raise SystemExit('Java major gate failed: '+p)
+          print('B4_HOTPATH_R2_CLASS_COUNT=%d'%n)
+          PY
+
+          echo "NEW_RUNTIME_SHA256=$(sha256sum "$JAR" | awk '{print $1}')" >> "$GITHUB_ENV"
+
+      - name: Package runtime-only fail-closed installer
+        run: |
+          set -euo pipefail
+          ROOT="$RUNNER_TEMP/pkg"
+          mkdir -p "$ROOT/payload"
+          cp "$B4/build/freej2me_plus-lr.jar" "$ROOT/payload/freej2me-lr.jar"
+          cp release/b4-hotpath-r2/* "$ROOT/"
+          sed -i "s/__NEW_RUNTIME_SHA256__/$NEW_RUNTIME_SHA256/g" "$ROOT/INSTALL-B4-HOTPATH-R2.ps1"
+          ! grep -R -Fq '__NEW_RUNTIME_SHA256__' "$ROOT"
+
+          pwsh -NoProfile -Command "[scriptblock]::Create((Get-Content -Raw '$ROOT/INSTALL-B4-HOTPATH-R2.ps1')) | Out-Null"
+          pwsh -NoProfile -Command "[scriptblock]::Create((Get-Content -Raw '$ROOT/RESTORE-B4-HOTPATH-R2.ps1')) | Out-Null"
+          pwsh -NoProfile -Command "[scriptblock]::Create((Get-Content -Raw '$ROOT/COLLECT-B4-HOTPATH-R2.ps1')) | Out-Null"
+
+          cat > "$ROOT/STATUS.txt" <<EOF
+          CHECKPOINT=B4-HOTPATH-R2-AB
+          PRIMARY_VARIABLE=UNBOUNDED_FRAME_TRANSPORT_DIAGNOSTICS_ONLY
+          SOURCE_COMMIT=$GITHUB_SHA
+          FREEJ2ME_PIN=$FREEJ2ME_PIN
+          OLD_RUNTIME_SHA256=$R2_RUNTIME_SHA256
+          NEW_RUNTIME_SHA256=$NEW_RUNTIME_SHA256
+          PRESERVED_CORE_SHA256=$B4_CORE_SHA256
+          VIDEO_MASK_R2=PRESERVED
+          BOUNDED_LIFECYCLE_LOGGING=PRESERVED
+          ERROR_DIAGNOSTICS=PRESERVED
+          AUDIO_CHANGE=NONE
+          FONT_CHANGE=NONE
+          CORE_CHANGE=NONE
+          BUILD_PASS=YES
+          DEVICE_PASS=NO_DEVICE_TEST_PENDING
+          STABLE=NO
+          EOF
+
+          (cd "$ROOT" && find . -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS.txt && sha256sum -c SHA256SUMS.txt)
+
+          echo B4_HOTPATH_R2_RUNTIME_SHA256=$NEW_RUNTIME_SHA256
+          echo B4_HOTPATH_R2_CORE_SHA256=$B4_CORE_SHA256
+          echo B4_HOTPATH_R2_BUILD_GATE=PASS
+          echo DEVICE_PASS=NO_DEVICE_TEST_PENDING
+          echo STABLE=NO
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: b4-hotpath-r2-ab
+          path: ${{ runner.temp }}/pkg/
+          if-no-files-found: error
