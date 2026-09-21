@@ -1,6 +1,6 @@
 # B4-DRAGON-TIMEBASE-TRACE-R1-AB
 
-Status: BUILD-PASS / DEVICE-TEST-PENDING / STABLE=NO
+Status: DEVICE-EVIDENCE / DIAGNOSTIC-PASS / STABLE=NO
 
 Primary variable:
 BOUNDED_GAME_VIRTUAL_TIME_AND_SLEEP_OBSERVABILITY_ONLY
@@ -190,3 +190,69 @@ BUILD-PASS=YES
 DEVICE-PASS=NO
 DEVICE-TEST-PENDING=YES
 STABLE=NO
+
+
+## Device result — 2026-09-21 22:52
+
+Evidence:
+B4-DRAGON-TIMEBASE-TRACE-R1-EVIDENCE-20260921-225245.zip
+
+Protected/install hashes:
+- JamVM L: eea1b97cebfaca67b69ed365e966d80cdac22d8ff245c7a556137cfb2898ea34
+- glibj.zip: d7abe888d2980329434c30f18c0eec124be1f02284bf9ed28e88d7242a1f2bea
+- protected B4 core: 56bb3b972337dd40b342c1881f6599c53eebf66a29f920a1aa2e2839eb29a07c
+- runtime: 86213649b09ce6fca7c55bd14131384a6f8eac07b9896c8a40d9fa1aa5538675
+- RMS_PRECONDITION=PASS
+- total Dragon metadata=7
+- prior recreated store remains structurally valid
+
+Timebase observations:
+- TIMEBASE_LINES=151
+- MILLIS samples=111
+- NANOS=0
+- SLEEP pairs=1
+- DRAWSLEEP pairs=19
+- YIELD=0
+- NEGATIVE_ELAPSED=0
+- every sampled currentTimeMillis returned exactly wallNow
+- unlockFramerateHack=0 throughout sampled calls
+- limitFPS=60 throughout sampled calls
+- fast-forward=false throughout sampled calls
+- sleep/drawSleep requested-vs-wall delta=0..2 ms
+- no unmatched sleep begin/end
+- no exception/error observed
+
+Thread distribution for sampled currentTimeMillis:
+- EventProcessing-Thread: 65
+- Thread-1: 43
+- Libretro-IO-Thread: 3
+
+Interpretation:
+- virtual currentTimeMillis is monotonic in the observed run.
+- no negative/backward virtual-time delta is observed.
+- sleep behavior is materially consistent with requested duration.
+- timebase/sleep is DEPRIORITIZED as the Dragon logo blocker.
+- Dragon compatibility remains FAIL.
+- STABLE=NO.
+
+Additional cross-check discovered from existing R13H evidence:
+- SERVICE_WAIT_WAKE count=13
+- wake with needsRepaint still true (aux=1)=2
+- both aux=1 wakes are followed immediately by REPAINT_REQUEST_BEGIN on Thread-1.
+- observed pairs:
+  - service seq=2 wake aux=1 -> repaint request seq=2 on Thread-1
+  - service seq=7 wake aux=1 -> repaint request seq=8 on Thread-1
+- this behavior follows pinned Canvas.serviceRepaints fallback: after any wait return, if needsRepaint is true it calls repaintRequest() on caller thread without distinguishing normal paint-completion notification from timeout.
+- during the second case EventProcessing-Thread is still completing a paint/flush while Thread-1 starts another paint path.
+- resource /16 ownership changes between repeated runs depending on this scheduling race:
+  - Resource-load checkpoint: /16 observed on Thread-1.
+  - Timebase checkpoint: /16 observed on EventProcessing-Thread until service fallback transfers another repaint to Thread-1.
+- source framebuffer remains static at 8545ff47.
+
+Next checkpoint:
+B4-DRAGON-SERVICE-REPAINT-SERIALIZE-R1-AB
+
+Primary hypothesis:
+serviceRepaints fallback decision allows caller-thread paint takeover after a normal completion wake, and may allow overlapping paint paths while another paint callback is active.
+
+No unrelated rendering/media/resource/timebase behavior change is authorized.
