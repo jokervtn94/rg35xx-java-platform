@@ -1,6 +1,6 @@
 # B4-DRAGON-GAMECANVAS-FLUSH-R1-AB
 
-Status: BUILD-PASS / DEVICE-TRACE-PENDING / STABLE=NO
+Status: DEVICE-EVIDENCE / DIAGNOSTIC-PASS / STABLE=NO
 
 Primary variable:
 BOUNDED_GAMECANVAS_TO_FRONTBUFFER_CONTENT_OBSERVABILITY_ONLY
@@ -165,3 +165,60 @@ Successful workflow:
 - PNG iCCP compatibility preserved: YES
 - DEVICE-PASS: NO / DEVICE-TRACE-PENDING
 - STABLE: NO
+
+
+## Device result — 2026-09-21 17:26
+
+Evidence:
+B4-DRAGON-GAMECANVAS-FLUSH-R1-EVIDENCE-20260921-172654.zip
+
+Installed/protected hashes:
+- JamVM L: eea1b97cebfaca67b69ed365e966d80cdac22d8ff245c7a556137cfb2898ea34
+- glibj.zip: d7abe888d2980329434c30f18c0eec124be1f02284bf9ed28e88d7242a1f2bea
+- protected B4 core: 56bb3b972337dd40b342c1881f6599c53eebf66a29f920a1aa2e2839eb29a07c
+- runtime: fa953382169425b087418a09a6d496c142a86f5e2e5c75af760d0b8d263a41f0
+
+Counts:
+- MOBILE_FLUSH_LINES=33
+- PG_FLUSH_LINES=66
+- PG_BEFORE=33
+- PG_ALIAS_RETURN=0
+- PG_FULLCOPY_DONE=33
+- PG_COPY_DONE=0
+- FLUSH_ALIAS_TRUE=0
+- FRAME_BIND_MISMATCH_TRUE=0
+- PNG_ICCP_STRIP=0
+- NETWORK_TRACE_LINES=0
+- MEDIA_TRACE_LINES=0
+- STRING_INDEX_OOB=0
+- NULL_POINTER_EXCEPTION=0
+
+Content evidence:
+- seq 1-2: source and destination sparse hashes both c67c4940.
+- seq 3: source changes to 8545ff47 while destination-before remains c67c4940.
+- seq 3 full-copy completes and destination becomes 8545ff47 with equalHash=true.
+- seq 4-32 and seq 64: source remains 8545ff47; destination remains exactly equal after every full-screen copy.
+- source and frontbuffer are distinct backing arrays (alias=false).
+- every sampled rectangle is full LCD 0,0,240,320.
+- paused=false and terminated=false throughout samples.
+- Display/Canvas activity and input delivery remain alive.
+
+Classification:
+- GameCanvas/PlatformGraphics source->frontbuffer bridge: DEVICE-EVIDENCE / DIAGNOSTIC-PASS.
+- Case E is proven for sampled full-screen copies.
+- Source content becomes static after its early transition: Case C.
+- GameCanvas/frontbuffer copy semantics are therefore DEPRIORITIZED as the Dragon logo blocker.
+- Dragon compatibility remains FAIL.
+- STABLE=NO.
+
+Historical regression clue:
+A real-device core log from 2026-09-06 shows dragon-mania-s40v6 reaching a long-running session with 2493 received frames and multiple native MIDI PLAY/PRIMED/END events. This proves Dragon previously reached a substantially later runtime state on RG35XX, but does not authorize restoring the entire historical RC1/CJ stack because that stack contains unrelated and later-rejected experiments.
+
+Next checkpoint:
+B4-DRAGON-RESOURCE-LOAD-TRACE-R1-AB
+
+Primary variable:
+BOUNDED_RESOURCE_AND_IMAGE_DECODE_OBSERVABILITY_ONLY
+
+Rationale:
+The display thread keeps repainting a static source buffer, while media/network are not reached. The next minimal boundary is background resource/image preload. Trace BEGIN/END around MIDlet resource reads and ImageIO decode; do not change decode/render semantics.
