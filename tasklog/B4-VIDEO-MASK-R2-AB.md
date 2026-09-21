@@ -113,3 +113,47 @@ Exact scope:
 - FunLights overlay behavior is preserved.
 - Native core, audio, font, resolution, JamVM L and GNU Classpath are unchanged.
 - Hot-path cleanup is not included.
+
+
+## Device evidence — 2026-09-21 10:37
+
+Evidence package:
+B4-VIDEO-MASK-R2-EVIDENCE-20260921-103743.zip
+
+Installed/protected hashes:
+- JamVM L: eea1b97cebfaca67b69ed365e966d80cdac22d8ff245c7a556137cfb2898ea34
+- glibj.zip: d7abe888d2980329434c30f18c0eec124be1f02284bf9ed28e88d7242a1f2bea
+- B4 core: 56bb3b972337dd40b342c1881f6599c53eebf66a29f920a1aa2e2839eb29a07c
+- R2 runtime: 90c4d9455e82ca8df5dce667c0a836356dfc69f8b756b6cafe1ea9ac0b9bc1ee
+
+Installer result: PASS.
+
+Real Football 2015 session:
+- early native log reaches LOAD_GAME, IPC_LOAD_SENT, IPC_RUN_SENT and CORE_DEINIT;
+- Java FrameTransport continued: requestFrame=1795, IPC_FLUSH_PASS=1794;
+- no native hard-deadlock evidence in captured log;
+- existing media blockers remain: LineUnavailableException(no Clip available) x2 and NoSuchMethodError(getSequencer) x1;
+- these media failures are outside the R2 primary variable.
+
+KDTT session:
+- early native log reaches LOAD_GAME, IPC_LOAD_SENT, IPC_RUN_SENT and CORE_DEINIT;
+- Java FrameTransport continued: requestFrame=789, IPC_FLUSH_PASS=788;
+- known PNG ICC v4 blocker remains: Wrong major version number:4;
+- PNG compatibility is not part of R2.
+
+Hot-path diagnostic load remains high:
+- Java log lines: 25918
+- RG35XX-JAVA-DIAG lines: 25840
+This is a separate known issue and is intentionally not changed by R2.
+
+Current classification:
+- BUILD-PASS: YES
+- DEVICE-EVIDENCE: YES
+- DEVICE-PASS: PENDING VISUAL ACCEPTANCE
+- STABLE: NO
+
+Reason DEVICE-PASS is not yet granted:
+The device evidence ZIP contains hashes and logs but no screenshot or explicit visual confirmation that the Real Football global green tint is absent. R2 acceptance criterion #2 therefore remains unverified.
+
+Next action:
+Obtain a Real Football screenshot from the R2 run (preferably the same splash/logo scene used for R1) or explicit user confirmation of normal colors. Do not open a new code checkpoint before this visual criterion is resolved.
