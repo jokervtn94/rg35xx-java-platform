@@ -106,10 +106,13 @@ jobs:
           jar=sys.argv[1]
           with zipfile.ZipFile(jar) as z:
               mgr=z.read('javax/microedition/media/Manager.class')
-              pp=b'\n'.join(
+              pp=b'|'.join(
                   z.read(n) for n in z.namelist()
                   if n == 'org/recompile/mobile/PlatformPlayer.class'
-                  or n.startswith('org/recompile/mobile/PlatformPlayer              b'RG35XX-B4-MEDIA-TRACE',
+                  or n.startswith('org/recompile/mobile/PlatformPlayer' + chr(36))
+              )
+          for tok in [
+              b'RG35XX-B4-MEDIA-TRACE',
               b'MANAGER_CREATE_STREAM_BEGIN',
               b'PLAYER_START_BEGIN',
               b'PLAYER_START_BLOCKED_STATE',
@@ -123,7 +126,6 @@ jobs:
                   raise SystemExit('missing bytecode marker '+repr(tok))
           print('B4_DRAGON_MEDIA_TRACE_R1_BYTECODE_GATE=PASS')
           PY
-
       - name: Package runtime-only fail-closed installer
         run: |
           set -euo pipefail
