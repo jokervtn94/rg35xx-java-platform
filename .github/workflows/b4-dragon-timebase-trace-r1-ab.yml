@@ -17,7 +17,8 @@ on:
       - 'scripts/vc6_apply_png_iccp_compat.py'
       - 'scripts/b4_apply_canonical_framebuffer_r1.py'
       - 'scripts/b4_apply_gamecanvas_flush_r1.py'
-      - 'scripts/b4_apply_resource_load_trace_r1.py'\n      - 'scripts/b4_apply_timebase_trace_r1.py'
+      - 'scripts/b4_apply_resource_load_trace_r1.py'
+      - 'scripts/b4_apply_timebase_trace_r1.py'
       - 'release/b4-dragon-timebase-trace-r1/**'
       - 'tasklog/B4-DRAGON-TIMEBASE-TRACE-R1-AB.md'
 
