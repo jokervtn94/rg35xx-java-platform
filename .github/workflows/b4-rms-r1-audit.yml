@@ -1,0 +1,48 @@
+name: B4 RMS R1 Audit Tools
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [b4-rms-r1-audit]
+    paths:
+      - '.github/workflows/b4-rms-r1-audit.yml'
+      - 'release/b4-rms-r1-audit/**'
+      - 'tasklog/B4-RMS-R1-AUDIT.md'
+
+jobs:
+  package:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Package read-only RMS audit
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/rms-audit"
+          mkdir -p "$OUT"
+          cp release/b4-rms-r1-audit/AUDIT-B4-RMS-R1.ps1 "$OUT/"
+          cp release/b4-rms-r1-audit/AUDIT-B4-RMS-R1.cmd "$OUT/"
+          cat > "$OUT/README-FIRST.txt" <<'EOF'
+          B4-RMS-R1-AUDIT
+
+          READ-ONLY. This tool does not repair, rename, delete or modify RMS saves.
+
+          1. Connect the RG35XX SD card to the PC.
+          2. Run AUDIT-B4-RMS-R1.cmd.
+          3. Enter the SD drive letter.
+          4. Send B4-RMS-R1-AUDIT-EVIDENCE-*.zip.
+
+          Purpose:
+          Identify zero-length, too-short or structurally unbraced .rms metadata
+          before any RecordStore runtime fix is attempted.
+
+          No platform file is installed.
+          STABLE=NO.
+          EOF
+          pwsh -NoProfile -Command "[scriptblock]::Create((Get-Content -Raw '$OUT/AUDIT-B4-RMS-R1.ps1')) | Out-Null"
+          (cd "$OUT" && sha256sum * > SHA256SUMS.txt)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: b4-rms-r1-audit-tools
+          path: ${{ runner.temp }}/rms-audit/
+          if-no-files-found: error
