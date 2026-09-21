@@ -265,3 +265,37 @@ Rollback acceptance:
 - runtime must remain 4f1f126c2e02b4fbc3b8985d3afd0cbb239d35e0f97512a4eb85f25fcbacbc9c
 - JamVM/glibj must remain protected hashes
 - test dragon-mania-s40v6 and NinjaSchool1 before opening any new code checkpoint.
+
+
+## Rollback tool v1 failure and v2 recovery — 2026-09-21
+
+Observed user failure:
+RESTORE FAIL: backup pointer missing
+
+Root cause:
+The v1 restore script depended exclusively on:
+RG35XX-B4-SCREENSHOT-R1-CURRENT-BACKUP.txt
+
+The earlier Screenshot-R1 installer evidence proves that the actual backup was created successfully:
+H:\RG35XX-JAVA-BACKUP\b4-screenshot-r1-20260921-111147
+
+Therefore the failure is a restore-tool discovery defect, not evidence that the backup was never created.
+
+v2 restore fallback order:
+1. explicit pointer file;
+2. BACKUP= path from RG35XX-B4-SCREENSHOT-R1-INSTALL-RESULT.txt;
+3. rebase historical drive letter onto currently selected SD root;
+4. scan newest RG35XX-JAVA-BACKUP\b4-screenshot-r1-* containing STATE.txt.
+
+Fail-closed gates before restore:
+- current runtime must remain B4-HOTPATH-R2 hash 4f1f126c2e02b4fbc3b8985d3afd0cbb239d35e0f97512a4eb85f25fcbacbc9c;
+- current core must be either Screenshot-R1 or the expected baseline;
+- backup core must hash exactly to baseline 56bb3b972337dd40b342c1881f6599c53eebf66a29f920a1aa2e2839eb29a07c.
+
+v2 package:
+- commit: bbca8f85c2ce42a4a74e2ce33964e3a1d74ba607
+- workflow/run: 35560813466
+- artifact: 10622490314
+- artifact SHA256: 5bfb395b9a439bb0a45d0e7b210200f8dfa25a147d11d256a02854ee37995e78
+
+No platform behavior change is introduced by this v2 tooling fix.
