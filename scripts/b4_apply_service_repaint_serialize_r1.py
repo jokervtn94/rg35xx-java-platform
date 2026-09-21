@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import pathlib, sys
+import pathlib, re, sys
 
 if len(sys.argv) != 2:
     raise SystemExit("usage: b4_apply_service_repaint_serialize_r1.py <Canvas.java>")
@@ -82,62 +82,58 @@ new_finally = """		finally
 """
 once(old_finally, new_finally, "paint completion generation")
 
-old_wait = """					// Wait for a whole second before forcefully repainting
-					// below. Should be way more than enough time for the EDT
-					// to dispatch non-deadlocked paints on any modern system.
-					rg35xxR13HLog("SERVICE_WAIT_BEGIN", rg35xxR13HLocalService, 1);
-					paintLock.wait(1000);
-					rg35xxR13HLog("SERVICE_WAIT_WAKE", rg35xxR13HLocalService, needsRepaint ? 1 : 0);
+pat = re.compile(
+    r'(?s)(?P<indent>\\s*)rg35xxR13HLog\\("SERVICE_WAIT_BEGIN", rg35xxR13HLocalService, 1\\);'
+    r'\\s*paintLock\\.wait\\(1000\\);'
+    r'\\s*rg35xxR13HLog\\("SERVICE_WAIT_WAKE", rg35xxR13HLocalService, needsRepaint \\? 1 : 0\\);'
+    r'\\s*// If it timed out and still needs repaint, force a repaint'
+    r'.*?if \\(needsRepaint && isShown\\(\\)\\)'
+    r'\\s*\\{\\s*repaintRequest\\(\\);\\s*break;\\s*\\}'
+)
+m = list(pat.finditer(s))
+if len(m) != 1:
+    raise SystemExit("B4 SERVICE SERIAL R1 FAIL service wait decision count=%d" % len(m))
 
-					// If it timed out and still needs repaint, force a repaint
-					// to occur as if it this was called from the EDT in order
-					// to rescue any stalled frames.
-					if (needsRepaint && isShown())
-					{
-						repaintRequest();
-						break;
-					}
+new_wait = """\t\t\t\t\t// Wait for a whole second before considering the rescue path.
+\t\t\t\t\t// A normal paint completion increments generation before notify.
+\t\t\t\t\t// If a newer repaint was queued while that paint was finishing,
+\t\t\t\t\t// serviceRepaints must keep waiting instead of stealing paint()
+\t\t\t\t\t// onto the caller thread.
+\t\t\t\t\tlong rg35xxB4GenBefore = rg35xxB4PaintCompletionGeneration;
+\t\t\t\t\trg35xxR13HLog("SERVICE_WAIT_BEGIN", rg35xxR13HLocalService, 1);
+\t\t\t\t\tpaintLock.wait(1000);
+\t\t\t\t\tlong rg35xxB4GenAfter = rg35xxB4PaintCompletionGeneration;
+\t\t\t\t\tboolean rg35xxB4CompletionObserved = (rg35xxB4GenAfter != rg35xxB4GenBefore);
+\t\t\t\t\trg35xxR13HLog("SERVICE_WAIT_WAKE", rg35xxR13HLocalService, needsRepaint ? 1 : 0);
+\t\t\t\t\trg35xxB4ServiceSerialLog("WAIT_WAKE", rg35xxR13HLocalService,
+\t\t\t\t\t\trg35xxB4GenBefore, rg35xxB4GenAfter,
+\t\t\t\t\t\trg35xxB4PaintCallbackActive, needsRepaint);
+
+\t\t\t\t\tif (needsRepaint && isShown())
+\t\t\t\t\t{
+\t\t\t\t\t\tif (rg35xxB4CompletionObserved)
+\t\t\t\t\t\t{
+\t\t\t\t\t\t\trg35xxB4ServiceSerialLog("SUPPRESS_AFTER_COMPLETION", rg35xxR13HLocalService,
+\t\t\t\t\t\t\t\trg35xxB4GenBefore, rg35xxB4GenAfter,
+\t\t\t\t\t\t\t\trg35xxB4PaintCallbackActive, needsRepaint);
+\t\t\t\t\t\t\tcontinue;
+\t\t\t\t\t\t}
+\t\t\t\t\t\tif (rg35xxB4PaintCallbackActive)
+\t\t\t\t\t\t{
+\t\t\t\t\t\t\trg35xxB4ServiceSerialLog("SUPPRESS_WHILE_PAINT_ACTIVE", rg35xxR13HLocalService,
+\t\t\t\t\t\t\t\trg35xxB4GenBefore, rg35xxB4GenAfter, true, needsRepaint);
+\t\t\t\t\t\t\tcontinue;
+\t\t\t\t\t\t}
+
+\t\t\t\t\t\t// No paint completed during the wait and no paint callback is
+\t\t\t\t\t\t// active: preserve the upstream one-second rescue fallback.
+\t\t\t\t\t\trg35xxB4ServiceSerialLog("FORCE_FALLBACK", rg35xxR13HLocalService,
+\t\t\t\t\t\t\trg35xxB4GenBefore, rg35xxB4GenAfter, false, needsRepaint);
+\t\t\t\t\t\trepaintRequest();
+\t\t\t\t\t\tbreak;
+\t\t\t\t\t}
 """
-new_wait = """					// Wait for a whole second before considering the rescue path.
-					// A normal paint completion increments generation before notify.
-					// If a newer repaint was queued while that paint was finishing,
-					// serviceRepaints must keep waiting instead of stealing paint()
-					// onto the caller thread.
-					long rg35xxB4GenBefore = rg35xxB4PaintCompletionGeneration;
-					rg35xxR13HLog("SERVICE_WAIT_BEGIN", rg35xxR13HLocalService, 1);
-					paintLock.wait(1000);
-					long rg35xxB4GenAfter = rg35xxB4PaintCompletionGeneration;
-					boolean rg35xxB4CompletionObserved = (rg35xxB4GenAfter != rg35xxB4GenBefore);
-					rg35xxR13HLog("SERVICE_WAIT_WAKE", rg35xxR13HLocalService, needsRepaint ? 1 : 0);
-					rg35xxB4ServiceSerialLog("WAIT_WAKE", rg35xxR13HLocalService,
-						rg35xxB4GenBefore, rg35xxB4GenAfter,
-						rg35xxB4PaintCallbackActive, needsRepaint);
-
-					if (needsRepaint && isShown())
-					{
-						if (rg35xxB4CompletionObserved)
-						{
-							rg35xxB4ServiceSerialLog("SUPPRESS_AFTER_COMPLETION", rg35xxR13HLocalService,
-								rg35xxB4GenBefore, rg35xxB4GenAfter,
-								rg35xxB4PaintCallbackActive, needsRepaint);
-							continue;
-						}
-						if (rg35xxB4PaintCallbackActive)
-						{
-							rg35xxB4ServiceSerialLog("SUPPRESS_WHILE_PAINT_ACTIVE", rg35xxR13HLocalService,
-								rg35xxB4GenBefore, rg35xxB4GenAfter, true, needsRepaint);
-							continue;
-						}
-
-						// No paint completed during the wait and no paint callback is
-						// active: preserve the upstream one-second rescue fallback.
-						rg35xxB4ServiceSerialLog("FORCE_FALLBACK", rg35xxR13HLocalService,
-							rg35xxB4GenBefore, rg35xxB4GenAfter, false, needsRepaint);
-						repaintRequest();
-						break;
-					}
-"""
-once(old_wait, new_wait, "service wait decision")
+s = s[:m[0].start()] + new_wait + s[m[0].end():]
 
 for tok in (
     "RG35XX-B4-SERVICE-SERIAL",
