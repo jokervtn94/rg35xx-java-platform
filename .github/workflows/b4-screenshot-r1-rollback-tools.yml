@@ -1,0 +1,56 @@
+name: B4 Screenshot R1 Rollback Tools
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [b4-screenshot-r1-ab]
+    paths:
+      - '.github/workflows/b4-screenshot-r1-rollback-tools.yml'
+      - 'release/b4-screenshot-r1/RESTORE-B4-SCREENSHOT-R1.*'
+      - 'release/b4-screenshot-r1/VERIFY-B4-SCREENSHOT-R1-ROLLBACK.*'
+      - 'release/b4-screenshot-r1/COLLECT-B4-SCREENSHOT-R1-ROLLBACK.*'
+
+jobs:
+  package:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Package rollback A/B tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/rollback"
+          mkdir -p "$OUT"
+          cp release/b4-screenshot-r1/RESTORE-B4-SCREENSHOT-R1.ps1 "$OUT/"
+          cp release/b4-screenshot-r1/RESTORE-B4-SCREENSHOT-R1.cmd "$OUT/"
+          cp release/b4-screenshot-r1/VERIFY-B4-SCREENSHOT-R1-ROLLBACK.ps1 "$OUT/"
+          cp release/b4-screenshot-r1/VERIFY-B4-SCREENSHOT-R1-ROLLBACK.cmd "$OUT/"
+          cp release/b4-screenshot-r1/COLLECT-B4-SCREENSHOT-R1-ROLLBACK.ps1 "$OUT/"
+          cp release/b4-screenshot-r1/COLLECT-B4-SCREENSHOT-R1-ROLLBACK.cmd "$OUT/"
+          cat > "$OUT/README-FIRST.txt" <<'EOF'
+          B4-SCREENSHOT-R1 ROLLBACK A/B
+
+          1. Run RESTORE-B4-SCREENSHOT-R1.cmd
+          2. Run VERIFY-B4-SCREENSHOT-R1-ROLLBACK.cmd
+          3. Boot RG35XX and test:
+             - dragon-mania-s40v6
+             - NinjaSchool1
+          4. Observe whether image animates after Run and whether hard reset is needed.
+          5. Run COLLECT-B4-SCREENSHOT-R1-ROLLBACK.cmd
+          6. Send B4-SCREENSHOT-R1-ROLLBACK-EVIDENCE-*.zip
+
+          Expected restored core:
+          56bb3b972337dd40b342c1881f6599c53eebf66a29f920a1aa2e2839eb29a07c
+
+          Expected runtime retained:
+          4f1f126c2e02b4fbc3b8985d3afd0cbb239d35e0f97512a4eb85f25fcbacbc9c
+
+          NO NEW CODE CHANGE.
+          STABLE=NO.
+          EOF
+          (cd "$OUT" && sha256sum * > SHA256SUMS.txt)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: b4-screenshot-r1-rollback-tools
+          path: ${{ runner.temp }}/rollback/
+          if-no-files-found: error
