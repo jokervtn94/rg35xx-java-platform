@@ -207,3 +207,37 @@ ENSURE semantics:
 - only after ENSURE PASS may INSTALL-B4-DRAGON-MEDIA-TRACE-R1.cmd be run.
 
 No new platform code checkpoint is opened for this event.
+
+
+## Recreated RMS metadata evidence — 387 bytes — 2026-09-21
+
+User-provided ENSURE log:
+- basename: ffffffff9c61314e09vhjlzvf1zxn0.rms
+- current length: 387 bytes
+- ENSURE refused quarantine because the metadata is no longer zero-length.
+
+Interpretation correction:
+The basename itself is not permanently corrupt.
+What was proven corrupt earlier was the zero-byte instance of this basename.
+Dragon Mania has now recreated the same store path with non-zero metadata, so automatic quarantine by basename would risk deleting newly valid save state.
+
+v4 precondition model:
+- ZERO-LENGTH current metadata at the previously corrupt basename => fail closed and require reversible ENSURE/quarantine;
+- ABSENT store => allowed;
+- NON-ZERO recreated store => parse as JSON, require pinned FreeJ2ME metadata keys, require baseName to match filename, require every ids[] entry to have its payload file and tag:<id> metadata;
+- structurally valid recreated metadata => preserve it and allow media trace installation;
+- installer never mutates RMS data.
+
+v4 build:
+- workflow/run: 35572214074
+- job: 106246034128
+- artifact: 10626358195
+- artifact SHA256: cd78b18d8c315f659585c989c0e8779370c84ef766ddf32b4c999dffc6e43d66
+- runtime SHA256: 0c2f8658e7786cd3f97285c94c609623464cb8f04311b359bfd0a95a7109f11e
+- protected core: 56bb3b972337dd40b342c1881f6599c53eebf66a29f920a1aa2e2839eb29a07c
+- Java classes: 1334
+- Java major: 50
+- bytecode trace gate: PASS
+- BUILD-PASS: YES
+- DEVICE-TRACE: PENDING
+- STABLE: NO
