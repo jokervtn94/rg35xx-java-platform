@@ -76,3 +76,32 @@ Status:
 - R2B BUILD-PASS=YES
 - R2B DEVICE-PASS=NO
 - STABLE=NO
+
+
+---
+
+## R2A real-device evidence justification — 2026-09-22
+
+Evidence from the exact installed R2A runtime confirms the desktop JavaSound path is failing on target:
+
+- `NoSuchMethodError: getSequencer`: 2 occurrences.
+- `LineUnavailableException`: 2 occurrences.
+- Real Football 2015 hits both Clip/LineUnavailable and getSequencer failure.
+- Zombie Infection reaches `PlatformPlayer$midiPlayer.prefetch` then getSequencer failure.
+
+This promotes the R2B native-audio architecture from historical-only rationale to a current-device-required subsystem change.
+
+Before any R2B device installer is published, add fail-closed preconditions for:
+- exact R2A base runtime;
+- exact JamVM L and glibj;
+- exact current protected B4 core as source/base identity;
+- SoundFont path `BIOS\freej2me.sf2`;
+- expected historical SoundFont SHA256 `c5378b62028c920cb11e4803327983fee2f2cdff5dc89c708e39da417e51c854`.
+
+R2B must remain a separate checkpoint from font and transparency testing.
+
+Current status remains:
+- BUILD-PASS=YES
+- DEVICE-INSTALL=BLOCKED
+- DEVICE-PASS=NO
+- STABLE=NO
