@@ -72,8 +72,15 @@ if($SelfTest){
     Fail 'SELFTEST nested parent creation failed'
   }
   Remove-Item -LiteralPath $nestedBase -Force
+  $singleton=@([pscustomobject]@{Name='one'})
+  if($singleton.Count -ne 1){ Fail 'SELFTEST singleton array normalization failed' }
+  $empty=@()
+  if($empty.Count -ne 0){ Fail 'SELFTEST empty array normalization failed' }
+
   Write-Host 'SELFTEST_ROOT_PARENT=PASS'
   Write-Host 'SELFTEST_NESTED_PARENT=PASS'
+  Write-Host 'SELFTEST_SINGLETON_ARRAY=PASS'
+  Write-Host 'SELFTEST_EMPTY_ARRAY=PASS'
   exit 0
 }
 
@@ -185,7 +192,7 @@ function Scan-Candidates {
 }
 
 Write-Host ''
-Write-Host 'RG35XX SD PRE-CLEAN R1'
+Write-Host 'RG35XX SD PRE-CLEAN R1.2'
 Write-Host "SD=$Sd"
 Write-Host "Protected JamVM=$jamvmSha"
 Write-Host "Protected glibj=$glibjSha"
@@ -203,7 +210,7 @@ if($partialQuarantines.Count -gt 0){
   Write-Warning "Detected $($partialQuarantines.Count) previous partial quarantine folder(s). They remain isolated and will not be reactivated."
 }
 
-$candidates=Scan-Candidates
+$candidates=@(Scan-Candidates)
 $stamp=Get-Date -Format 'yyyyMMdd-HHmmss'
 $reportRoot=Join-Path $Sd "RG35XX-JAVA-PRECLEAN\scan-$stamp"
 New-Item -ItemType Directory -Force -Path $reportRoot | Out-Null
@@ -312,7 +319,7 @@ try {
   if((Sha $core) -ne $ExpectedCore){ Fail 'protected core changed during clean' }
 
   # Rescan active SD. This must be empty of known old runtime/core aliases.
-  $residual=Scan-Candidates
+  $residual=@(Scan-Candidates)
   if($residual.Count -ne 0){
     $residual | Select-Object RelativePath,Reason,Size,SHA256 |
       Export-Csv -LiteralPath (Join-Path $qRoot 'RESIDUAL.csv') -NoTypeInformation -Encoding UTF8
