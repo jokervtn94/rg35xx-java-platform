@@ -1,7 +1,8 @@
 param(
   [Parameter(Mandatory=$false, Position=0)][string]$SdRoot,
   [switch]$ScanOnly,
-  [switch]$Force
+  [switch]$Force,
+  [switch]$SelfTest
 )
 
 $ErrorActionPreference='Stop'
@@ -51,6 +52,29 @@ function RelPath([string]$root,[string]$full){
 }
 function StartsRel([string]$rel,[string]$prefix){
   return $rel.StartsWith($prefix,[StringComparison]::OrdinalIgnoreCase)
+}
+
+function Ensure-ParentDirectory([string]$path){
+  $parent=Split-Path -Parent $path
+  if([string]::IsNullOrWhiteSpace($parent)){ return }
+  if(Test-Path -LiteralPath $parent -PathType Container){ return }
+  New-Item -ItemType Directory -Force -Path $parent | Out-Null
+}
+
+if($SelfTest){
+  $rootProbe=Join-Path ([IO.Path]::GetPathRoot($env:SystemRoot)) 'rg35xx-preclean-selftest-root-file.tmp'
+  Ensure-ParentDirectory $rootProbe
+
+  $nestedBase=Join-Path $env:TEMP ('rg35xx-preclean-selftest-'+[Guid]::NewGuid().ToString('N'))
+  $nestedFile=Join-Path $nestedBase 'a\b\probe.tmp'
+  Ensure-ParentDirectory $nestedFile
+  if(!(Test-Path -LiteralPath (Split-Path -Parent $nestedFile) -PathType Container)){
+    Fail 'SELFTEST nested parent creation failed'
+  }
+  Remove-Item -LiteralPath $nestedBase -Recurse -Force
+  Write-Host 'SELFTEST_ROOT_PARENT=PASS'
+  Write-Host 'SELFTEST_NESTED_PARENT=PASS'
+  exit 0
 }
 
 $Sd=Resolve-Sd $SdRoot
@@ -169,6 +193,16 @@ Write-Host "Protected core=$coreSha"
 Write-Host 'Preserve: Roms\JAVA, Saves, RG35XX-JAVA-BACKUP, protected foundation'
 Write-Host ''
 
+$partialQuarantines=@()
+$precleanRoot=Join-Path $Sd 'RG35XX-JAVA-PRECLEAN'
+if(Test-Path -LiteralPath $precleanRoot -PathType Container){
+  $partialQuarantines=@(Get-ChildItem -LiteralPath $precleanRoot -Directory -Filter 'quarantine-*' -ErrorAction SilentlyContinue |
+    Where-Object { !(Test-Path -LiteralPath (Join-Path $_.FullName 'RESULT.txt') -PathType Leaf) })
+}
+if($partialQuarantines.Count -gt 0){
+  Write-Warning "Detected $($partialQuarantines.Count) previous partial quarantine folder(s). They remain isolated and will not be reactivated."
+}
+
 $candidates=Scan-Candidates
 $stamp=Get-Date -Format 'yyyyMMdd-HHmmss'
 $reportRoot=Join-Path $Sd "RG35XX-JAVA-PRECLEAN\scan-$stamp"
@@ -183,6 +217,7 @@ $candidates | Select-Object RelativePath,Reason,Size,SHA256 |
   "SD=$Sd",
   "MODE=$(if($ScanOnly){'SCAN_ONLY'}else{'CLEAN'})",
   "CANDIDATE_COUNT=$($candidates.Count)",
+  "PREVIOUS_PARTIAL_QUARANTINE_COUNT=$($partialQuarantines.Count)",
   "JAMVM_SHA256=$jamvmSha",
   "GLIBJ_SHA256=$glibjSha",
   "CORE_SHA256=$coreSha",
@@ -224,7 +259,7 @@ try {
     if(!(Test-Path -LiteralPath $src -PathType Leaf)){ continue }
 
     $dst=Join-Path $qRoot $item.RelativePath
-    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dst) | Out-Null
+    Ensure-ParentDirectory $dst
 
     if(Test-Path -LiteralPath $dst){ Fail "Quarantine collision: $dst" }
 
@@ -265,6 +300,7 @@ try {
     "SD=$Sd",
     "QUARANTINE=$qRoot",
     "MOVED_COUNT=$($moved.Count)",
+    "PREVIOUS_PARTIAL_QUARANTINE_COUNT=$($partialQuarantines.Count)",
     "JAMVM_SHA256=$ExpectedJamvm",
     "GLIBJ_SHA256=$ExpectedGlibj",
     "CORE_SHA256=$ExpectedCore",
@@ -286,16 +322,31 @@ try {
   Write-Host 'READY_FOR_RG35XX_CLEAN_R1_INSTALL=YES'
 }
 catch {
-  Write-Warning 'Clean failed. Rolling back files moved in this run.'
+  $originalError=$_.Exception
+  Write-Warning ("Clean failed: " + $originalError.Message)
+  Write-Warning 'Rolling back files moved in this run.'
+  $rollbackErrors=New-Object System.Collections.ArrayList
   for($i=$moved.Count-1;$i -ge 0;$i--){
     $m=$moved[$i]
     $src=$m.QuarantinePath
     $dst=Join-Path $Sd $m.RelativePath
     if(Test-Path -LiteralPath $src -PathType Leaf){
-      New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dst) | Out-Null
-      if(Test-Path -LiteralPath $dst){ Remove-Item -LiteralPath $dst -Force }
-      Move-Item -LiteralPath $src -Destination $dst
+      try {
+        Ensure-ParentDirectory $dst
+        if(Test-Path -LiteralPath $dst){ Remove-Item -LiteralPath $dst -Force }
+        Move-Item -LiteralPath $src -Destination $dst -Force
+        if((Sha $dst) -ne $m.SHA256){ throw "Rollback hash mismatch: $($m.RelativePath)" }
+      }
+      catch {
+        [void]$rollbackErrors.Add("$($m.RelativePath) => $($_.Exception.Message)")
+      }
     }
   }
-  throw
+  if($rollbackErrors.Count -gt 0){
+    Write-Warning 'Rollback had errors:'
+    foreach($e in $rollbackErrors){ Write-Warning $e }
+  } else {
+    Write-Host 'ROLLBACK_AFTER_FAILURE=PASS'
+  }
+  throw $originalError
 }
