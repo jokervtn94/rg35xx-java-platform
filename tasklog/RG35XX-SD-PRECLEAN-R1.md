@@ -128,3 +128,52 @@ Rollback if needed:
 - saves/RMS unchanged
 
 STABLE=NO.
+
+
+---
+
+## Incident 2026-09-22 — drive-root rollback failure
+
+User executed the original R1 cleaner on SD drive `H:\`.
+
+The scan correctly detected 14 old/stray active platform files while all protected hashes matched.
+
+During CLEAN, a failure triggered rollback. The rollback then failed at the root-level restore path:
+
+```
+New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dst)
+```
+
+For root files such as:
+- `H:\freej2me-java-error.log`
+- `H:\freej2me-vc3-early.log`
+- root install-result / backup-pointer files
+
+`Split-Path -Parent` resolves to the drive root. Recreating an already existing drive root with `New-Item -ItemType Directory` is not a valid/safe operation on the user's Windows PowerShell environment.
+
+### Impact
+
+- protected JamVM/glibj/B4-core hashes were verified before mutation;
+- game and save trees were excluded;
+- rollback itself may have stopped before restoring every file moved in that run;
+- any files left in the previous quarantine are isolated and cannot participate in runtime lookup;
+- R1 must NOT be installed until a fixed cleaner completes with `ACTIVE_OLD_PLATFORM_SCAN=ZERO`.
+
+### R1.1 fix
+
+- new `Ensure-ParentDirectory(path)` helper:
+  - if parent is empty: return;
+  - if parent already exists (including drive root): return;
+  - create only genuinely missing parent directories.
+- all clean/rollback/restore parent creation uses the helper.
+- rollback preserves the original clean exception instead of masking it.
+- rollback validates restored SHA256.
+- previous incomplete `quarantine-*` folders are detected and reported, but remain isolated.
+- rerunning R1.1 safely continues cleanup from the current active SD state; files already isolated in an earlier partial quarantine do not need to be reactivated first.
+- Windows PowerShell drive-root self-test added to CI.
+
+Classification:
+- original R1 cleaner: SUPERSEDED / DO NOT USE
+- fixed cleaner: R1.1
+- device cleanup status: pending successful R1.1 rerun
+- R1 platform install: BLOCKED until R1.1 reports READY_FOR_RG35XX_CLEAN_R1_INSTALL=YES
