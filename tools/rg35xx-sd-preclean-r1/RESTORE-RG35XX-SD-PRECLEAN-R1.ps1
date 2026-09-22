@@ -6,6 +6,12 @@ $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
 function Fail([string]$m){throw "RG35XX SD PRECLEAN RESTORE FAIL: $m"}
 function Sha([string]$p){if(!(Test-Path -LiteralPath $p -PathType Leaf)){return $null};return (Get-FileHash -Algorithm SHA256 -LiteralPath $p).Hash.ToLowerInvariant()}
+function Ensure-ParentDirectory([string]$path){
+ $parent=Split-Path -Parent $path
+ if([string]::IsNullOrWhiteSpace($parent)){return}
+ if(Test-Path -LiteralPath $parent -PathType Container){return}
+ New-Item -ItemType Directory -Force -Path $parent|Out-Null
+}
 if([string]::IsNullOrWhiteSpace($SdRoot)){$SdRoot=Read-Host 'Nhap ky tu o SD RG35XX'}
 $SdRoot=$SdRoot.Trim().Trim('"')
 if($SdRoot -match '^[A-Za-z]$'){$SdRoot=$SdRoot+':'}
@@ -36,7 +42,7 @@ foreach($r in $rows){
   if(!$Force){Fail "target exists: $($r.RelativePath)"}
   Remove-Item -LiteralPath $dst -Force
  }
- New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dst)|Out-Null
+ Ensure-ParentDirectory $dst
  Move-Item -LiteralPath $src -Destination $dst
  if((Sha $dst) -ne $r.SHA256){Fail "restored hash mismatch: $($r.RelativePath)"}
  $restored++
