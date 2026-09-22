@@ -1,4 +1,4 @@
-name: RG35XX SD Preclean R1.1 Tool
+name: RG35XX SD Preclean R1.2 Tool
 
 on:
   workflow_dispatch:
@@ -32,8 +32,17 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          & 'tools/rg35xx-sd-preclean-r1/RG35XX-SD-PRECLEAN-R1.ps1' -SelfTest
+          $out=& 'tools/rg35xx-sd-preclean-r1/RG35XX-SD-PRECLEAN-R1.ps1' -SelfTest 2>&1
+          $out | ForEach-Object { Write-Host $_ }
           if($LASTEXITCODE -ne 0){ throw "SelfTest failed rc=$LASTEXITCODE" }
+          foreach($required in @(
+            'SELFTEST_ROOT_PARENT=PASS',
+            'SELFTEST_NESTED_PARENT=PASS',
+            'SELFTEST_SINGLETON_ARRAY=PASS',
+            'SELFTEST_EMPTY_ARRAY=PASS'
+          )){
+            if(-not ($out -contains $required)){ throw "Missing selftest marker: $required" }
+          }
 
       - name: Static safety audit
         shell: powershell
@@ -74,7 +83,7 @@ jobs:
           Copy-Item 'tasklog/RG35XX-SD-PRECLEAN-R1.md' $root -Force
 
           @'
-          RG35XX SD PRE-CLEAN R1.1
+          RG35XX SD PRE-CLEAN R1.2
 
           Recommended order:
           1. 01-SCAN-RG35XX-OLD-PLATFORM.cmd
@@ -101,6 +110,6 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: rg35xx-sd-preclean-r1-1
+          name: rg35xx-sd-preclean-r1-2
           path: ${{ runner.temp }}/pkg/
           if-no-files-found: error
