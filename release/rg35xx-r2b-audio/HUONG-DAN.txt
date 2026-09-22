@@ -1,0 +1,26 @@
+RG35XX CLEAN R2B AUDIO - DEVICE TEST ONLY
+
+BUILD-PASS=YES
+DEVICE-PASS=NO
+STABLE=NO
+PRIMARY_VARIABLE=AUDIO_OWNERSHIP_ONLY
+
+1. Restore exact R2A before R2B. If R2C-FONT is still installed, PRECHECK must fail.
+2. BIOS\freej2me.sf2 must hash to c5378b62028c920cb11e4803327983fee2f2cdff5dc89c708e39da417e51c854.
+3. Run PRECHECK-RG35XX-R2B-AUDIO.cmd. Continue only when READY_FOR_R2B=YES.
+4. Run INSTALL-RG35XX-R2B-AUDIO.cmd.
+5. Test NinjaSchool2, KDTT, then Real Football 2015 or Zombie Infection.
+6. Hard reset = FAIL.
+7. Run COLLECT-RG35XX-R2B-AUDIO.cmd and send the evidence ZIP.
+8. Roll back with RESTORE-RG35XX-R2B-AUDIO.cmd.
+
+Expected core markers:
+RG35XX-AUDIO: async callback registered=1
+RG35XX-AUDIO: worker START ring=16384 target=3072 chunk=1470
+
+Expected Java result:
+No NoSuchMethodError: getSequencer
+No eager MediaWarmup
+No /dev/snd/seq boot probe
+
+R2B is RECONSTRUCTED audio ownership. It is not exact Golden/CN.
