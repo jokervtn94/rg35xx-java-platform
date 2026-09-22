@@ -98,7 +98,7 @@ jobs:
           if bad: raise SystemExit('JAVA_MAJOR_FAIL '+repr(bad[:10]))
           with zipfile.ZipFile(jar) as z:
               pg=z.read('org/recompile/mobile/PlatformGraphics.class')
-              if b'RG35XX-R2D-METRIC-BITMAP-FONT' not in pg: raise SystemExit('font marker missing')
+              if b'rg35xxR2DDrawMetricText' not in pg: raise SystemExit('font method bytecode missing')
               if b'RG35XX-R2D-FONT: ready bytes=' not in pg: raise SystemExit('font ready marker missing')
           print('JAVA_CLASS_COUNT=%d'%n)
           print('JAVA_MAJOR_50_GATE=PASS')
