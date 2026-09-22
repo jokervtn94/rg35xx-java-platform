@@ -77,10 +77,10 @@ if($SelfTest){
   $empty=@()
   if($empty.Count -ne 0){ Fail 'SELFTEST empty array normalization failed' }
 
-  Write-Host 'SELFTEST_ROOT_PARENT=PASS'
-  Write-Host 'SELFTEST_NESTED_PARENT=PASS'
-  Write-Host 'SELFTEST_SINGLETON_ARRAY=PASS'
-  Write-Host 'SELFTEST_EMPTY_ARRAY=PASS'
+  Write-Output 'SELFTEST_ROOT_PARENT=PASS'
+  Write-Output 'SELFTEST_NESTED_PARENT=PASS'
+  Write-Output 'SELFTEST_SINGLETON_ARRAY=PASS'
+  Write-Output 'SELFTEST_EMPTY_ARRAY=PASS'
   exit 0
 }
 
