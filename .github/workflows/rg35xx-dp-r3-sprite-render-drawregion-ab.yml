@@ -31,7 +31,7 @@ jobs:
           sudo rm -rf /opt/miyoo
           sudo docker cp "$cid:/opt/miyoo" /opt/miyoo
           sudo chown -R "$(id -u):$(id -g)" /opt/miyoo
-          test "$(/opt/miyoo/bin/arm-miyoo-linux-uclibcgnueabi-gcc -dumpmachine)" = arm-miyoo-linux-uclibgnueabi
+          test "$(/opt/miyoo/bin/arm-miyoo-linux-uclibcgnueabi-gcc -dumpmachine)" = arm-miyoo-linux-uclibcgnueabi
       - name: Build DP-R3 Sprite render A/B
         run: bash rebuild-v3/build_sprite_render_ab.sh
       - name: Publish identity
