@@ -37,7 +37,11 @@ if((Sha $glibj) -ne $ExpectedGlibj){Fail "glibj precondition failed actual=$(Sha
 if((Sha $core) -ne $ExpectedCore){Fail "protected B4 core precondition failed actual=$(Sha $core)"}
 
 $oldRuntime=Sha $current
-if($null -eq $oldRuntime){Fail 'Canonical BIOS runtime missing'}
+$oldRuntimeState='PRESENT'
+if($null -eq $oldRuntime){
+ $oldRuntime='ABSENT_PRE_CLEAN'
+ $oldRuntimeState='ABSENT_PRE_CLEAN'
+}
 
 $targets=@(
  'BIOS\freej2me-lr.jar',
@@ -102,6 +106,7 @@ try {
   "TIME=$((Get-Date).ToString('s'))",
   "BACKUP=$backup",
   "OLD_RUNTIME_SHA256=$oldRuntime",
+  "OLD_RUNTIME_STATE=$oldRuntimeState",
   "NEW_RUNTIME_SHA256=$NewRuntime",
   "CORE_SHA256=$ExpectedCore",
   "JAMVM_SHA256=$ExpectedJamvm",
