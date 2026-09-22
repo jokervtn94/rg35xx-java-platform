@@ -32,10 +32,31 @@ A self-contained recovery kit was generated from the exact R2A GitHub Actions ar
 
 The recovery kit accepts only exact R2C-FONT on all five runtime aliases, checks protected JamVM/glibj/B4 core, creates a backup, replaces only the five runtime aliases with exact R2A, and verifies each write.
 
+## Device recovery evidence
+
+The user ran the recovery verification on the real SD and all five runtime aliases matched the exact R2A SHA256:
+
+- `BIOS\freej2me-lr.jar` = `5c1ac5ab9927fff29012366ac26cd756967858259116c654b529ebb501363913`
+- `BIOS\freej2me_plus-lr.jar` = same exact R2A SHA
+- `CFW\java\share\freej2me\freej2me-lr.jar` = same exact R2A SHA
+- `CFW\retroarch\.retroarch\system\freej2me-lr.jar` = same exact R2A SHA
+- `CFW\retroarch\system\freej2me-lr.jar` = same exact R2A SHA
+
+Verifier result:
+`R2A_EXACT=YES`
+
+Classification:
+- BASELINE_RECOVERY=DEVICE-EVIDENCE
+- EXACT_R2A_RUNTIME_ALIASES=PASS
+- R2B_PRECHECK=NEXT
+- R2B_DEVICE_PASS=NO
+- STABLE=NO
+
 ## Status
 
 - R2B INSTALL ATTEMPT: FAIL-CLOSED BEFORE WRITE
-- DEVICE STATE AFTER FAILED INSTALL: R2C-FONT unchanged
+- DEVICE STATE AFTER RECOVERY: exact R2A runtime restored and verified
 - R2B BUILD-PASS: YES
+- R2B DEVICE-TEST-PENDING: YES
 - R2B DEVICE-PASS: NO
 - STABLE: NO
