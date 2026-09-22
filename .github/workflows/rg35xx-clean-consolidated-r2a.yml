@@ -16,6 +16,7 @@ on:
       - 'scripts/vc6_apply_png_iccp_compat.py'
       - 'scripts/vc7r2_apply_proven_dynamic_view.py'
       - 'tasklog/RG35XX-CLEAN-CONSOLIDATED-R2.md'
+      - 'release/rg35xx-clean-consolidated-r2a/**'
 
 jobs:
   runtime:
@@ -114,13 +115,37 @@ jobs:
 
           echo "R2A_RUNTIME_SHA256=$(sha256sum "$JAR" | awk '{print $1}')" >> "$GITHUB_ENV"
 
-      - name: Package runtime checkpoint
+      - name: Validate Windows tooling
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          foreach($p in @(
+            'release/rg35xx-clean-consolidated-r2a/INSTALL-RG35XX-CLEAN-R2A.ps1',
+            'release/rg35xx-clean-consolidated-r2a/RESTORE-RG35XX-CLEAN-R2A.ps1',
+            'release/rg35xx-clean-consolidated-r2a/COLLECT-RG35XX-CLEAN-R2A.ps1'
+          )){
+            [scriptblock]::Create((Get-Content -Raw $p)) | Out-Null
+            Write-Host "PARSE_PASS=$p"
+          }
+          $out=& 'release/rg35xx-clean-consolidated-r2a/COLLECT-RG35XX-CLEAN-R2A.ps1' -SelfTest 2>&1
+          $text=($out | Out-String)
+          $out | ForEach-Object { Write-Host $_ }
+          foreach($m in @('SELFTEST_ZERO_MATCH=PASS','SELFTEST_SINGLE_MATCH=PASS','SELFTEST_MULTI_MATCH=PASS')){
+            if(-not $text.Contains($m)){ throw "Collector selftest missing: $m" }
+          }
+          Write-Host 'R2A_WINDOWS_TOOL_GATE=PASS'
+
+      - name: Package fail-closed R2A device-test kit
         run: |
           set -euo pipefail
           ROOT="$RUNNER_TEMP/pkg"
           mkdir -p "$ROOT/payload"
           cp "$R2A/build/freej2me_plus-lr.jar" "$ROOT/payload/freej2me-lr.jar"
+          cp release/rg35xx-clean-consolidated-r2a/* "$ROOT/"
           cp tasklog/RG35XX-CLEAN-CONSOLIDATED-R2.md "$ROOT/"
+
+          sed -i "s/__R2A_RUNTIME_SHA256__/$R2A_RUNTIME_SHA256/g" "$ROOT/INSTALL-RG35XX-CLEAN-R2A.ps1"
+          ! grep -R -Fq '__R2A_RUNTIME_SHA256__' "$ROOT"
 
           cat > "$ROOT/STATUS.txt" <<EOF
           CHECKPOINT=RG35XX-CLEAN-CONSOLIDATED-R2A
@@ -149,16 +174,19 @@ jobs:
 
           cat > "$ROOT/TEST-FIRST.txt" <<EOF
           R2A tests only decoded-image normalization.
-          Do not interpret audio/freeze/screenshot behavior as fixed by this checkpoint.
 
-          First device target:
-          - use a game that showed black/missing decoded assets on R1
-          - verify physical LCD colors
-          - verify whether black/missing images are restored
-          - collect freej2me-java-error.log after test
+          1. Run INSTALL-RG35XX-CLEAN-R2A.cmd.
+             It requires exact installed R1 runtime SHA 6053eb80f890c33a4ef2466e1c18c516178d3b4a0d1ad5130c91a532951d9921.
+          2. Test the SAME game that showed black/missing images on R1.
+          3. Compare physical LCD with screenshot output.
+          4. Report audio/freeze observations, but R2A does not modify those subsystems.
+          5. Run COLLECT-RG35XX-CLEAN-R2A.cmd.
+          6. Upload RG35XX-CLEAN-R2A-EVIDENCE-*.zip.
 
-          Expected bounded marker:
+          Expected bounded Java marker:
           RG35XX-R2A-IMAGE-NORMALIZE
+
+          Hard reset = FAIL for that session.
           EOF
 
           (cd "$ROOT" && find . -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS.txt)
