@@ -21,7 +21,9 @@ cp "$A_PLATFORM" build-dp-r8/dp-r8-a-platform.jar
 python3 rebuild-v8/patch_sprite_transformed_collision_rect.py
 grep -q 'DP-R8 PRIMARY VARIABLE:' upstream/src/javax/microedition/lcdui/game/Sprite.java
 
-# Force JAR repack after Sprite.java compilation.
+# Force Sprite recompilation and JAR repack. Chained checkpoint builds can
+# leave class/JAR mtimes equal to or newer than a freshly patched source file.
+rm -f upstream/build/classes/javax/microedition/lcdui/game/Sprite.class
 rm -f upstream/build/freej2me_plus.jar upstream/build/freej2me_plus-lr.jar
 (cd upstream && JAVA_HOME="$JAVA8" ant -noinput -buildfile build.xml)
 
