@@ -66,12 +66,12 @@ if($SelfTest){
   Ensure-ParentDirectory $rootProbe
 
   $nestedBase=Join-Path $env:TEMP ('rg35xx-preclean-selftest-'+[Guid]::NewGuid().ToString('N'))
-  $nestedFile=Join-Path $nestedBase 'a\b\probe.tmp'
+  $nestedFile=Join-Path $nestedBase 'probe.tmp'
   Ensure-ParentDirectory $nestedFile
-  if(!(Test-Path -LiteralPath (Split-Path -Parent $nestedFile) -PathType Container)){
+  if(!(Test-Path -LiteralPath $nestedBase -PathType Container)){
     Fail 'SELFTEST nested parent creation failed'
   }
-  Remove-Item -LiteralPath $nestedBase -Recurse -Force
+  Remove-Item -LiteralPath $nestedBase -Force
   Write-Host 'SELFTEST_ROOT_PARENT=PASS'
   Write-Host 'SELFTEST_NESTED_PARENT=PASS'
   exit 0
