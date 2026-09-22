@@ -177,3 +177,71 @@ Classification:
 - fixed cleaner: R1.1
 - device cleanup status: pending successful R1.1 rerun
 - R1 platform install: BLOCKED until R1.1 reports READY_FOR_RG35XX_CLEAN_R1_INSTALL=YES
+
+
+---
+
+## Incident 2026-09-22 — StrictMode singleton scan failure
+
+After R1.1 fixed the drive-root rollback bug, the user's next SCAN run reported:
+
+```
+WARNING: Detected 1 previous partial quarantine folder(s).
+The property 'Count' cannot be found on this object.
+PropertyNotFoundStrict
+```
+
+### Root cause
+
+Under Windows PowerShell, function output is pipeline-unrolled.
+
+When `Scan-Candidates` returned exactly one object, assignment:
+
+```
+$candidates=Scan-Candidates
+```
+
+produced a scalar `PSCustomObject`, not an array.
+
+With `Set-StrictMode -Version Latest`, accessing:
+
+```
+$candidates.Count
+```
+
+failed because the scalar object has no Count property.
+
+The same latent bug existed in the post-clean residual rescan.
+
+### Impact
+
+- failure occurred in SCAN ONLY;
+- no additional platform files were moved by this run;
+- protected JamVM/glibj/B4 core hashes were still valid;
+- previous partial quarantine remained isolated.
+
+### R1.2 fix
+
+Normalize all scanner results at the call site:
+
+```
+$candidates=@(Scan-Candidates)
+$residual=@(Scan-Candidates)
+```
+
+This guarantees:
+- zero result -> array Count 0;
+- one result -> array Count 1;
+- many results -> array Count N.
+
+CI self-test now requires:
+- `SELFTEST_ROOT_PARENT=PASS`
+- `SELFTEST_NESTED_PARENT=PASS`
+- `SELFTEST_SINGLETON_ARRAY=PASS`
+- `SELFTEST_EMPTY_ARRAY=PASS`
+
+Classification:
+- R1: SUPERSEDED
+- R1.1: SUPERSEDED
+- R1.2: current cleaner candidate
+- R1 platform install remains BLOCKED until R1.2 returns READY_FOR_RG35XX_CLEAN_R1_INSTALL=YES
