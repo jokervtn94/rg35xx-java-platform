@@ -1,0 +1,9 @@
+param([Parameter(Mandatory=$false, Position=0)][string]$SdRoot)
+$ErrorActionPreference='Stop';Set-StrictMode -Version Latest
+function Fail([string]$m){throw "R2C-AUDIO-R1-AB RESTORE FAIL: $m"}
+function Ensure-Parent([string]$p){$d=Split-Path -Parent $p;if([string]::IsNullOrWhiteSpace($d)){return};if(!(Test-Path -LiteralPath $d -PathType Container)){New-Item -ItemType Directory -Force -Path $d|Out-Null}}
+if([string]::IsNullOrWhiteSpace($SdRoot)){$SdRoot=Read-Host 'Nhap ky tu o SD RG35XX'}
+$SdRoot=$SdRoot.Trim().Trim('"');if($SdRoot-match'^[A-Za-z]$'){$SdRoot=$SdRoot+':'};if($SdRoot-match'^[A-Za-z]:$'){$SdRoot=$SdRoot+'\'};if(!(Test-Path -LiteralPath $SdRoot -PathType Container)){Fail "SD root not found: $SdRoot"}
+$Sd=(Resolve-Path -LiteralPath $SdRoot).Path;$ptr=Join-Path $Sd 'R2C-AUDIO-R1-AB-CURRENT-BACKUP.txt';if(!(Test-Path -LiteralPath $ptr -PathType Leaf)){Fail 'backup pointer missing'};$backup=(Get-Content -LiteralPath $ptr -Raw).Trim();$state=Join-Path $backup 'STATE.txt';if(!(Test-Path -LiteralPath $state -PathType Leaf)){Fail "STATE missing: $state"}
+foreach($line in @(Get-Content -LiteralPath $state)){$p=$line.Split('|');if($p.Count-lt 2){continue};$rel=$p[1];$dst=Join-Path $Sd $rel;$bak=Join-Path $backup $rel;if(Test-Path -LiteralPath $dst){Remove-Item -LiteralPath $dst -Force};if(Test-Path -LiteralPath $bak -PathType Leaf){Ensure-Parent $dst;Copy-Item -LiteralPath $bak -Destination $dst -Force}}
+Write-Host "RESTORE PASS - exact R2C baseline restored from $backup"
