@@ -35,6 +35,10 @@ MF
 python3 rebuild-v7/patch_sprite_transform_collision_upstream93d.py
 grep -q 'DP-R7 PRIMARY VARIABLE:' upstream/src/javax/microedition/lcdui/game/Sprite.java
 
+# Force Ant to repack the just-recompiled Sprite.class. The chained DP builds
+# leave a newer JAR timestamp behind, so an incremental jar target can otherwise
+# skip repacking even though javac compiled Sprite.java.
+rm -f upstream/build/freej2me_plus.jar upstream/build/freej2me_plus-lr.jar
 (cd upstream && JAVA_HOME="$JAVA8" ant -noinput -buildfile build.xml)
 B_PLATFORM=upstream/build/freej2me_plus.jar
 test -f "$B_PLATFORM"
