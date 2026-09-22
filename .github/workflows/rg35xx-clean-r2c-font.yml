@@ -1,0 +1,161 @@
+name: RG35XX Clean R2C Font
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [rg35xx-clean-consolidated-r2]
+    paths:
+      - '.github/workflows/rg35xx-clean-r2c-font.yml'
+      - 'scripts/rg35xx_clean_consolidated_r2a_assemble.sh'
+      - 'scripts/r2_apply_headless_image_normalize.py'
+      - 'scripts/r2d_apply_metric_bitmap_font.py'
+      - 'scripts/vc7r_reconstruct_font.py'
+      - 'release/rg35xx-r2c-font/**'
+      - 'tasklog/RG35XX-CLEAN-R2C-FONT.md'
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      FREEJ2ME_PIN: 13ec186903087156c145268f8706eecfaf9f1e50
+      R2A_BASE_SHA256: 5c1ac5ab9927fff29012366ac26cd756967858259116c654b529ebb501363913
+      FONT_SHA256: 20c2e59d063282d4b6a0d612dea3cba2c0b5bd7fafe85a05729951bd38902db9
+      LATIN_SHA256: ae7b7855e115a5966d8b1b3f80f254ccc117ec86f9965e202ee2940453837280
+      CJK_SHA256: b76b0433203017ca80401b2ee0dd69350349871c4b19d504c34dbdd80541690a
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: TASEmulators/freej2me-plus
+          ref: 13ec186903087156c145268f8706eecfaf9f1e50
+          path: upstream
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update >/dev/null
+          sudo apt-get install -y --no-install-recommends ant python3 python3-pil python3-fonttools fonts-dejavu-core fonts-noto-cjk >/dev/null
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Assemble exact R2A foundation
+        run: |
+          set -euo pipefail
+          test "$(git -C upstream rev-parse HEAD)" = "$FREEJ2ME_PIN"
+          VC_UPSTREAM="$GITHUB_WORKSPACE/upstream" R2A_ASSEMBLY="$RUNNER_TEMP/r2c-font"             sh scripts/rg35xx_clean_consolidated_r2a_assemble.sh
+          echo "OUT=$RUNNER_TEMP/r2c-font" >> "$GITHUB_ENV"
+          grep -Fq 'RG35XX-R2A-IMAGE-NORMALIZE' "$RUNNER_TEMP/r2c-font/src/org/recompile/mobile/PlatformImage.java"
+          echo R2A_BASE_GATE=PASS
+
+      - name: Apply font-only patch
+        run: |
+          set -euo pipefail
+          P="$OUT/src/org/recompile/mobile/PlatformGraphics.java"
+          python3 scripts/r2d_apply_metric_bitmap_font.py "$P"
+          grep -Fq 'RG35XX-R2D-METRIC-BITMAP-FONT' "$P"
+          grep -Fq 'rg35xxR2DDrawMetricText(str, x, y - ascent);' "$P"
+          ! grep -Fq 'gc.drawString(str, x, y);' "$P"
+          echo R2C_FONT_SOURCE_GATE=PASS
+
+      - name: Generate deterministic reconstructed Unicode resource
+        run: |
+          set -euo pipefail
+          LATIN='/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
+          CJK="$(fc-match -f '%{file}
+' 'Noto Sans CJK JP' | head -n1)"
+          test "$(sha256sum "$LATIN"|awk '{print $1}')" = "$LATIN_SHA256"
+          test "$(sha256sum "$CJK"|awk '{print $1}')" = "$CJK_SHA256"
+          mkdir -p "$OUT/resources/org/recompile/mobile" "$RUNNER_TEMP/font"
+          python3 scripts/vc7r_reconstruct_font.py             --font "$LATIN" --font "$CJK#0"             --out "$OUT/resources/org/recompile/mobile/rg35xx-font.bin"             --manifest "$RUNNER_TEMP/font/manifest.json"
+          test "$(stat -c%s "$OUT/resources/org/recompile/mobile/rg35xx-font.bin")" = 727008
+          test "$(sha256sum "$OUT/resources/org/recompile/mobile/rg35xx-font.bin"|awk '{print $1}')" = "$FONT_SHA256"
+          grep -Fq '"status": "RECONSTRUCTED-NOT-GOLDEN"' "$RUNNER_TEMP/font/manifest.json"
+          echo FONT_RESOURCE_GATE=PASS
+
+      - name: Build Java 6 runtime and bytecode gates
+        run: |
+          set -euo pipefail
+          (cd "$OUT" && ant)
+          JAR="$OUT/build/freej2me_plus-lr.jar"
+          test -f "$JAR"
+          jar tf "$JAR" | grep -Fx 'org/recompile/mobile/rg35xx-font.bin'
+
+          python3 - "$OUT/build/classes" "$JAR" <<'PY'
+          import os,struct,sys,zipfile
+          cls=sys.argv[1]; jar=sys.argv[2]
+          bad=[]; n=0
+          for b,_,fs in os.walk(cls):
+              for fn in fs:
+                  if not fn.endswith('.class'): continue
+                  n+=1
+                  p=os.path.join(b,fn)
+                  h=open(p,'rb').read(8)
+                  if len(h)!=8 or h[:4]!=b'\xca\xfe\xba\xbe' or struct.unpack('>H',h[6:8])[0]!=50:
+                      bad.append(p)
+          if bad: raise SystemExit('JAVA_MAJOR_FAIL '+repr(bad[:10]))
+          with zipfile.ZipFile(jar) as z:
+              pg=z.read('org/recompile/mobile/PlatformGraphics.class')
+              if b'RG35XX-R2D-METRIC-BITMAP-FONT' not in pg: raise SystemExit('font marker missing')
+              if b'RG35XX-R2D-FONT: ready bytes=' not in pg: raise SystemExit('font ready marker missing')
+          print('JAVA_CLASS_COUNT=%d'%n)
+          print('JAVA_MAJOR_50_GATE=PASS')
+          print('R2C_FONT_BYTECODE_GATE=PASS')
+          PY
+          echo "NEW_SHA=$(sha256sum "$JAR"|awk '{print $1}')" >> "$GITHUB_ENV"
+
+      - name: Validate Windows tooling
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          foreach($p in @(
+            'release/rg35xx-r2c-font/INSTALL-RG35XX-R2C-FONT.ps1',
+            'release/rg35xx-r2c-font/RESTORE-RG35XX-R2C-FONT.ps1',
+            'release/rg35xx-r2c-font/COLLECT-RG35XX-R2C-FONT.ps1'
+          )){
+            [scriptblock]::Create((Get-Content -Raw $p))|Out-Null
+            Write-Host "PARSE_PASS=$p"
+          }
+          $out=& 'release/rg35xx-r2c-font/COLLECT-RG35XX-R2C-FONT.ps1' -SelfTest 2>&1
+          if(-not (($out|Out-String).Contains('SELFTEST_COUNT=PASS'))){throw 'collector selftest fail'}
+          Write-Host 'WINDOWS_TOOL_GATE=PASS'
+
+      - name: Package fail-closed device kit
+        run: |
+          set -euo pipefail
+          ROOT="$RUNNER_TEMP/pkg";mkdir -p "$ROOT/payload"
+          cp "$OUT/build/freej2me_plus-lr.jar" "$ROOT/payload/freej2me-lr.jar"
+          cp release/rg35xx-r2c-font/* "$ROOT/"
+          cp tasklog/RG35XX-CLEAN-R2C-FONT.md "$ROOT/"
+          cp "$RUNNER_TEMP/font/manifest.json" "$ROOT/R2C-FONT-MANIFEST.json"
+          sed -i "s/__R2C_FONT_RUNTIME_SHA256__/$NEW_SHA/g" "$ROOT/INSTALL-RG35XX-R2C-FONT.ps1"
+          ! grep -R -Fq '__R2C_FONT_RUNTIME_SHA256__' "$ROOT"
+          cat > "$ROOT/STATUS.txt" <<EOF
+          CHECKPOINT=RG35XX-CLEAN-R2C-FONT
+          PRIMARY_VARIABLE=FONT_TEXT_RASTER_ONLY
+          SOURCE_COMMIT=$GITHUB_SHA
+          BASE_R2A_SHA256=$R2A_BASE_SHA256
+          RUNTIME_SHA256=$NEW_SHA
+          FONT_RESOURCE_SHA256=$FONT_SHA256
+          FONT_STATUS=RECONSTRUCTED-NOT-GOLDEN
+          NATIVE_CORE_CHANGE=NONE
+          TRANSPARENCY_CHANGE=NONE
+          AUDIO_CHANGE=NONE
+          CANVAS_CHANGE=NONE
+          BUILD_PASS=YES
+          DEVICE_PASS=NO_DEVICE_TEST_PENDING
+          STABLE=NO
+          EOF
+          (cd "$ROOT" && find . -type f ! -name SHA256SUMS.txt -print0|sort -z|xargs -0 sha256sum > SHA256SUMS.txt)
+          (cd "$ROOT" && sha256sum -c SHA256SUMS.txt)
+          echo "R2C_FONT_RUNTIME_SHA256=$NEW_SHA"
+          echo BUILD_PASS=YES
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rg35xx-clean-r2c-font
+          path: ${{ runner.temp }}/pkg/
+          if-no-files-found: error
