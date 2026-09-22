@@ -65,8 +65,7 @@ jobs:
         run: |
           set -euo pipefail
           LATIN='/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
-          CJK="$(fc-match -f '%{file}
-' 'Noto Sans CJK JP' | head -n1)"
+          CJK="$(fc-match -f '%{file}\\n' 'Noto Sans CJK JP' | head -n1)"
           test "$(sha256sum "$LATIN"|awk '{print $1}')" = "$LATIN_SHA256"
           test "$(sha256sum "$CJK"|awk '{print $1}')" = "$CJK_SHA256"
           mkdir -p "$OUT/resources/org/recompile/mobile" "$RUNNER_TEMP/font"
