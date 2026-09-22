@@ -123,12 +123,21 @@ R2A:
 - DEVICE-PASS=NO
 - STABLE=NO
 
-## Next integrated candidate
+## Next checkpoint policy correction
 
-Build one user-facing candidate from R2A with independently gated owners:
-1. R2C transparency semantics.
-2. R2D direct metric bitmap Unicode font.
-3. R2B native audio dedicated-FD worker-ring.
+The project rule file explicitly requires:
+- minimal delta;
+- one primary variable per A/B checkpoint;
+- do not bundle unrelated fixes.
+
+Therefore an integrated transparency+font+audio candidate is FORBIDDEN.
+
+Prepare independent R2A-based checkpoints:
+1. R2C-FONT — direct metric bitmap Unicode text only.
+2. R2D-TRANSPARENCY — PNG tRNS + conservative legacy border white-key only.
+3. R2B-AUDIO — dedicated-FD native worker-ring only, kept separate.
+
+Each device installer must require exact R2A base identity and support rollback before another checkpoint is tested.
 
 Do not change:
 - Canvas/serviceRepaints semantics;
