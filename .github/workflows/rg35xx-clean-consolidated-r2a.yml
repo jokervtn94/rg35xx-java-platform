@@ -1,0 +1,176 @@
+name: RG35XX Clean Consolidated R2A Image Normalize
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [rg35xx-clean-consolidated-r2]
+    paths:
+      - '.github/workflows/rg35xx-clean-consolidated-r2a.yml'
+      - 'scripts/rg35xx_clean_consolidated_r2a_assemble.sh'
+      - 'scripts/r2_apply_headless_image_normalize.py'
+      - 'scripts/rg35xx_clean_consolidated_r1_assemble.sh'
+      - 'scripts/b4_apply_nomask_green_tint_fix.py'
+      - 'scripts/b4_apply_nomask_hard_bypass.py'
+      - 'scripts/b4_apply_hotpath_r2_cleanup.py'
+      - 'scripts/b4_apply_canonical_framebuffer_r1.py'
+      - 'scripts/vc6_apply_png_iccp_compat.py'
+      - 'scripts/vc7r2_apply_proven_dynamic_view.py'
+      - 'tasklog/RG35XX-CLEAN-CONSOLIDATED-R2.md'
+
+jobs:
+  runtime:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    env:
+      FREEJ2ME_PIN: 13ec186903087156c145268f8706eecfaf9f1e50
+      JAMVM_SHA256: eea1b97cebfaca67b69ed365e966d80cdac22d8ff245c7a556137cfb2898ea34
+      GLIBJ_SHA256: d7abe888d2980329434c30f18c0eec124be1f02284bf9ed28e88d7242a1f2bea
+      B4_CORE_SHA256: 56bb3b972337dd40b342c1881f6599c53eebf66a29f920a1aa2e2839eb29a07c
+      MIYOO_REF: ca11dfe8ea1cc273d92460f9a83bbf192023fa63
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/checkout@v4
+        with:
+          repository: TASEmulators/freej2me-plus
+          ref: 13ec186903087156c145268f8706eecfaf9f1e50
+          path: upstream
+
+      - name: Install requirements
+        run: |
+          sudo apt-get update >/dev/null
+          sudo apt-get install -y --no-install-recommends ant python3 unzip >/dev/null
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Verify exact upstream pin
+        run: |
+          set -euo pipefail
+          test "$(git -C upstream rev-parse HEAD)" = "$FREEJ2ME_PIN"
+          echo FREEJ2ME_PIN_GATE=PASS
+
+      - name: Assemble R2A from current R1
+        run: |
+          set -euo pipefail
+          VC_UPSTREAM="$GITHUB_WORKSPACE/upstream" \
+          R2A_ASSEMBLY="$RUNNER_TEMP/clean-r2a" \
+            sh scripts/rg35xx_clean_consolidated_r2a_assemble.sh
+          echo "R2A=$RUNNER_TEMP/clean-r2a" >> "$GITHUB_ENV"
+
+      - name: Scope and ownership gates
+        run: |
+          set -euo pipefail
+          I="$R2A/src/org/recompile/mobile/PlatformImage.java"
+          P="$R2A/src/org/recompile/mobile/PlatformPlayer.java"
+          C="$R2A/src/javax/microedition/lcdui/Canvas.java"
+          N="$R2A/src/libretro/freej2me_libretro.c"
+
+          test "$(grep -Fc 'rg35xxR2ANormalizeDecodedImage(image);' "$I")" -eq 3
+          grep -Fq 'image.getRGB(0, 0, w, h, null, 0, w)' "$I"
+          grep -Fq 'System.arraycopy(pixels, 0, dst, 0, pixels.length)' "$I"
+          grep -Fq 'rg35xxR2AImageNormalizeSeq <= 24' "$I"
+          ! grep -Fq 'canvas.getGraphics().drawImage(image, 0, 0, null);' "$I"
+
+          test "$(grep -Fc 'ImageIO.read(rg35xxPngIccpCompat(stream))' "$I")" -eq 3
+          ! grep -Fq 'ImageIO.read(stream)' "$I"
+
+          grep -Fq 'MidiSystem.getSequencer(false)' "$P"
+          grep -Fq 'AudioSystem.getClip()' "$P"
+          grep -Fq 'paintLock.wait(1000)' "$C"
+          grep -Fq 'RETRO_PIXEL_FORMAT_RGB565' "$N"
+
+          echo R2A_SCOPE_GATE=PASS
+
+      - name: Build Java runtime
+        run: |
+          set -euo pipefail
+          cd "$R2A"
+          ant
+          JAR="$R2A/build/freej2me_plus-lr.jar"
+          test -f "$JAR"
+
+          python3 - "$R2A/build/classes" <<'PY'
+          import os,struct,sys
+          count=0
+          bad=[]
+          for base,_,files in os.walk(sys.argv[1]):
+              for fn in files:
+                  if not fn.endswith('.class'): continue
+                  count+=1
+                  p=os.path.join(base,fn)
+                  b=open(p,'rb').read(8)
+                  if len(b)!=8 or b[:4]!=b'\xca\xfe\xba\xbe':
+                      bad.append((p,'magic')); continue
+                  major=struct.unpack('>H',b[6:8])[0]
+                  if major!=50: bad.append((p,'major=%d'%major))
+          if bad: raise SystemExit('JAVA_MAJOR_GATE_FAIL '+repr(bad[:20]))
+          print('JAVA_CLASS_COUNT=%d'%count)
+          print('JAVA_MAJOR_50_GATE=PASS')
+          PY
+
+          echo "R2A_RUNTIME_SHA256=$(sha256sum "$JAR" | awk '{print $1}')" >> "$GITHUB_ENV"
+
+      - name: Package runtime checkpoint
+        run: |
+          set -euo pipefail
+          ROOT="$RUNNER_TEMP/pkg"
+          mkdir -p "$ROOT/payload"
+          cp "$R2A/build/freej2me_plus-lr.jar" "$ROOT/payload/freej2me-lr.jar"
+          cp tasklog/RG35XX-CLEAN-CONSOLIDATED-R2.md "$ROOT/"
+
+          cat > "$ROOT/STATUS.txt" <<EOF
+          CHECKPOINT=RG35XX-CLEAN-CONSOLIDATED-R2A
+          SOURCE_COMMIT=$GITHUB_SHA
+          BASE=RG35XX-CLEAN-CONSOLIDATED-R1
+          FREEJ2ME_PIN=$FREEJ2ME_PIN
+          MIYOO_REFERENCE_COMMIT=$MIYOO_REF
+          RUNTIME_SHA256=$R2A_RUNTIME_SHA256
+          REQUIRED_JAMVM_SHA256=$JAMVM_SHA256
+          REQUIRED_GLIBJ_SHA256=$GLIBJ_SHA256
+          REQUIRED_CORE_SHA256=$B4_CORE_SHA256
+          CORE_PACKAGED=NO
+          R2A_IMAGE_NORMALIZE=ENABLED
+          PNG_ICCP=R1_PRESERVED
+          DYNAMIC_VIEW=R1_PRESERVED
+          VIDEO_MASK_R2=R1_PRESERVED
+          HOTPATH_R2=R1_PRESERVED
+          CANONICAL_FRAMEBUFFER=R1_PRESERVED
+          AUDIO_CHANGE=NONE
+          CANVAS_CHANGE=NONE
+          NATIVE_VIDEO_CHANGE=NONE
+          BUILD_PASS=YES
+          DEVICE_PASS=NO_DEVICE_TEST_PENDING
+          STABLE=NO
+          EOF
+
+          cat > "$ROOT/TEST-FIRST.txt" <<EOF
+          R2A tests only decoded-image normalization.
+          Do not interpret audio/freeze/screenshot behavior as fixed by this checkpoint.
+
+          First device target:
+          - use a game that showed black/missing decoded assets on R1
+          - verify physical LCD colors
+          - verify whether black/missing images are restored
+          - collect freej2me-java-error.log after test
+
+          Expected bounded marker:
+          RG35XX-R2A-IMAGE-NORMALIZE
+          EOF
+
+          (cd "$ROOT" && find . -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS.txt)
+          (cd "$ROOT" && sha256sum -c SHA256SUMS.txt)
+
+          echo "R2A_RUNTIME_SHA256=$R2A_RUNTIME_SHA256"
+          echo BUILD_PASS=YES
+          echo DEVICE_PASS=NO_DEVICE_TEST_PENDING
+          echo STABLE=NO
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rg35xx-clean-consolidated-r2a-runtime
+          path: ${{ runner.temp }}/pkg/
+          if-no-files-found: error
