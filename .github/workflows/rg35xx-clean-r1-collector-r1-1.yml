@@ -1,0 +1,86 @@
+name: RG35XX Clean R1 Collector R1.1
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [rg35xx-clean-consolidated-r1]
+    paths:
+      - '.github/workflows/rg35xx-clean-r1-collector-r1-1.yml'
+      - 'tools/rg35xx-clean-r1-collector-r1-1/**'
+
+jobs:
+  package:
+    runs-on: windows-2022
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Parse collector
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $p='tools/rg35xx-clean-r1-collector-r1-1/COLLECT-RG35XX-CLEAN-R1.1.ps1'
+          [scriptblock]::Create((Get-Content -Raw $p)) | Out-Null
+          Write-Host 'COLLECTOR_PARSE=PASS'
+
+      - name: StrictMode 0-1-N self-test
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $p='tools/rg35xx-clean-r1-collector-r1-1/COLLECT-RG35XX-CLEAN-R1.1.ps1'
+          $out=& $p -SelfTest 2>&1
+          $text=($out | Out-String)
+          $out | ForEach-Object { Write-Host $_ }
+          foreach($required in @(
+            'SELFTEST_ZERO_MATCH=PASS',
+            'SELFTEST_SINGLE_MATCH=PASS',
+            'SELFTEST_MULTI_MATCH=PASS',
+            'SELFTEST_SINGLE_CONTENT_LINE=PASS'
+          )){
+            if(-not $text.Contains($required)){ throw "Missing selftest marker: $required" }
+          }
+          Write-Host 'STRICTMODE_COUNT_GATE=PASS'
+
+      - name: Static collector audit
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $p='tools/rg35xx-clean-r1-collector-r1-1/COLLECT-RG35XX-CLEAN-R1.1.ps1'
+          $s=Get-Content -Raw $p
+          if($s -match '\|Select-String[^\r\n]*\)\.Count'){ throw 'Unsafe Select-String.Count remains' }
+          if(-not $s.Contains('$lines=@(Get-Content -LiteralPath $java)')){ throw 'Java log array normalization missing' }
+          if(-not $s.Contains('$elines=@(Get-Content -LiteralPath $early)')){ throw 'Early log array normalization missing' }
+          if(-not $s.Contains('function Count-Matches')){ throw 'Count-Matches helper missing' }
+          Write-Host 'COLLECTOR_STATIC_GATE=PASS'
+
+      - name: Package collector hotfix
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $root=Join-Path $env:RUNNER_TEMP 'pkg'
+          New-Item -ItemType Directory -Force -Path $root | Out-Null
+          Copy-Item 'tools/rg35xx-clean-r1-collector-r1-1/*' $root -Force
+          @'
+          RG35XX CLEAN R1 COLLECTOR R1.1 HOTFIX
+
+          This package only collects logs/evidence.
+          It does NOT install or modify the Java runtime.
+
+          Run:
+          COLLECT-RG35XX-CLEAN-R1.1.cmd
+
+          Enter the RG35XX SD drive letter.
+          Upload RG35XX-CLEAN-R1-EVIDENCE-*.zip after COLLECT R1.1 PASS.
+          '@ | Set-Content -LiteralPath (Join-Path $root 'README-FIRST.txt') -Encoding ASCII
+
+          Push-Location $root
+          Get-ChildItem -File | Sort-Object Name | ForEach-Object {
+            "$((Get-FileHash -Algorithm SHA256 $_.FullName).Hash.ToLowerInvariant())  $($_.Name)"
+          } | Set-Content -LiteralPath 'SHA256SUMS.txt' -Encoding ASCII
+          Pop-Location
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rg35xx-clean-r1-collector-r1-1
+          path: ${{ runner.temp }}/pkg/
+          if-no-files-found: error
