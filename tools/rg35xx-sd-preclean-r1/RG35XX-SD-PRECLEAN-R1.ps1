@@ -229,6 +229,35 @@ $candidates | Select-Object RelativePath,Reason,Size,SHA256 |
 
 if($candidates.Count -eq 0){
   Write-Host 'SCAN PASS: no old/stray active platform files detected.'
+  if($ScanOnly){
+    Write-Host "Report: $reportRoot"
+    exit 0
+  }
+
+  @(
+    'RG35XX SD PRE-CLEAN R1.1',
+    'RESULT=PASS',
+    "TIME=$((Get-Date).ToString('s'))",
+    "SD=$Sd",
+    'MOVED_COUNT=0',
+    "PREVIOUS_PARTIAL_QUARANTINE_COUNT=$($partialQuarantines.Count)",
+    "JAMVM_SHA256=$ExpectedJamvm",
+    "GLIBJ_SHA256=$ExpectedGlibj",
+    "CORE_SHA256=$ExpectedCore",
+    'ACTIVE_OLD_PLATFORM_SCAN=ZERO',
+    'Roms/JAVA=PRESERVED',
+    'Saves=PRESERVED',
+    'RG35XX-JAVA-BACKUP=PRESERVED',
+    'READY_FOR_RG35XX_CLEAN_R1_INSTALL=YES'
+  ) | Set-Content -LiteralPath (Join-Path $reportRoot 'CLEAN-READY-RESULT.txt') -Encoding ASCII
+
+  Write-Host ''
+  Write-Host 'CLEAN PASS - active platform paths are already clean.'
+  Write-Host "Previous partial quarantine folders: $($partialQuarantines.Count)"
+  Write-Host 'Protected JamVM/glibj/B4 core preserved.'
+  Write-Host 'Roms\JAVA and Saves were not modified.'
+  Write-Host 'ACTIVE_OLD_PLATFORM_SCAN=ZERO'
+  Write-Host 'READY_FOR_RG35XX_CLEAN_R1_INSTALL=YES'
   Write-Host "Report: $reportRoot"
   exit 0
 }
