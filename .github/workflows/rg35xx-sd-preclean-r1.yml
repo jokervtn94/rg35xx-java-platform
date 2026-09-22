@@ -35,13 +35,14 @@ jobs:
           $out=& 'tools/rg35xx-sd-preclean-r1/RG35XX-SD-PRECLEAN-R1.ps1' -SelfTest 2>&1
           $out | ForEach-Object { Write-Host $_ }
           if($LASTEXITCODE -ne 0){ throw "SelfTest failed rc=$LASTEXITCODE" }
+          $text=($out | Out-String)
           foreach($required in @(
             'SELFTEST_ROOT_PARENT=PASS',
             'SELFTEST_NESTED_PARENT=PASS',
             'SELFTEST_SINGLETON_ARRAY=PASS',
             'SELFTEST_EMPTY_ARRAY=PASS'
           )){
-            if(-not ($out -contains $required)){ throw "Missing selftest marker: $required" }
+            if(-not $text.Contains($required)){ throw "Missing selftest marker: $required" }
           }
 
       - name: Static safety audit
