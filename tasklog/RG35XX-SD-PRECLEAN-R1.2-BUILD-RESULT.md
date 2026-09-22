@@ -62,3 +62,29 @@ Internal `SHA256SUMS.txt` verification:
 - real SD cleanup: pending user rerun
 - R1 platform install: BLOCKED until R1.2 reports `READY_FOR_RG35XX_CLEAN_R1_INSTALL=YES`
 - STABLE: NO
+
+
+---
+
+## Real-device result — 2026-09-22
+
+User reports on original RG35XX SD card:
+
+- SD Pre-Clean R1.2: **SUCCESS**
+- old/stray active Java platform files: cleaned successfully
+- Clean Consolidated R1 pre-clean-compatible installer: **INSTALL SUCCESS**
+- protected foundation preconditions passed during the successful workflow
+- no installation failure reported
+
+Current classification:
+- PRE-CLEAN DEVICE RESULT: PASS
+- INSTALL DEVICE RESULT: PASS
+- RUNTIME DEVICE GAME PASS: PENDING
+- MULTI-GAME REGRESSION: PENDING
+- STABLE: NO
+
+Next required evidence:
+1. Real Football 2015
+2. KDTT 320x240
+3. Dragon Mania S40v6
+4. run COLLECT-RG35XX-CLEAN-R1.cmd and archive evidence
