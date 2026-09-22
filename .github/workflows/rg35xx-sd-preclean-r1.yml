@@ -1,0 +1,99 @@
+name: RG35XX SD Preclean R1 Tool
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [rg35xx-clean-consolidated-r1]
+    paths:
+      - '.github/workflows/rg35xx-sd-preclean-r1.yml'
+      - 'tools/rg35xx-sd-preclean-r1/**'
+      - 'tasklog/RG35XX-SD-PRECLEAN-R1.md'
+
+jobs:
+  package:
+    runs-on: windows-2022
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Parse PowerShell scripts
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          foreach($p in @(
+            'tools/rg35xx-sd-preclean-r1/RG35XX-SD-PRECLEAN-R1.ps1',
+            'tools/rg35xx-sd-preclean-r1/RESTORE-RG35XX-SD-PRECLEAN-R1.ps1'
+          )){
+            [scriptblock]::Create((Get-Content -Raw $p)) | Out-Null
+            Write-Host "PARSE_PASS=$p"
+          }
+
+      - name: Static safety audit
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $p='tools/rg35xx-sd-preclean-r1/RG35XX-SD-PRECLEAN-R1.ps1'
+          $s=Get-Content -Raw $p
+
+          foreach($required in @(
+            'Roms\JAVA\',
+            'Saves\',
+            'RG35XX-JAVA-BACKUP\',
+            'RG35XX-JAVA-PRECLEAN\',
+            'eea1b97cebfaca67b69ed365e966d80cdac22d8ff245c7a556137cfb2898ea34',
+            'd7abe888d2980329434c30f18c0eec124be1f02284bf9ed28e88d7242a1f2bea',
+            '56bb3b972337dd40b342c1881f6599c53eebf66a29f920a1aa2e2839eb29a07c',
+            'READY_FOR_RG35XX_CLEAN_R1_INSTALL=YES',
+            'ACTIVE_OLD_PLATFORM_SCAN=ZERO',
+            'Type CLEAN to continue',
+            'Move-Item -LiteralPath'
+          )){
+            if(!$s.Contains($required)){ throw "Missing safety contract: $required" }
+          }
+
+          if($s -match 'Remove-Item[^\r\n]*-Recurse'){ throw 'Recursive delete is forbidden' }
+          if($s -match 'Roms\\JAVA[^\r\n]*(Remove-Item|Move-Item)'){ throw 'Direct game-tree mutation detected' }
+          if($s -match 'Saves\\[^\r\n]*(Remove-Item|Move-Item)'){ throw 'Direct save-tree mutation detected' }
+
+          Write-Host 'STATIC_SAFETY_GATE=PASS'
+
+      - name: Package preclean tool
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $root=Join-Path $env:RUNNER_TEMP 'pkg'
+          New-Item -ItemType Directory -Force -Path $root | Out-Null
+          Copy-Item 'tools/rg35xx-sd-preclean-r1/*' $root -Force
+          Copy-Item 'tasklog/RG35XX-SD-PRECLEAN-R1.md' $root -Force
+
+          @'
+          RG35XX SD PRE-CLEAN R1
+
+          Recommended order:
+          1. 01-SCAN-RG35XX-OLD-PLATFORM.cmd
+          2. Review SCAN output.
+          3. 02-CLEAN-RG35XX-OLD-PLATFORM.cmd
+          4. Require CLEAN PASS and READY_FOR_RG35XX_CLEAN_R1_INSTALL=YES.
+          5. Install the updated RG35XX Clean Consolidated R1 package.
+          6. Keep quarantine until real-device testing is accepted.
+
+          This tool preserves:
+          - Roms\JAVA
+          - Saves
+          - JamVM L
+          - glibj.zip
+          - protected B4 native core
+          - existing RG35XX-JAVA-BACKUP trees
+          '@ | Set-Content -LiteralPath (Join-Path $root 'README-FIRST.txt') -Encoding ASCII
+
+          Push-Location $root
+          Get-ChildItem -File | Sort-Object Name | ForEach-Object {
+            "$((Get-FileHash -Algorithm SHA256 $_.FullName).Hash.ToLowerInvariant())  $($_.Name)"
+          } | Set-Content -LiteralPath 'SHA256SUMS.txt' -Encoding ASCII
+          Pop-Location
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rg35xx-sd-preclean-r1
+          path: ${{ runner.temp }}/pkg/
+          if-no-files-found: error
