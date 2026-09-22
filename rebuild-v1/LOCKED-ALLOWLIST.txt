@@ -1,0 +1,58 @@
+# Locked input allowlist for rg35xx-device-pass-rebuild-v1
+# Anything not listed here is excluded from the foundation build.
+
+LOCKED_REPO_SNAPSHOT=faa49f9b941db5394265d9b13413e4576ef4694f
+FREEJ2ME_PIN=13ec186903087156c145268f8706eecfaf9f1e50
+FREEJ2ME_TREE=ad47ab16e9025f0eb3d2067bc3b1897dc71987df
+JAMVM_L_SHA256=eea1b97cebfaca67b69ed365e966d80cdac22d8ff245c7a556137cfb2898ea34
+GLIBJ_SHA256=d7abe888d2980329434c30f18c0eec124be1f02284bf9ed28e88d7242a1f2bea
+FONT_RESOURCE_SHA256=20c2e59d063282d4b6a0d612dea3cba2c0b5bd7fafe85a05729951bd38902db9
+FONT_RESOURCE_CLASSIFICATION=EXPERIMENTAL_NOT_GOLDEN
+
+# Runtime patches, in locked application order:
+miyoo-m1/m1_9/patch_headless_platformfont.py
+miyoo-m1/m1_9/patch_headless_platformimage_probe.py
+miyoo-m1/m1_9/patch_headless_platformgraphics_probe.py
+miyoo-m1/m1_9/patch_headless_platformgraphics_fillrect.py
+miyoo-m1/m1_9/patch_mobileplatform_resize_diagnostics.py
+miyoo-m1/m1_10/patch_mobileplatform_headless_flush.py
+miyoo-m1/m1_11/patch_headless_ascii_text.py
+miyoo-m1/m1_12/patch_headless_unicode_bitmap_text.py
+miyoo-m1/m1_13/patch_hybrid_font_layout_v1.py
+miyoo-m1/m1_13/patch_bitmap_raster_column_bound_r2.py
+miyoo-m1/m1_14/patch_headless_font_metrics_v1.py
+miyoo-m1/m1_14/patch_decoupled_size_semantics_r3.py
+miyoo-m1/m1_14/patch_bold_only_r4a.py
+miyoo-m1/m1_14/patch_italic_only_r4b.py
+miyoo-m1/m1_14/patch_underline_only_r4c.py
+miyoo-m1/m1_14/patch_monospace_face_semantics_r5a.py
+miyoo-m1/m1_14/patch_proportional_glyph_bounds_r5c.py
+miyoo-m1/m1_16/patch_platformimage_blank_dimensions_r12.py
+
+# Standalone helpers/native ownership:
+miyoo-m1/m1_8/M1Input.java
+miyoo-m1/m1_8/M1InputDispatch.java
+miyoo-m1/m1_8/m1_8_input_jni.c
+miyoo-m1/m1_9/M19InputPump.java
+miyoo-m1/m1_9/M19SdlPresenter.java
+miyoo-m1/m1_9/M19CanvasLifecycleLauncher.java
+miyoo-m1/m1_9/m1_9e_presenter_jni.c
+
+# Device regression MIDlets:
+miyoo-m1/m1_9/M19CanvasE2EMIDlet.java
+miyoo-m1/m1_10/M110GameCanvasE2EMIDlet.java
+miyoo-m1/m1_14/M114R6FontMatrixRegressionMIDlet.java
+miyoo-m1/m1_15/M115R1RmsDiagnosticMIDlet.java
+miyoo-m1/m1_15/M115R11RmsPersistenceMIDlet.java
+miyoo-m1/m1_16/M116R12PlatformImageBlankDiagnosticMIDlet.java
+
+# Explicit exclusions:
+# - all libretro core/native sources
+# - R2/VC7/CV/CW branches
+# - SDL2 frontend
+# - JavaSound MidiSystem.getSequencer / AudioSystem.getClip adaptations
+# - MediaWarmup and /dev/snd/seq boot probe
+# - transform-cache patch 0008
+# - GNU Classpath N3/N3.1 mutations
+# - unbounded hot-path logging
+# - audio worker-ring reconstruction (later isolated checkpoint)
