@@ -107,8 +107,9 @@ write(rel, text)
 note("REWRITE", rel, "lambda-to-anonymous-comparator count=1")
 
 # Desugar the small set of in-scope single-resource try-with-resources forms.
-# We keep the original surrounding catch blocks. The nested finally guarantees
-# close() on normal and exceptional exit without requiring Java 7 bytecode/API.
+# If the original TWR is followed by catch/finally, retain an outer try so those
+# handlers still cover resource construction/body/close. Otherwise use a plain
+# scope plus an inner Java-6 try/finally, avoiding an illegal handler-less try.
 def find_matching(text, open_pos, open_ch, close_ch):
     depth = 0
     i = open_pos
@@ -178,8 +179,13 @@ def desugar_twr(rel):
         bend = find_matching(text, bopen, "{", "}")
         body = text[bopen+1:bend]
         indent = text[line_start:m.start()]
+        tail = bend + 1
+        while tail < len(text) and text[tail].isspace():
+            tail += 1
+        has_handler = text.startswith("catch", tail) or text.startswith("finally", tail)
+        opener = "try {\n" if has_handler else "{\n"
         replacement = (
-            "try {\n" + indent + "\t" + rtype + " " + rname + " = " + rexpr + ";\n" +
+            opener + indent + "\t" + rtype + " " + rname + " = " + rexpr + ";\n" +
             indent + "\ttry {" + body + "\n" + indent + "\t} finally {\n" +
             indent + "\t\tif (" + rname + " != null) { " + rname + ".close(); }\n" +
             indent + "\t}\n" + indent + "}"
