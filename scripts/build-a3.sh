@@ -34,7 +34,16 @@ java_build() {
 
     rm -rf "$BUILD" "$OUT"
     mkdir -p "$BUILD/classes" "$BUILD/manifests" "$OUT"
-    find "$UPSTREAM/src" "$ROOT/adapter/java" -type f -name '*.java' -print | LC_ALL=C sort > "$BUILD/sources.list"
+
+    # Never modify the canonical gitlink. Materialize a disposable Java-6
+    # compatibility view under build/a3 and record every scope/rewrite delta.
+    python3 "$ROOT/scripts/stage-a3-java6.py" \
+        "$UPSTREAM/src" \
+        "$BUILD/stage-src" \
+        "$BUILD/JAVA6-COMPAT-AUDIT.tsv"
+    verify_canonical
+
+    find "$BUILD/stage-src" "$ROOT/adapter/java" -type f -name '*.java' -print | LC_ALL=C sort > "$BUILD/sources.list"
     [ -s "$BUILD/sources.list" ] || fail "empty Java source list"
 
     "$JAVAC" \
@@ -62,9 +71,11 @@ import sys, zipfile
 jar=sys.argv[1]
 bad=[]
 majors=set()
+count=0
 with zipfile.ZipFile(jar) as z:
     for n in z.namelist():
         if n.endswith('.class'):
+            count += 1
             b=z.read(n)
             major=int.from_bytes(b[6:8], 'big')
             majors.add(major)
@@ -72,10 +83,14 @@ with zipfile.ZipFile(jar) as z:
                 bad.append((n, major))
 if bad:
     raise SystemExit('JAVA6_GATE_FAIL ' + repr(bad[:20]))
+if count < 100:
+    raise SystemExit('JAVA6_GATE_FAIL suspicious class count=%d' % count)
+print('JAVA_CLASS_COUNT=%d' % count)
 print('JAVA_CLASS_MAJORS=' + ','.join(map(str, sorted(majors))))
 print('JAVA6_GATE=PASS')
 PY
 
+    cp "$BUILD/JAVA6-COMPAT-AUDIT.tsv" "$OUT/JAVA6-COMPAT-AUDIT.tsv"
     {
         echo "AWEIGIT_REPO=aweigit/freej2me-miyoomini"
         echo "AWEIGIT_COMMIT=$AWEIGIT_COMMIT"
@@ -83,6 +98,11 @@ PY
         echo "CANONICAL_WORKTREE_DIRTY=NO"
         echo "CANONICAL_CORE_PATCH_COUNT=0"
         echo "CANONICAL_SOURCE_MODE=PINNED_GITLINK_UNMODIFIED"
+        echo "COMPILE_SOURCE_MODE=DISPOSABLE_JAVA6_COMPAT_VIEW"
+        echo "COMPAT_AUDIT=JAVA6-COMPAT-AUDIT.tsv"
+        echo "A4_A5_SCOPE=2D_RMS_FONT_INPUT_VIDEO"
+        echo "DEFERRED_3D=javax.microedition.m3g,com.mascotcapsule.micro3d,ru.woesss.j2me.micro3d,org.lwjgl"
+        echo "MIDLET_RESOURCE_BACKEND=JAVA6_JARFILE_JARENTRY"
         echo "ADAPTER_JAVA_ROOT=adapter/java/org/recompile/rg35xx"
         echo "ADAPTER_NATIVE_ROOT=adapter/native"
     } > "$OUT/CANONICAL-DIFF-MANIFEST.txt"
@@ -126,9 +146,11 @@ finalize_build() {
     [ -f "$OUT/librg35xx_input.so" ] || fail "input native missing"
     [ -f "$OUT/librg35xx_video.so" ] || fail "video native missing"
     [ -f "$OUT/CANONICAL-DIFF-MANIFEST.txt" ] || fail "canonical diff manifest missing"
+    [ -f "$OUT/JAVA6-COMPAT-AUDIT.tsv" ] || fail "java6 compat audit missing"
 
     ADAPTER_COMMIT="${GITHUB_SHA:-$(git rev-parse HEAD)}"
     CANONICAL_DIFF_SHA256="$(sha256sum "$OUT/CANONICAL-DIFF-MANIFEST.txt" | awk '{print $1}')"
+    COMPAT_AUDIT_SHA256="$(sha256sum "$OUT/JAVA6-COMPAT-AUDIT.tsv" | awk '{print $1}')"
     {
         echo "PROJECT=RG35XX-AWEIGIT-R1"
         echo "AWEIGIT_REPO=aweigit/freej2me-miyoomini"
@@ -145,6 +167,7 @@ finalize_build() {
         echo "INPUT_SOURCE_SHA256=$(sha256sum "$ROOT/adapter/native/rg35xx_input.c" | awk '{print $1}')"
         echo "VIDEO_SOURCE_SHA256=$(sha256sum "$ROOT/adapter/native/rg35xx_video_sdl1.c" | awk '{print $1}')"
         echo "CANONICAL_DIFF_MANIFEST_SHA256=$CANONICAL_DIFF_SHA256"
+        echo "JAVA6_COMPAT_AUDIT_SHA256=$COMPAT_AUDIT_SHA256"
         echo "BUILD-PASS=YES"
         echo "DEVICE-PASS=NO"
         echo "DEVICE-TEST-PENDING=YES"
