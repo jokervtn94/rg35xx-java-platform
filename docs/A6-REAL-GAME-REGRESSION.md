@@ -12,15 +12,15 @@ It validates the production A5 core with a real commercial JAR on the original R
 
 Audio/Media remain HOLD. A6 must not diagnose or patch media behavior.
 
-## Locked first corpus entry
+## Historical corpus candidate — unavailable
 
 Game file:
 `Vua-Cuop-Bien-240x320.jar`
 
-Required SHA256:
+Historical SHA256:
 `220ac0e6a2ab61318aa3d2e20057e2231991a21d7ca15148ed3c57534b941578`
 
-Known corpus metadata:
+Known corpus metadata from the compatibility matrix:
 - MIDP-1.0
 - CLDC-1.0
 - 83 class files
@@ -32,13 +32,32 @@ Known corpus metadata:
 - Vendor namespace: nokia/
 - Media API usage: none in the compatibility matrix
 
-The game itself is NOT stored or distributed by this repository. A6 packaging must require a user-supplied local copy and fail closed unless the SHA256 matches exactly.
+Historical logs confirm that this JAR previously ran from:
+`/mnt/mmc/Roms/JAVA/Vua-Cuop-Bien-240x320.jar`
+
+The user has confirmed that the JAR was deleted from the SD card. No recoverable binary copy is currently available in Project/Library context. Therefore this entry is retained only as historical corpus identity and MUST NOT be used for A6 acceptance unless an exact user-owned copy is recovered and its SHA256 matches the historical value.
+
+Status:
+`A6_CORPUS_01=UNAVAILABLE`
+
+## Replacement corpus policy
+
+A6 is not blocked on this single title. A replacement real-game JAR may be locked only after its actual binary is available and statically inventoried.
+
+Replacement requirements:
+1. user-owned/local real JAR binary is available;
+2. record exact filename, SHA256, size, MIDP/CLDC profile and resource count;
+3. inventory Font/Text/Graphics/Game API/RMS/Vendor/Media usage;
+4. while Audio/Media remain HOLD, prefer a title with no `javax.microedition.media` / Manager / Player usage;
+5. if Media APIs are present, do not interpret a media-related startup/runtime failure as an A6 non-audio core failure;
+6. once selected, lock the exact JAR identity before device testing;
+7. repository must not store or redistribute the commercial game JAR.
 
 ## Scope
 
 A6 evaluates only the already-accepted non-audio production path:
 - JAR load/startup
-- 240x320 logical rendering to physical 640x480 SDL1/fbcon
+- logical rendering to physical 640x480 SDL1/fbcon
 - image/resource rendering
 - text/font rendering
 - physical RG35XX input mapping
@@ -84,6 +103,8 @@ A4_LEVEL1_DEVICE_PASS=YES
 A5_R2_DEVICE_PASS=YES
 A5_REGRESSION_CONFIRMATION=PASS
 A5_PRODUCTION_MERGE=ffff492c0f2f0ccc1e0c1548addcec99c73fff09
+A6_CORPUS_01=UNAVAILABLE
+A6_REPLACEMENT_CORPUS=PENDING_BINARY
 A6_REAL_GAME_REGRESSION=PENDING
 AUDIO=HOLD
 MEDIA=HOLD
