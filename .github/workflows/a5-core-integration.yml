@@ -40,7 +40,24 @@ jobs:
             "$TOOLCHAIN" \
             bash -lc 'git config --global --add safe.directory /work/upstream/freej2me-miyoomini && ./scripts/build-a3.sh native'
 
-      - name: Finalize protected identity
+      - name: Finalize A4 protected identity
+        run: ./scripts/build-a3.sh finalize
+
+      - name: Rebuild A4 parent smoke regression package
+        run: bash ./scripts/build-a4-smoke.sh
+
+      - name: Verify A4 regression build gate
+        run: |
+          set -euo pipefail
+          grep -q '^BUILD-PASS=YES$' out/a4/A4-BUILD-IDENTITY.txt
+          grep -q '^A4_RAW2D_OVERLAY=YES$' out/a3/CANONICAL-DIFF-MANIFEST.txt
+          grep -q '^DEVICE-PASS=NO$' out/a4/A4-BUILD-IDENTITY.txt
+          echo A4_REGRESSION_BUILD_GATE=PASS
+
+      - name: Apply A5 headless core2D overlay and rebuild platform
+        run: bash ./scripts/build-a5-core2d-java.sh
+
+      - name: Finalize A5 protected identity
         run: ./scripts/build-a3.sh finalize
 
       - name: Build A5 parent integration package
@@ -50,12 +67,14 @@ jobs:
         run: |
           set -euo pipefail
           grep -q '^A4_RAW2D_OVERLAY=YES$' out/a3/CANONICAL-DIFF-MANIFEST.txt
+          grep -q '^A5_CORE2D_OVERLAY=YES$' out/a3/CANONICAL-DIFF-MANIFEST.txt
+          grep -q '^A5_CORE2D_OWNER=RG35XX_ADAPTER_STAGED_BACKING_ONLY$' out/a3/CANONICAL-DIFF-MANIFEST.txt
           grep -q '^CANONICAL_GITLINK_MUTATED=NO$' out/a3/CANONICAL-DIFF-MANIFEST.txt
           grep -q '^DEVICE-PASS=NO$' out/a5/A5-BUILD-IDENTITY.txt
           grep -q '^DEVICE_PASS_REVIEW=PENDING$' out/a5/A5-BUILD-IDENTITY.txt
           grep -q '^STABLE=NO$' out/a5/A5-BUILD-IDENTITY.txt
           grep -q '^A5_PARENT_SCOPE=' out/a5/A5-BUILD-IDENTITY.txt
-          ! grep -R -E 'freej2me_plus-lr|libretro' tests/a5 packaging/a5 scripts/build-a5-core-integration.sh
+          ! grep -R -E 'freej2me_plus-lr|libretro' tests/a5 packaging/a5 scripts/build-a5-core-integration.sh scripts/build-a5-core2d-java.sh scripts/stage-a5-rg35xx-core2d.py
           echo A5_SCOPE_LOCK=PASS
 
       - name: Upload A5 RG35XX parent integration package
