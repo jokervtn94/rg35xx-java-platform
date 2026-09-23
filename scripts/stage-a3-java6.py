@@ -76,6 +76,89 @@ for p in sorted(dst.rglob("*.java")):
         diamond_total += n
 note("SUMMARY", "*", "diamond-to-raw-total=%d" % diamond_total)
 
+# Java 7 string-switch in the bytecode visitor is syntax sugar only. Replace the
+# pinned switch with an equivalent Java-6 if/else chain, preserving every owner
+# rewrite, descriptor rewrite, return, and final fall-through invocation.
+rel = "org/recompile/mobile/MyMethodVisitor.java"
+text = read(rel)
+switch_re = re.compile(
+    r"\t\tswitch \(owner\) \{.*?\n\t\t\}\n\t\tdesc = desc\.replace",
+    re.S,
+)
+switch_new = '''\t\tif ("java/lang/Class".equals(owner)) {
+\t\t\tif (name.equals("getResourceAsStream")) {
+\t\t\t\tmv.visitMethodInsn(INVOKESTATIC, "org/recompile/mobile/Mobile", name, "(Ljava/lang/Class;Ljava/lang/String;)Ljava/io/InputStream;", itf);
+\t\t\t\treturn;
+\t\t\t}
+\t\t} else if ("java/lang/Thread".equals(owner)) {
+\t\t\tif (name.equals("yield")) {
+\t\t\t\tmv.visitLdcInsn(1L);
+\t\t\t\tmv.visitMethodInsn(opcode, owner, "sleep", "(J)V", false);
+\t\t\t\treturn;
+\t\t\t}
+\t\t} else if ("java/lang/String".equals(owner)) {
+\t\t\tif (name.equals("<init>") && desc.startsWith("([B") && !desc.endsWith("Ljava/lang/String;)V")) {
+\t\t\t\tinjectGetPropertyEncoding();
+\t\t\t\tString descriptor = new StringBuilder(desc.length() + 18)
+\t\t\t\t\t\t.append(desc)
+\t\t\t\t\t\t.insert(desc.length() - 2, "Ljava/lang/String;")
+\t\t\t\t\t\t.toString();
+\t\t\t\tmv.visitMethodInsn(opcode, owner, name, descriptor, itf);
+\t\t\t\treturn;
+\t\t\t} else if (name.equals("getBytes") && desc.equals("()[B")) {
+\t\t\t\tinjectGetPropertyEncoding();
+\t\t\t\tmv.visitMethodInsn(opcode, owner, name, "(Ljava/lang/String;)[B", itf);
+\t\t\t\treturn;
+\t\t\t}
+\t\t} else if ("java/io/InputStreamReader".equals(owner)) {
+\t\t\tif (name.equals("<init>") && desc.equals("(Ljava/io/InputStream;)V")) {
+\t\t\t\tinjectGetPropertyEncoding();
+\t\t\t\tmv.visitMethodInsn(opcode, owner, name, "(Ljava/io/InputStream;Ljava/lang/String;)V", itf);
+\t\t\t\treturn;
+\t\t\t}
+\t\t} else if ("java/io/OutputStreamWriter".equals(owner)) {
+\t\t\tif (name.equals("<init>") && desc.equals("(Ljava/io/OutputStream;)V")) {
+\t\t\t\tinjectGetPropertyEncoding();
+\t\t\t\tmv.visitMethodInsn(opcode, owner, name, "(Ljava/io/OutputStream;Ljava/lang/String;)V", itf);
+\t\t\t\treturn;
+\t\t\t}
+\t\t} else if ("java/io/ByteArrayOutputStream".equals(owner)) {
+\t\t\tif (name.equals("toString") && desc.equals("()Ljava/lang/String;")) {
+\t\t\t\tinjectGetPropertyEncoding();
+\t\t\t\tmv.visitMethodInsn(opcode, owner, name, "(Ljava/lang/String;)Ljava/lang/String;", itf);
+\t\t\t\treturn;
+\t\t\t}
+\t\t} else if ("java/io/PrintStream".equals(owner)) {
+\t\t\tif (name.equals("<init>") && desc.equals("(Ljava/io/OutputStream;)V")) {
+\t\t\t\tmv.visitInsn(ICONST_0);
+\t\t\t\tinjectGetPropertyEncoding();
+\t\t\t\tmv.visitMethodInsn(opcode, owner, name, "(Ljava/io/OutputStream;ZLjava/lang/String;)V", itf);
+\t\t\t\treturn;
+\t\t\t}
+\t\t} else if ("com/siemens/mp/io/Connection".equals(owner)) {
+\t\t\tif (opcode == INVOKESTATIC && name.equals("setListener")) {
+\t\t\t\tname = "setListenerCompat";
+\t\t\t}
+\t\t} else if ("java/util/Timer".equals(owner)) {
+\t\t\towner = "javax/microedition/shell/custom/Timer";
+\t\t} else if ("java/util/TimerTask".equals(owner)) {
+\t\t\towner = "javax/microedition/shell/custom/TimerTask";
+\t\t} else if ("java/lang/Runtime".equals(owner)) {
+\t\t\tif (name.equals("getRuntime")) {
+\t\t\t\tmv.visitMethodInsn(opcode, "javax/microedition/shell/MidletRuntime", name, "()Ljavax/microedition/shell/MidletRuntime;", itf);
+\t\t\t\treturn;
+\t\t\t} else if (name.equals("totalMemory") || name.equals("gc") || name.equals("exit") || name.equals("freeMemory") || name.equals("maxMemory")) {
+\t\t\t\tmv.visitMethodInsn(opcode, "javax/microedition/shell/MidletRuntime", name, desc, itf);
+\t\t\t\treturn;
+\t\t\t}
+\t\t}
+\t\tdesc = desc.replace'''
+text, n = switch_re.subn(switch_new, text, count=1)
+if n != 1:
+    raise SystemExit("A3_STAGE_FAIL MyMethodVisitor string-switch anchor drift")
+write(rel, text)
+note("REWRITE", rel, "string-switch-to-java6-if-chain count=1")
+
 # Java 8 lambdas in the in-scope RMS and FileConnection paths become ordinary
 # Java 6 anonymous Comparator classes. The comparison expressions are unchanged.
 rel = "javax/microedition/rms/impl/RecordEnumerationImpl.java"
@@ -152,8 +235,6 @@ def desugar_twr(rel):
         if not m:
             out.append(text[pos:])
             break
-        # Skip occurrences inside comments by a conservative line check. The
-        # allowlisted files have executable TWR only at the pinned tree.
         line_start = text.rfind("\n", 0, m.start()) + 1
         prefix = text[line_start:m.start()]
         if prefix.lstrip().startswith("//") or prefix.lstrip().startswith("*"):
@@ -162,10 +243,7 @@ def desugar_twr(rel):
             continue
         paren = text.find("(", m.start())
         pend = find_matching(text, paren, "(", ")")
-        resource = text[paren+1:pend].strip()
-        resource = resource.rstrip(";").strip()
-        # Multiple resources are intentionally unsupported: fail rather than
-        # silently changing close ordering.
+        resource = text[paren+1:pend].strip().rstrip(";").strip()
         if ";" in resource:
             raise SystemExit("A3_STAGE_FAIL multi-resource TWR unsupported in %s" % rel)
         rm = re.match(r"(?s)(?:final\s+)?([A-Za-z_$][A-Za-z0-9_.$<>?, ]*)\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*=\s*(.+)$", resource)
@@ -180,8 +258,7 @@ def desugar_twr(rel):
         body = text[bopen+1:bend]
         indent = text[line_start:m.start()]
         tail = bend + 1
-        while tail < len(text) and text[tail].isspace():
-            tail += 1
+        while tail < len(text) and text[tail].isspace(): tail += 1
         has_handler = text.startswith("catch", tail) or text.startswith("finally", tail)
         opener = "try {\n" if has_handler else "{\n"
         replacement = (
@@ -235,40 +312,28 @@ text = text.replace(anchor, anchor + "import java.io.File;\nimport java.util.jar
 if text.count("\tFileSystem zipfs;\n") != 1:
     raise SystemExit("A3_STAGE_FAIL MIDletLoader zipfs field drift")
 text = text.replace("\tFileSystem zipfs;\n", "\tprivate JarFile jarFile;\n")
-
-# Replace only the constructor's active zipfs-open block (the later NIO copy
-# helper is commented out in canonical source and is left as documentation).
-# Constructor diamonds have already been erased above, so the pinned-stage
-# anchor is intentionally "new HashMap()" rather than canonical "new HashMap<>()".
 ctor_re = re.compile(
     r"\t\ttry\{\n\t\t\tHashMap<String, String> env = new HashMap\(\);.*?"
     r"\t\tcatch\(Exception e\)\n\t\t\{\n\t\t\tSystem\.out\.println\(\"创建zip文件系统出错: \"\+e\.getMessage\(\)\);\n\t\t\}\n",
     re.S,
 )
 ctor_new = (
-    "\t\ttry\n\t\t{\n"
-    "\t\t\tjarFile = openJar(u);\n"
-    "\t\t}\n"
-    "\t\tcatch(Exception e)\n\t\t{\n"
-    "\t\t\tSystem.out.println(\"打开jar文件出错: \"+e.getMessage());\n"
-    "\t\t}\n"
+    "\t\ttry\n\t\t{\n\t\t\tjarFile = openJar(u);\n\t\t}\n"
+    "\t\tcatch(Exception e)\n\t\t{\n\t\t\tSystem.out.println(\"打开jar文件出错: \"+e.getMessage());\n\t\t}\n"
 )
 text, n = ctor_re.subn(ctor_new, text, count=1)
 if n != 1:
     raise SystemExit("A3_STAGE_FAIL MIDletLoader zipfs constructor block drift")
-
 helper = '''\n\tprivate JarFile openJar(String u) throws Exception\n\t{\n\t\tif (u.startsWith("file:"))\n\t\t{\n\t\t\treturn new JarFile(new File(new URL(u).toURI()));\n\t\t}\n\t\treturn new JarFile(new File(u));\n\t}\n\n'''
 start_anchor = "\n\n\tpublic void start() throws MIDletStateChangeException\n"
 if text.count(start_anchor) != 1:
     raise SystemExit("A3_STAGE_FAIL MIDletLoader start anchor drift")
 text = text.replace(start_anchor, "\n" + helper + "\tpublic void start() throws MIDletStateChangeException\n")
-
 method_re = re.compile(r"\tpublic Path findJarResource\(String resource\)\n\t\{.*?\n\t\}\n\n\tpublic InputStream getResourceAsStream", re.S)
 method_new = '''\tpublic JarEntry findJarResource(String resource)\n\t{\n\t\tif (jarFile == null || resource == null) { return null; }\n\t\twhile (resource.startsWith("/")) { resource = resource.substring(1); }\n\t\treturn jarFile.getJarEntry(resource);\n\t}\n\n\tpublic InputStream getResourceAsStream'''
 text, n = method_re.subn(method_new, text, count=1)
 if n != 1:
     raise SystemExit("A3_STAGE_FAIL MIDletLoader findJarResource method drift")
-
 text = text.replace("Path url = findJarResource(resource);", "JarEntry url = findJarResource(resource);")
 text = text.replace("Path url;", "JarEntry url;")
 text = text.replace("InputStream stream = Files.newInputStream(url,StandardOpenOption.READ);", "InputStream stream = jarFile.getInputStream(url);")
@@ -277,19 +342,13 @@ if text.count(manifest_stream) != 1:
     raise SystemExit("A3_STAGE_FAIL MIDletLoader manifest NIO stream anchor drift")
 text = text.replace(manifest_stream, "InputStream is = jarFile.getInputStream(url);")
 note("REWRITE", rel, "manifest-stream-nio-to-jarfile count=1")
-# All executable stream opens must now be Java-6 JarFile based. Strip block
-# comments correctly before this guard so the commented copy helper is ignored.
 if "Files.newInputStream(" in re.sub(r"/\*.*?\*/", "", text, flags=re.S):
     raise SystemExit("A3_STAGE_FAIL active MIDletLoader NIO stream use remains")
-
 write(rel, text)
 note("REWRITE", rel, "nio-zipfs-to-java6-jarfile")
 
-# Final guards: no Java7/8 syntax known to be incompatible is allowed to remain
-# in the staged 2D scope. Comments are tolerated; javac is the authoritative gate.
 if (dst / "org/lwjgl").exists():
     raise SystemExit("A3_STAGE_FAIL LWJGL staging contamination")
-
 java_count = sum(1 for p in dst.rglob("*.java"))
 if java_count < 100:
     raise SystemExit("A3_STAGE_FAIL unexpectedly small staged source count=%d" % java_count)
