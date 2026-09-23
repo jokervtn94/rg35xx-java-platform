@@ -1,1 +1,0 @@
-DP-R10 work starts after DP-R9 device evidence.
