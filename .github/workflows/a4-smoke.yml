@@ -44,7 +44,7 @@ jobs:
         run: ./scripts/build-a3.sh finalize
 
       - name: Build one-package A4 smoke test
-        run: ./scripts/build-a4-smoke.sh
+        run: bash ./scripts/build-a4-smoke.sh
 
       - name: Verify A4 scope lock
         run: |
