@@ -22,6 +22,27 @@ JAR="$JAVA8/bin/jar"
 [ -d "$BUILD/stage-src" ] || fail "A3 staged source missing"
 [ -f "$BUILD/JAVA6-COMPAT-AUDIT.tsv" ] || fail "A3 audit missing"
 
+# Canonical MobilePlatform.getLCD() is a four-line method at the pinned tree.
+# The raw-overlay transformer intentionally uses exact anchors. Normalize only
+# this formatting in the disposable staged source so the semantic rewrite stays
+# exact and fail-closed; record the normalization in the audit.
+python3 - "$BUILD/stage-src/org/recompile/mobile/MobilePlatform.java" "$BUILD/JAVA6-COMPAT-AUDIT.tsv" <<'PY'
+import sys
+from pathlib import Path
+p=Path(sys.argv[1])
+a=Path(sys.argv[2])
+text=p.read_text(encoding='utf-8')
+old='\tpublic BufferedImage getLCD()\n\t{\n\t\treturn lcd.getCanvas();\n\t}\n'
+new='\tpublic BufferedImage getLCD() { return lcd.getCanvas(); }\n'
+count=text.count(old)
+if count != 1:
+    raise SystemExit('A4_RAW2D_FAIL getLCD-normalize expected=1 found=%d' % count)
+p.write_text(text.replace(old,new,1), encoding='utf-8')
+with a.open('a', encoding='utf-8') as f:
+    f.write('A4_RAW2D\torg/recompile/mobile/MobilePlatform.java\tnormalize-getLCD-format-only count=1\n')
+print('A4_RAW2D_GETLCD_NORMALIZE=PASS')
+PY
+
 # Apply the A4-only RG35XX raw framebuffer overlay to the disposable staged
 # source tree. The pinned Aweigit gitlink is never modified.
 python3 "$ROOT/scripts/stage-a4-rg35xx-raw2d.py" \
