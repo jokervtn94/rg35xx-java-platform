@@ -43,6 +43,27 @@ with a.open('a', encoding='utf-8') as f:
 print('A4_RAW2D_GETLCD_NORMALIZE=PASS')
 PY
 
+# PlatformGraphics gates raw operations through PlatformImage.isRG35XXRaw().
+# Add an explicit staged property-ownership marker so the transformer's sanity
+# check can prove this class belongs to the rg35xx.raw2d overlay without changing
+# any runtime behavior.
+python3 - "$BUILD/stage-src/org/recompile/mobile/PlatformGraphics.java" "$BUILD/JAVA6-COMPAT-AUDIT.tsv" <<'PY'
+import sys
+from pathlib import Path
+p=Path(sys.argv[1])
+a=Path(sys.argv[2])
+text=p.read_text(encoding='utf-8')
+old='public class PlatformGraphics extends javax.microedition.lcdui.Graphics implements DirectGraphics\n{\n'
+new='public class PlatformGraphics extends javax.microedition.lcdui.Graphics implements DirectGraphics\n{\n\tprivate static final String RG35XX_RAW2D_PROPERTY = "rg35xx.raw2d";\n'
+count=text.count(old)
+if count != 1:
+    raise SystemExit('A4_RAW2D_FAIL PlatformGraphics-marker expected=1 found=%d' % count)
+p.write_text(text.replace(old,new,1), encoding='utf-8')
+with a.open('a', encoding='utf-8') as f:
+    f.write('A4_RAW2D\torg/recompile/mobile/PlatformGraphics.java\tproperty-ownership-marker-only count=1\n')
+print('A4_RAW2D_GRAPHICS_MARKER=PASS')
+PY
+
 # Apply the A4-only RG35XX raw framebuffer overlay to the disposable staged
 # source tree. The pinned Aweigit gitlink is never modified.
 python3 "$ROOT/scripts/stage-a4-rg35xx-raw2d.py" \
