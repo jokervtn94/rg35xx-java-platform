@@ -11,6 +11,7 @@ fail(){ echo "A5_CORE2D_BUILD_FAIL=$*" >&2; exit 1; }
 
 [ -n "$JAVA8" ] || fail "JAVA8/JAVA_HOME not set"
 [ -x "$JAVA8/bin/javac" ] || fail "javac missing"
+[ -x "$JAVA8/bin/java" ] || fail "java missing"
 [ -x "$JAVA8/bin/jar" ] || fail "jar missing"
 [ -d "$BUILD/stage-src" ] || fail "A4 staged source missing"
 [ -f "$BUILD/JAVA6-COMPAT-AUDIT.tsv" ] || fail "A4 audit missing"
@@ -56,12 +57,23 @@ print('A5_CORE2D_CLASS_MAJORS='+','.join(map(str,sorted(majors))))
 print('A5_CORE2D_JAVA6_GATE=PASS')
 PY
 
+rm -rf "$BUILD/host-gate"
+mkdir -p "$BUILD/host-gate"
+"$JAVA8/bin/javac" -encoding UTF-8 -source 1.6 -target 1.6 \
+  -bootclasspath "$JAVA8/jre/lib/rt.jar" \
+  -classpath "$OUT/freej2me-rg35xx.jar" \
+  -d "$BUILD/host-gate" "$ROOT/tests/a5/RG35XXCore2DHostGate.java"
+"$JAVA8/bin/java" -cp "$OUT/freej2me-rg35xx.jar:$BUILD/host-gate" \
+  org.recompile.rg35xx.a5.RG35XXCore2DHostGate
+
 cp "$BUILD/JAVA6-COMPAT-AUDIT.tsv" "$OUT/JAVA6-COMPAT-AUDIT.tsv"
 cat >> "$OUT/CANONICAL-DIFF-MANIFEST.txt" <<'EOF'
 A5_CORE2D_OVERLAY=YES
 A5_CORE2D_PROPERTY=rg35xx.raw2d
 A5_CORE2D_SCOPE=HEADLESS_IMAGE_RGB+PNG+COPY+8_TRANSFORMS+DRAWIMAGE+DRAWREGION+ALPHA+FONT_METRICS+BITMAP_TEXT
 A5_CORE2D_OWNER=RG35XX_ADAPTER_STAGED_BACKING_ONLY
+A5_CORE2D_ALPHA_MODEL=STRAIGHT_ARGB_SOURCE_OVER
+A5_CORE2D_ALPHA_HOST_GATE=PASS
 A5_CORE2D_EXCLUDED=audio,media,3d,m3g,mascot,lwjgl
 CANONICAL_GITLINK_MUTATED=NO
 EOF
