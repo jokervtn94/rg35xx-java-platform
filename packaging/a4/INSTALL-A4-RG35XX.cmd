@@ -8,15 +8,17 @@ echo ===============================================
 echo.
 echo Hay giai nen ZIP hoan toan truoc khi chay file nay.
 echo.
-set /p DRIVE=Nhap ky tu o SD RG35XX (vi du G): 
+set /p DRIVE=Nhap ky tu o SD RG35XX (vi du H): 
 if "%DRIVE%"=="" goto :badinput
+set "DRIVE=%DRIVE: =%"
 set "DRIVE=%DRIVE::=%"
 set "DRIVE=%DRIVE:\=%"
-set "SDROOT=%DRIVE%:\"
+if not "%DRIVE:~1,1%"=="" goto :badinput
+echo(%DRIVE%| findstr /R /I "^[A-Z]$" >nul || goto :badinput
 
-if not exist "%SDROOT%" (
+if not exist "%DRIVE%:\" (
   echo.
-  echo [FAIL] Khong tim thay o dia: %SDROOT%
+  echo [FAIL] Khong tim thay o dia: %DRIVE%:\
   goto :fail
 )
 if not exist "%~dp0INSTALL-RG35XX-AWEIGIT-R1-A4.ps1" (
@@ -27,13 +29,13 @@ if not exist "%~dp0INSTALL-RG35XX-AWEIGIT-R1-A4.ps1" (
 )
 
 echo.
-echo Dang kiem tra JamVM/glibj va cai A4 vao %SDROOT% ...
-powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0INSTALL-RG35XX-AWEIGIT-R1-A4.ps1" -SdRoot "%SDROOT%"
+echo Dang kiem tra JamVM/glibj va cai A4 vao %DRIVE%:\ ...
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%~dp0INSTALL-RG35XX-AWEIGIT-R1-A4.ps1" -SdRoot "%DRIVE%"
 set "RC=%ERRORLEVEL%"
 echo.
 if not "%RC%"=="0" (
   echo [FAIL] Installer tra ve ma loi %RC%.
-  echo Hay chup man hinh nay hoac gui file RG35XX-AWEIGIT-R1-A4-INSTALL-RESULT.txt neu co.
+  echo Hay chup NGUYEN cua so nay gui ChatGPT.
   goto :fail
 )
 
@@ -45,7 +47,9 @@ pause
 exit /b 0
 
 :badinput
-echo [FAIL] Chua nhap ky tu o dia SD.
+echo.
+echo [FAIL] Ky tu o dia khong hop le.
+echo Chi nhap MOT chu cai, vi du: H
 :fail
 echo.
 pause
