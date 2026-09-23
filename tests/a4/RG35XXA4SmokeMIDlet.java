@@ -64,12 +64,12 @@ public final class RG35XXA4SmokeMIDlet extends MIDlet {
         private Thread thread;
         private int x = 280;
         private int y = 200;
-        private int paintCount;
-        private int trackedPresses;
-        private int trackedReleases;
-        private boolean sawDirection;
-        private boolean sawFire;
-        private boolean fire;
+        private volatile int paintCount;
+        private volatile int trackedPresses;
+        private volatile int trackedReleases;
+        private volatile boolean sawDirection;
+        private volatile boolean sawFire;
+        private volatile boolean fire;
 
         CanvasProbe() {
             setFullScreenMode(true);
@@ -170,12 +170,21 @@ public final class RG35XXA4SmokeMIDlet extends MIDlet {
             if (y > maxY) y = maxY;
         }
 
+        private boolean acceptanceReady() {
+            return paintCount > 0 && sawDirection && sawFire
+                && trackedPresses > 0 && trackedPresses == trackedReleases;
+        }
+
         public void run() {
             long deadline = System.currentTimeMillis() + PHASE_TIMEOUT_MS;
+            if (INPUT_TRACE) System.out.println("A4_CANVAS_MONITOR=NONBLOCKING");
             while (running && System.currentTimeMillis() < deadline) {
+                // repaint() is asynchronous. Do not call serviceRepaints() from
+                // this monitor thread: on the RG35XX raw-2D path that call can
+                // block the acceptance/timeout loop while the UI callbacks keep
+                // running. Callback-side serviceRepaints() remains untouched.
                 repaint();
-                serviceRepaints();
-                if (paintCount > 0 && sawDirection && sawFire && trackedPresses > 0 && trackedPresses == trackedReleases) {
+                if (acceptanceReady()) {
                     running = false;
                     System.out.println("A4_CANVAS_PAINT_COUNT=" + paintCount);
                     System.out.println("A4_CANVAS_TRACKED_PRESS_COUNT=" + trackedPresses);
