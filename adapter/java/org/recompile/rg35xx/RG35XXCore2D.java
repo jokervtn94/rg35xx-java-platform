@@ -109,12 +109,14 @@ public final class RG35XXCore2D {
         if (sa == 255) return s;
         int da = (d >>> 24) & 0xFF;
         int inv = 255 - sa;
-        int oa = sa + ((da * inv + 127) / 255);
+        int outA255 = sa * 255 + da * inv;
+        if (outA255 == 0) return 0;
+        int oa = (outA255 + 127) / 255;
         int sr = (s >>> 16) & 0xFF, sg = (s >>> 8) & 0xFF, sb = s & 0xFF;
         int dr = (d >>> 16) & 0xFF, dg = (d >>> 8) & 0xFF, db = d & 0xFF;
-        int r = (sr * sa + dr * inv + 127) / 255;
-        int g = (sg * sa + dg * inv + 127) / 255;
-        int b = (sb * sa + db * inv + 127) / 255;
+        int r = (sr * sa * 255 + dr * da * inv + outA255 / 2) / outA255;
+        int g = (sg * sa * 255 + dg * da * inv + outA255 / 2) / outA255;
+        int b = (sb * sa * 255 + db * da * inv + outA255 / 2) / outA255;
         return (oa << 24) | (r << 16) | (g << 8) | b;
     }
 
