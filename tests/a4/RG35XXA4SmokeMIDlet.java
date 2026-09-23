@@ -15,6 +15,7 @@ import javax.microedition.midlet.MIDlet;
  */
 public final class RG35XXA4SmokeMIDlet extends MIDlet {
     private static final long PHASE_TIMEOUT_MS = 30000L;
+    private static final boolean INPUT_TRACE = Boolean.getBoolean("rg35xx.a4.inputtrace");
 
     private Display display;
     private CanvasProbe canvasProbe;
@@ -23,6 +24,7 @@ public final class RG35XXA4SmokeMIDlet extends MIDlet {
 
     protected void startApp() {
         System.out.println("A4_SMOKE_BOOT=PASS");
+        if (INPUT_TRACE) System.out.println("A4_INPUT_TRACE=ENABLED");
         display = Display.getDisplay(this);
         canvasProbe = new CanvasProbe();
         display.setCurrent(canvasProbe);
@@ -94,6 +96,9 @@ public final class RG35XXA4SmokeMIDlet extends MIDlet {
 
         public void keyPressed(int keyCode) {
             int action = getGameAction(keyCode);
+            if (INPUT_TRACE) {
+                System.out.println("A4_CANVAS_CALLBACK=PRESS key=" + keyCode + " action=" + action);
+            }
             boolean tracked = true;
             if (action == UP) {
                 y -= 20;
@@ -114,6 +119,10 @@ public final class RG35XXA4SmokeMIDlet extends MIDlet {
                 tracked = false;
             }
             if (tracked) trackedPresses++;
+            if (INPUT_TRACE) {
+                System.out.println("A4_CANVAS_COUNTS_AFTER_PRESS=presses=" + trackedPresses
+                    + " releases=" + trackedReleases + " tracked=" + (tracked ? "YES" : "NO"));
+            }
             clamp();
             repaint();
             serviceRepaints();
@@ -121,9 +130,18 @@ public final class RG35XXA4SmokeMIDlet extends MIDlet {
 
         public void keyReleased(int keyCode) {
             int action = getGameAction(keyCode);
-            if (action == UP || action == DOWN || action == LEFT || action == RIGHT || action == FIRE) {
+            boolean tracked = action == UP || action == DOWN || action == LEFT || action == RIGHT || action == FIRE;
+            if (INPUT_TRACE) {
+                System.out.println("A4_CANVAS_CALLBACK=RELEASE key=" + keyCode + " action=" + action
+                    + " tracked=" + (tracked ? "YES" : "NO"));
+            }
+            if (tracked) {
                 trackedReleases++;
                 if (action == FIRE) fire = false;
+            }
+            if (INPUT_TRACE) {
+                System.out.println("A4_CANVAS_COUNTS_AFTER_RELEASE=presses=" + trackedPresses
+                    + " releases=" + trackedReleases);
             }
             repaint();
             serviceRepaints();
@@ -131,6 +149,9 @@ public final class RG35XXA4SmokeMIDlet extends MIDlet {
 
         public void keyRepeated(int keyCode) {
             int action = getGameAction(keyCode);
+            if (INPUT_TRACE) {
+                System.out.println("A4_CANVAS_CALLBACK=REPEAT key=" + keyCode + " action=" + action);
+            }
             if (action == UP) y -= 20;
             else if (action == DOWN) y += 20;
             else if (action == LEFT) x -= 20;
@@ -172,6 +193,11 @@ public final class RG35XXA4SmokeMIDlet extends MIDlet {
             }
             if (running) {
                 running = false;
+                if (INPUT_TRACE) {
+                    System.out.println("A4_CANVAS_TIMEOUT_STATE=sawDirection=" + (sawDirection ? "YES" : "NO")
+                        + " sawFire=" + (sawFire ? "YES" : "NO")
+                        + " fireHeld=" + (fire ? "YES" : "NO"));
+                }
                 System.out.println("A4_CANVAS_PAINT_COUNT=" + paintCount);
                 System.out.println("A4_CANVAS_TRACKED_PRESS_COUNT=" + trackedPresses);
                 System.out.println("A4_CANVAS_TRACKED_RELEASE_COUNT=" + trackedReleases);
@@ -241,16 +267,20 @@ public final class RG35XXA4SmokeMIDlet extends MIDlet {
                     sawDirection = true;
                 }
 
-                boolean fire = (state & FIRE_PRESSED) != 0;
-                if (fire) sawFire = true;
-                if (previousFire && !fire) sawFireRelease = true;
-                previousFire = fire;
+                boolean fireNow = (state & FIRE_PRESSED) != 0;
+                if (fireNow) sawFire = true;
+                if (previousFire && !fireNow) sawFireRelease = true;
+                if (INPUT_TRACE && fireNow != previousFire) {
+                    System.out.println("A4_GAMECANVAS_FIRE_STATE=" + (fireNow ? "PRESSED" : "RELEASED")
+                        + " keyStates=0x" + Integer.toHexString(state));
+                }
+                previousFire = fireNow;
                 clamp();
 
                 Graphics g = getGraphics();
                 g.setColor(0x00000000);
                 g.fillRect(0, 0, getWidth(), getHeight());
-                g.setColor(fire ? 0x00FFFF00 : 0x0000FFFF);
+                g.setColor(fireNow ? 0x00FFFF00 : 0x0000FFFF);
                 g.fillRect(x, y, 80, 80);
                 flushGraphics();
                 flushCount++;
@@ -274,6 +304,12 @@ public final class RG35XXA4SmokeMIDlet extends MIDlet {
 
             if (running) {
                 running = false;
+                if (INPUT_TRACE) {
+                    System.out.println("A4_GAMECANVAS_TIMEOUT_STATE=sawDirection=" + (sawDirection ? "YES" : "NO")
+                        + " sawFire=" + (sawFire ? "YES" : "NO")
+                        + " sawFireRelease=" + (sawFireRelease ? "YES" : "NO")
+                        + " previousFire=" + (previousFire ? "YES" : "NO"));
+                }
                 System.out.println("A4_GAMECANVAS_SAMPLE_COUNT=" + sampleCount);
                 System.out.println("A4_GAMECANVAS_FLUSH_COUNT=" + flushCount);
                 System.out.println("A4_GAMECANVAS_EXECUTION=FAIL");
