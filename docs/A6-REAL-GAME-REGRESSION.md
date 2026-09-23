@@ -40,18 +40,59 @@ The user has confirmed that the JAR was deleted from the SD card. No recoverable
 Status:
 `A6_CORPUS_01=UNAVAILABLE`
 
+## Evaluated replacement candidate — rejected for A6
+
+Uploaded file:
+`NinjaSchool1.jar`
+
+SHA256:
+`8eac77fd4cfef3903d210db32792ef3fb34fceaaf77a700ed9a4873aea5e9cb3`
+
+Size:
+`298021` bytes
+
+Manifest/profile:
+- MIDlet-Name: Ninja School
+- MIDlet-Vendor: TeaMobi
+- MIDlet-Version: 1.0.0
+- MIDP-2.0
+- CLDC-1.0
+- Nokia-MIDlet-no-exit: true
+
+Static inventory:
+- 4 class files
+- 393 non-class resources
+- 362 PNG resources
+- 5 MIDI (`.mid`) resources
+- 2 TXT resources
+- 24 extensionless resources
+- class major versions: 45, 47
+- Graphics/Image: drawImage, drawRegion, drawString, setClip, createImage
+- Font: getFont, getHeight, stringWidth
+- RMS: RecordStore open/add/set/get/close
+- Media: `javax.microedition.media.Manager.createPlayer`, Player realize/prefetch/start/stop/deallocate/setLoopCount, VolumeControl.setLevel
+- SMS: `javax.wireless.messaging.MessageConnection`, TextMessage, send
+- IO wrapper: `javay.microedition.io.Connector`
+- Bluetooth/device identity: `javax.bluetooth.LocalDevice`, `com.nokia.IMEI`
+
+A6 decision:
+`A6_CANDIDATE_NINJASCHOOL1=REJECTED_OUT_OF_SCOPE`
+
+Reason: the game mixes the non-audio Core2D/RMS path with Media, SMS/activation, Bluetooth/device-ID dependencies. Using it now would create ambiguous failures outside the currently opened A6 scope. It remains a useful later-stage corpus candidate after Media and activation/vendor compatibility are intentionally opened.
+
 ## Replacement corpus policy
 
-A6 is not blocked on this single title. A replacement real-game JAR may be locked only after its actual binary is available and statically inventoried.
+A6 is not blocked on one title. A replacement real-game JAR may be locked only after its actual binary is available and statically inventoried.
 
 Replacement requirements:
 1. user-owned/local real JAR binary is available;
 2. record exact filename, SHA256, size, MIDP/CLDC profile and resource count;
 3. inventory Font/Text/Graphics/Game API/RMS/Vendor/Media usage;
 4. while Audio/Media remain HOLD, prefer a title with no `javax.microedition.media` / Manager / Player usage;
-5. if Media APIs are present, do not interpret a media-related startup/runtime failure as an A6 non-audio core failure;
-6. once selected, lock the exact JAR identity before device testing;
-7. repository must not store or redistribute the commercial game JAR.
+5. avoid SMS/network/device-activation dependencies for the first A6 acceptance title when possible;
+6. if Media APIs are present, do not interpret a media-related startup/runtime failure as an A6 non-audio core failure;
+7. once selected, lock the exact JAR identity before device testing;
+8. repository must not store or redistribute the commercial game JAR.
 
 ## Scope
 
@@ -104,6 +145,7 @@ A5_R2_DEVICE_PASS=YES
 A5_REGRESSION_CONFIRMATION=PASS
 A5_PRODUCTION_MERGE=ffff492c0f2f0ccc1e0c1548addcec99c73fff09
 A6_CORPUS_01=UNAVAILABLE
+A6_CANDIDATE_NINJASCHOOL1=REJECTED_OUT_OF_SCOPE
 A6_REPLACEMENT_CORPUS=PENDING_BINARY
 A6_REAL_GAME_REGRESSION=PENDING
 AUDIO=HOLD
