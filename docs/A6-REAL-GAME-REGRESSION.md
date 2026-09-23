@@ -80,6 +80,42 @@ A6 decision:
 
 Reason: the game mixes the non-audio Core2D/RMS path with Media, SMS/activation, Bluetooth/device-ID dependencies. Using it now would create ambiguous failures outside the currently opened A6 scope. It remains a useful later-stage corpus candidate after Media and activation/vendor compatibility are intentionally opened.
 
+## Evaluated replacement candidate — conditional fallback
+
+Uploaded file:
+`Bolacthoitiensu_mod_by_thaimeow_320x240_fix.jar`
+
+SHA256:
+`5091f23baab29a420edb677c9fdc4f0e24c299f26b0656eaf8a601366d3d1f74`
+
+Size:
+`482460` bytes
+
+Manifest/profile:
+- MIDlet-Name: Bolacthoitiensu_mod_by_thaimeow
+- MIDlet-Version: 1.0.1
+- CLDC-1.1
+- MIDP-2.1
+- logical screen 320x240
+- landscape orientation
+
+Static inventory:
+- 7 class files, all class major version 47
+- 33 non-class entries
+- 1 PNG and 25 extensionless resources
+- Canvas/Input: getGameAction, repaint, full-screen, sizeChanged
+- Graphics/Image: drawImage, drawLine, drawRect, drawRegion, drawString, fillRect, setClip, setColor, createImage/getGraphics
+- Font: getFont, getHeight, stringWidth
+- RMS: RecordStore open/add/get/getNumRecords/close/delete
+- no Connector/HTTP/Socket/SMS/Bluetooth/IMEI references found
+- one `platformRequest` literal points to a Facebook URL
+- Media is active: Manager.createPlayer(InputStream, `audio/midi`), Player realize/prefetch/start/stop/close/setMediaTime, VolumeControl.setLevel
+
+A6 decision:
+`A6_CANDIDATE_BOLACTHOITIENSU=CONDITIONAL_FALLBACK`
+
+Reason: this title is substantially cleaner than NinjaSchool1 and provides useful real-game coverage for 320x240 landscape rendering, Canvas/input, drawRegion/text and RMS without SMS/network/device-activation dependencies. However it still actively invokes J2ME Media, so any media-related failure must be excluded from the A6 non-audio verdict. A clean comparable title with no Media dependency remains preferred for first A6 acceptance.
+
 ## Replacement corpus policy
 
 A6 is not blocked on one title. A replacement real-game JAR may be locked only after its actual binary is available and statically inventoried.
@@ -146,7 +182,8 @@ A5_REGRESSION_CONFIRMATION=PASS
 A5_PRODUCTION_MERGE=ffff492c0f2f0ccc1e0c1548addcec99c73fff09
 A6_CORPUS_01=UNAVAILABLE
 A6_CANDIDATE_NINJASCHOOL1=REJECTED_OUT_OF_SCOPE
-A6_REPLACEMENT_CORPUS=PENDING_BINARY
+A6_CANDIDATE_BOLACTHOITIENSU=CONDITIONAL_FALLBACK
+A6_REPLACEMENT_CORPUS=PENDING_CLEAN_CANDIDATE
 A6_REAL_GAME_REGRESSION=PENDING
 AUDIO=HOLD
 MEDIA=HOLD
