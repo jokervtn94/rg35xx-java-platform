@@ -67,6 +67,8 @@ chmod +x "$APPS/RG35XX-AWEIGIT-R1-A4-SMOKE.sh"
 
 cp "$ROOT/packaging/a4/INSTALL-RG35XX-AWEIGIT-R1-A4.ps1" "$OUT/"
 cp "$ROOT/packaging/a4/COLLECT-RG35XX-AWEIGIT-R1-A4.ps1" "$OUT/"
+cp "$ROOT/packaging/a4/INSTALL-A4-RG35XX.cmd" "$OUT/"
+cp "$ROOT/packaging/a4/COLLECT-A4-EVIDENCE.cmd" "$OUT/"
 cp "$ROOT/packaging/a4/A4-TEST-INSTRUCTIONS.txt" "$OUT/"
 
 ADAPTER_COMMIT="${GITHUB_SHA:-$(git rev-parse HEAD)}"
