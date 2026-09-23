@@ -68,6 +68,81 @@ A6 scope:
 Excluded from A6 verdict:
 `SMS,HTTP,PAYMENT,NETWORK,AUDIO,MEDIA`
 
+## Original-RG35XX A6 failure evidence
+
+The first parent A6 run passed all identity gates, created the MIDlet and 240x320 Canvas, opened `RMS_ROL` and `RMS_PUB`, then exited with SIGSEGV / code 139 after the game printed `CHANNEL_FLAG=======3`. Protected JamVM/glibj hashes remained unchanged.
+
+A single PNG diagnostic then exercised the first two startup resources from the locked game itself:
+- `/bin/move_logo.png` — PASS, 101x75;
+- `/bin/process.png` — PASS, 125x7 with transparency;
+- diagnostic exit code 0;
+- protected hashes PASS.
+
+The required parent rerun was then performed with trace-only image/decode markers. It decoded and returned `/bin/move_logo.png`, `/bin/process.png`, `/bin/logo_1.png` and `/bin/logo_2.png`; missing `/bin/logo_3.png` followed the expected IOException/null path. The first meaningful Java failure was instead:
+
+```text
+Exception in thread "Thread-1" java.lang.NoClassDefFoundError: w
+Caused by: java.lang.LinkageError: duplicate class definition
+    at java.lang.VMClassLoader.defineClass(Native Method)
+    at java.lang.ClassLoader.defineClass(ClassLoader.java:186)
+    at org.recompile.mobile.MIDletLoader.loadClass(MIDletLoader.java:594)
+    ...
+    at l.paint(Unknown Source)
+```
+
+Another game thread continued loading `/bin/firefly.png` after that exception, and the device then hung and required a hard reset. Per project policy, that tested build is `FAIL`.
+
+Historical RG35XX logs contain the same `NoClassDefFoundError` + `LinkageError: duplicate class definition` pattern in Canvas/EventProcessing/showNotify paths, so this is treated as a recurring class-loader concurrency boundary rather than a game-specific workaround.
+
+## Evidence-driven A6 adapter delta
+
+Pinned Aweigit `MIDletLoader.loadClass(String)` delegates platform/vendor namespaces as before, but its custom MIDlet game-class path instruments and calls `defineClass(...)` without a `findLoadedClass(name)` guard and without serialization around that path.
+
+The A6 disposable-source overlay therefore makes exactly two generic changes to that one-argument game-class loader entry:
+1. serialize `loadClass(String)`;
+2. return `findLoadedClass(name)` when another thread has already defined the class before the instrumentation/define path.
+
+No game-specific class names are hard-coded. Canonical upstream gitlink remains pinned and unmodified. A5 Core2D semantics, JamVM, glibj, input native and video native are unchanged.
+
+Prechange classification:
+
+```text
+CURRENT_INTEGRATION_FAILURE=A6 parent hard-hangs; first Java failure is NoClassDefFoundError:w caused by LinkageError duplicate class definition in MIDletLoader.loadClass.
+AWEIGIT_CANONICAL_BEHAVIOR=Pinned MIDletLoader instruments/defineClass-es game classes directly; no findLoadedClass guard and no synchronization around define.
+RG35XX_DEVICE_CONTRACT=A5 display/input/Core2D/RMS contracts remain protected; hard reset is FAIL.
+HISTORY_FOUND=Same duplicate-class-definition pattern appeared in earlier RG35XX Canvas/EventProcessing/showNotify paths.
+CURRENT_DIVERGENCE=Concurrent game and Canvas/EventProcessing threads can request the same obfuscated game class before either define completes.
+PROPOSED_ADAPTER_DELTA=Disposable-source overlay: serialize game-class load and return findLoadedClass before instrument/defineClass; no game-specific names.
+REGRESSION_RISK=Low-to-moderate; affects custom MIDlet game-class loader path only; platform/java/javax/vendor delegation remains unchanged.
+PARENT_TEST_TO_RE-RUN=Exact locked Vua-Cuop-Bien-240x320.jar A6 real-game regression.
+```
+
+## A6 class-loader candidate build
+
+A6 branch head used by CI: `edbeb926ffe0caf60a6dd7cc10e762f16592f2b1`
+
+GitHub Actions run: `35876072666`
+
+Result:
+- A4 raw2D staging: PASS
+- exact ARMv5/EABI5/soft-float native build: PASS
+- accepted A5 Core2D staging: PASS
+- A6 class-loader staging: PASS
+- A6 Java6 class-major gate: PASS (`50`)
+- synchronized/findLoadedClass bytecode gate: PASS
+- canonical gitlink clean/scope lock: PASS
+- accepted input/video native hash lock: PASS
+- artifact upload: PASS
+
+Fixed candidate hashes:
+- platform JAR: `2bf2ff422156cb60f0fb46149c70468c2e72854207a3822ee4cd4361aefb9a94`
+- input native: `69a8aeb3940bfbc234f3a562a7ae4bcaea10b50f8a8f2c38ad229a5430930f6d`
+- video native: `9094819d7c81576b63bd0cde9531404a3fb82b8d5b845dbae152152f2e1a2a7a`
+- CI artifact ZIP: `59915cb282cd010190d8a5d10d2470f14f5fdfd801005ec14d69f5f4609cbf33`
+- CI artifact ID: `10756728471`
+
+This establishes `BUILD-PASS` only. The same locked Vua Cuop Bien parent test must be rerun on the original RG35XX before any DEVICE-PASS decision.
+
 ## Other evaluated candidates
 
 - `NinjaSchool1.jar`: `REJECTED_OUT_OF_SCOPE` — Media + SMS + Bluetooth/device identity.
@@ -83,7 +158,7 @@ Only original RG35XX evidence can promote the A6 real-game gate.
 
 ## Failure handling
 
-If the game fails, identify the first meaningful boundary and compare it against pinned Aweigit and A5 device-proven contracts. Do not replay DP patches. Do not patch SMS/network/media behavior under A6. Use a micro diagnostic only if evidence cannot isolate an already-open boundary, then rerun the same locked JAR.
+If the fixed parent still fails, identify the first meaningful boundary from that same parent run and compare it against pinned Aweigit plus A5 device-proven contracts. Do not replay DP patches. Do not patch SMS/network/media behavior under A6. Do not create an endless micro-checkpoint chain.
 
 ## Current status
 
@@ -92,7 +167,11 @@ A5_R2_DEVICE_PASS=YES
 A5_REGRESSION_CONFIRMATION=PASS
 A5_PRODUCTION_MERGE=ffff492c0f2f0ccc1e0c1548addcec99c73fff09
 A6_CORPUS_VUACUOPBIEN=PRIMARY_LOCKED
-A6_REAL_GAME_REGRESSION=READY_FOR_DEVICE_TEST
+A6_PARENT_BASELINE_RESULT=FAIL_HARD_RESET
+A6_FAILURE_OWNER=MIDLETLOADER_DUPLICATE_CLASS_DEFINITION_RACE
+A6_CLASSLOADER_FIX_BUILD_PASS=YES
+A6_CLASSLOADER_FIX_DEVICE_PASS=NO_PENDING_PARENT_RERUN
+A6_REAL_GAME_REGRESSION=PENDING
 AUDIO=HOLD
 MEDIA=HOLD
 STABLE=NO
