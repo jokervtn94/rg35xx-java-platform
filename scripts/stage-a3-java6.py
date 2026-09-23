@@ -232,8 +232,10 @@ text = text.replace("\tFileSystem zipfs;\n", "\tprivate JarFile jarFile;\n")
 
 # Replace only the constructor's active zipfs-open block (the later NIO copy
 # helper is commented out in canonical source and is left as documentation).
+# Constructor diamonds have already been erased above, so the pinned-stage
+# anchor is intentionally "new HashMap()" rather than canonical "new HashMap<>()".
 ctor_re = re.compile(
-    r"\t\ttry\{\n\t\t\tHashMap<String, String> env = new HashMap<>\(\);.*?"
+    r"\t\ttry\{\n\t\t\tHashMap<String, String> env = new HashMap\(\);.*?"
     r"\t\tcatch\(Exception e\)\n\t\t\{\n\t\t\tSystem\.out\.println\(\"创建zip文件系统出错: \"\+e\.getMessage\(\)\);\n\t\t\}\n",
     re.S,
 )
@@ -264,8 +266,9 @@ if n != 1:
 text = text.replace("Path url = findJarResource(resource);", "JarEntry url = findJarResource(resource);")
 text = text.replace("Path url;", "JarEntry url;")
 text = text.replace("InputStream stream = Files.newInputStream(url,StandardOpenOption.READ);", "InputStream stream = jarFile.getInputStream(url);")
-# The canonical source has five active stream opens through NIO.
-if "Files.newInputStream(" in re.sub(r"/\\*.*?\\*/", "", text, flags=re.S):
+# The canonical source has five active stream opens through NIO. Strip block
+# comments correctly before this guard so the commented copy helper is ignored.
+if "Files.newInputStream(" in re.sub(r"/\*.*?\*/", "", text, flags=re.S):
     raise SystemExit("A3_STAGE_FAIL active MIDletLoader NIO stream use remains")
 
 write(rel, text)
