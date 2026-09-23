@@ -9,10 +9,20 @@ function Get-Sha256([string]$Path) {
 }
 
 if ([string]::IsNullOrWhiteSpace($SdRoot)) {
-    $SdRoot = Read-Host 'Nhap duong dan root SD RG35XX (vi du G:\)'
+    $SdRoot = Read-Host 'Nhap ky tu o SD RG35XX (vi du G)'
 }
 if ([string]::IsNullOrWhiteSpace($SdRoot)) { throw 'SD root is empty.' }
-$SdRoot = [System.IO.Path]::GetFullPath($SdRoot)
+
+$SdRoot = $SdRoot.Trim()
+if ($SdRoot -match '^[A-Za-z]$') {
+    $SdRoot = ($SdRoot.ToUpperInvariant() + ':\')
+}
+elseif ($SdRoot -match '^[A-Za-z]:[\\/]?$') {
+    $SdRoot = ($SdRoot.Substring(0,1).ToUpperInvariant() + ':\')
+}
+else {
+    $SdRoot = [System.IO.Path]::GetFullPath($SdRoot)
+}
 if (-not (Test-Path -LiteralPath $SdRoot -PathType Container)) { throw "SD root not found: $SdRoot" }
 
 $Stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
