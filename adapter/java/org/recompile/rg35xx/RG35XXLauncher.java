@@ -2,6 +2,7 @@ package org.recompile.rg35xx;
 
 import java.awt.image.BufferedImage;
 import java.io.File;
+import java.lang.reflect.Method;
 
 import org.recompile.mobile.Mobile;
 import org.recompile.mobile.MobilePlatform;
@@ -31,6 +32,11 @@ public final class RG35XXLauncher {
         if (dataDir == null) dataDir = new File(".").getAbsoluteFile();
         if (rootDir == null) rootDir = dataDir;
 
+        final boolean raw2d = Boolean.getBoolean("rg35xx.raw2d");
+        if (raw2d) {
+            System.out.println("RG35XX_A4_RAW2D=ENABLED");
+        }
+
         final MobilePlatform platform = new MobilePlatform(width, height);
         Mobile.setPlatform(platform);
         platform.dataPath = withSlash(dataDir.getAbsolutePath());
@@ -48,7 +54,7 @@ public final class RG35XXLauncher {
             System.exit(5);
         }
 
-        final FramePresenter presenter = new FramePresenter(platform);
+        final FramePresenter presenter = new FramePresenter(platform, raw2d);
         platform.setPainter(presenter);
 
         if (!platform.loadJar(jar.getAbsolutePath())) {
@@ -96,14 +102,54 @@ public final class RG35XXLauncher {
 
     private static final class FramePresenter implements Runnable {
         private final MobilePlatform platform;
+        private final boolean rawMode;
+        private final Method rawPixelsMethod;
         private int[] pixels;
         private int lastError = Integer.MIN_VALUE;
+        private boolean rawInvokeErrorLogged;
 
-        FramePresenter(MobilePlatform platform) {
+        FramePresenter(MobilePlatform platform, boolean rawMode) {
             this.platform = platform;
+            this.rawMode = rawMode;
+            Method method = null;
+            if (rawMode) {
+                try {
+                    method = platform.getClass().getMethod("getRG35XXLCDPixels", new Class[0]);
+                } catch (Exception e) {
+                    throw new IllegalStateException("RG35XX_A4_RAW2D_METHOD_MISSING", e);
+                }
+            }
+            rawPixelsMethod = method;
         }
 
         public void run() {
+            if (rawMode) {
+                try {
+                    int[] raw = (int[]) rawPixelsMethod.invoke(platform, new Object[0]);
+                    int width = platform.lcdWidth;
+                    int height = platform.lcdHeight;
+                    if (raw == null || raw.length < width * height) {
+                        if (!rawInvokeErrorLogged) {
+                            System.err.println("RG35XX_A4_RAW2D_BUFFER_INVALID");
+                            rawInvokeErrorLogged = true;
+                        }
+                        return;
+                    }
+                    int rc = RG35XXVideo.presentARGB(raw, width, height);
+                    if (rc != 0 && rc != lastError) {
+                        System.err.println("RG35XX_A3_PRESENT_FAIL=" + rc + " SOURCE=" + width + "x" + height + " RAW2D=YES");
+                    }
+                    lastError = rc;
+                    return;
+                } catch (Exception e) {
+                    if (!rawInvokeErrorLogged) {
+                        System.err.println("RG35XX_A4_RAW2D_PRESENT_EXCEPTION=" + e.toString());
+                        rawInvokeErrorLogged = true;
+                    }
+                    return;
+                }
+            }
+
             BufferedImage image = platform.getLCD();
             if (image == null) return;
             int width = image.getWidth();

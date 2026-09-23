@@ -13,6 +13,7 @@ public final class RG35XXKeyDispatcher {
 
     private static final int REPEAT_DELAY_MS = 400;
     private static final int REPEAT_PERIOD_MS = 100;
+    private static final boolean A4_INPUT_TRACE = Boolean.getBoolean("rg35xx.a4.inputtrace");
 
     private final MobilePlatform platform;
     private int previous;
@@ -28,7 +29,16 @@ public final class RG35XXKeyDispatcher {
     }
 
     void dispatchState(int state, long nowMs) {
-        if (Mobile.getDisplay() == null || Mobile.getDisplay().getCurrent() == null) {
+        boolean displayReady = Mobile.getDisplay() != null && Mobile.getDisplay().getCurrent() != null;
+        if (A4_INPUT_TRACE && state != previous) {
+            System.out.println("RG35XX_A4_INPUT_STATE prev=0x" + Integer.toHexString(previous)
+                + " state=0x" + Integer.toHexString(state)
+                + " displayReady=" + (displayReady ? "YES" : "NO"));
+        }
+        if (!displayReady) {
+            if (A4_INPUT_TRACE && state != previous) {
+                System.out.println("RG35XX_A4_INPUT_DISPATCH=DEFERRED_DISPLAY_NOT_READY");
+            }
             return;
         }
         for (int id = UP; id <= SELECT; id++) {
@@ -39,12 +49,24 @@ public final class RG35XXKeyDispatcher {
             if (key == 0) continue;
 
             if (!wasDown && isDown) {
+                if (A4_INPUT_TRACE) {
+                    System.out.println("RG35XX_A4_INPUT_EVENT=PRESS id=" + id + " bit=0x"
+                        + Integer.toHexString(bit) + " key=" + key);
+                }
                 platform.keyPressed(key);
                 nextRepeat[id] = repeatable(id) ? nowMs + REPEAT_DELAY_MS : 0;
             } else if (wasDown && !isDown) {
+                if (A4_INPUT_TRACE) {
+                    System.out.println("RG35XX_A4_INPUT_EVENT=RELEASE id=" + id + " bit=0x"
+                        + Integer.toHexString(bit) + " key=" + key);
+                }
                 platform.keyReleased(key);
                 nextRepeat[id] = 0;
             } else if (isDown && repeatable(id) && nextRepeat[id] != 0 && nowMs >= nextRepeat[id]) {
+                if (A4_INPUT_TRACE) {
+                    System.out.println("RG35XX_A4_INPUT_EVENT=REPEAT id=" + id + " bit=0x"
+                        + Integer.toHexString(bit) + " key=" + key);
+                }
                 platform.keyRepeated(key);
                 nextRepeat[id] = nowMs + REPEAT_PERIOD_MS;
             }
