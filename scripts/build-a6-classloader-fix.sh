@@ -7,10 +7,11 @@ BUILD="$ROOT/build/a3"
 OUT="$ROOT/out/a3"
 UPSTREAM="$ROOT/upstream/freej2me-miyoomini"
 JAVA8="${JAVA8:-${JAVA_HOME:-}}"
-fail(){ echo "A6_REALGAME_R2_BUILD_FAIL=$*" >&2; exit 1; }
+fail(){ echo "A6_REALGAME_R3_BUILD_FAIL=$*" >&2; exit 1; }
 
 [ -n "$JAVA8" ] || fail "JAVA8/JAVA_HOME not set"
 [ -x "$JAVA8/bin/javac" ] || fail "javac missing"
+[ -x "$JAVA8/bin/java" ] || fail "java missing"
 [ -x "$JAVA8/bin/jar" ] || fail "jar missing"
 [ -x "$JAVA8/bin/javap" ] || fail "javap missing"
 [ -d "$BUILD/stage-src" ] || fail "A5 staged source missing"
@@ -22,6 +23,7 @@ python3 "$ROOT/scripts/stage-a6-rg35xx-classloader-race.py" \
   "$BUILD/stage-src" "$BUILD/JAVA6-COMPAT-AUDIT.tsv"
 python3 "$ROOT/scripts/stage-a6-rg35xx-drawregion-null-guard.py" \
   "$BUILD/stage-src" "$BUILD/JAVA6-COMPAT-AUDIT.tsv"
+python3 "$ROOT/scripts/stage-a6-rg35xx-adam7.py" "$ROOT"
 [ -z "$(git -C "$UPSTREAM" status --porcelain --untracked-files=no)" ] || fail "canonical dirty after A6 staging"
 
 rm -rf "$BUILD/classes"
@@ -39,7 +41,12 @@ if [ -d "$UPSTREAM/META-INF" ]; then "$JAVA8/bin/jar" uf "$OUT/freej2me-rg35xx.j
 python3 - "$OUT/freej2me-rg35xx.jar" <<'PY'
 import sys, zipfile
 jar=sys.argv[1]
-bad=[]; majors=set(); required={'org/recompile/mobile/MIDletLoader.class','org/recompile/mobile/PlatformGraphics.class'}
+bad=[]; majors=set(); required={
+ 'org/recompile/mobile/MIDletLoader.class',
+ 'org/recompile/mobile/PlatformGraphics.class',
+ 'org/recompile/rg35xx/RG35XXCore2D.class',
+ 'org/recompile/rg35xx/RG35XXAdam7.class'
+}
 seen=set()
 with zipfile.ZipFile(jar) as z:
   for n in z.namelist():
@@ -47,21 +54,20 @@ with zipfile.ZipFile(jar) as z:
       b=z.read(n); m=int.from_bytes(b[6:8],'big'); majors.add(m)
       if m>50: bad.append((n,m))
       if n in required: seen.add(n)
-if bad: raise SystemExit('A6_REALGAME_R2_JAVA6_GATE_FAIL '+repr(bad[:20]))
-if required-seen: raise SystemExit('A6_REALGAME_R2_CLASS_GATE_FAIL missing='+repr(sorted(required-seen)))
-print('A6_REALGAME_R2_CLASS_MAJORS='+','.join(map(str,sorted(majors))))
-print('A6_REALGAME_R2_JAVA6_GATE=PASS')
+if bad: raise SystemExit('A6_REALGAME_R3_JAVA6_GATE_FAIL '+repr(bad[:20]))
+if required-seen: raise SystemExit('A6_REALGAME_R3_CLASS_GATE_FAIL missing='+repr(sorted(required-seen)))
+print('A6_REALGAME_R3_CLASS_MAJORS='+','.join(map(str,sorted(majors))))
+print('A6_REALGAME_R3_JAVA6_GATE=PASS')
 PY
 
-# Class-loader gate from R1 remains mandatory.
+# R1 class-loader gate remains mandatory.
 "$JAVA8/bin/javap" -classpath "$OUT/freej2me-rg35xx.jar" -p -c org.recompile.mobile.MIDletLoader > "$BUILD/a6-midletloader.javap"
 grep -q 'public synchronized java.lang.Class loadClass(java.lang.String)' "$BUILD/a6-midletloader.javap" || fail "loadClass not synchronized"
 grep -q 'findLoadedClass' "$BUILD/a6-midletloader.javap" || fail "findLoadedClass bytecode missing"
 grep -q 'defineClass' "$BUILD/a6-midletloader.javap" || fail "game defineClass path missing"
 echo A6_CLASSLOADER_BYTECODE_GATE=PASS
 
-# R2 gate: null guard must execute before the first Image.getWidth dereference
-# in PlatformGraphics.drawRegion. This directly guards the A6 parent failure.
+# R2 drawRegion gate remains mandatory.
 "$JAVA8/bin/javap" -classpath "$OUT/freej2me-rg35xx.jar" -p -c -l org.recompile.mobile.PlatformGraphics > "$BUILD/a6-platformgraphics.javap"
 python3 - "$BUILD/a6-platformgraphics.javap" <<'PY'
 import sys
@@ -79,6 +85,20 @@ if getw < 0 or nullop < 0 or nullop > getw or platform < 0 or platform > getw:
 print('A6_DRAWREGION_NULL_GUARD_BYTECODE_GATE=PASS')
 PY
 
+# R3 gate: interlace method 1 must delegate into RG35XX Adam7 and decode a
+# synthetic 9x9 RGBA Adam7 fixture to an exact pixel checksum.
+"$JAVA8/bin/javap" -classpath "$OUT/freej2me-rg35xx.jar" -p -c org.recompile.rg35xx.RG35XXCore2D > "$BUILD/a6-core2d.javap"
+grep -q 'RG35XXAdam7.decode' "$BUILD/a6-core2d.javap" || fail "Adam7 delegation bytecode missing"
+rm -rf "$BUILD/a6-adam7-host"
+mkdir -p "$BUILD/a6-adam7-host"
+"$JAVA8/bin/javac" -encoding UTF-8 -source 1.6 -target 1.6 \
+  -bootclasspath "$JAVA8/jre/lib/rt.jar" \
+  -classpath "$OUT/freej2me-rg35xx.jar" \
+  -d "$BUILD/a6-adam7-host" "$ROOT/tests/a6/RG35XXAdam7HostGate.java"
+"$JAVA8/bin/java" -cp "$OUT/freej2me-rg35xx.jar:$BUILD/a6-adam7-host" \
+  org.recompile.rg35xx.a6.RG35XXAdam7HostGate | tee "$BUILD/a6-adam7-host-gate.txt"
+grep -q '^A6_ADAM7_HOST_GATE=PASS$' "$BUILD/a6-adam7-host-gate.txt" || fail "Adam7 host gate missing"
+
 cp "$BUILD/JAVA6-COMPAT-AUDIT.tsv" "$OUT/JAVA6-COMPAT-AUDIT.tsv"
 cat >> "$OUT/CANONICAL-DIFF-MANIFEST.txt" <<'EOF'
 A6_CLASSLOADER_OVERLAY=YES
@@ -93,29 +113,37 @@ A6_DRAWREGION_TRIGGER=REAL_GAME_FIRST_REPAINT_NULL_IMAGE
 A6_DRAWREGION_SCOPE=EARLY_RETURN_NULL_IMAGE_OR_PLATFORMIMAGE
 A6_DRAWREGION_GAME_SPECIFIC_NAMES=NO
 A6_DRAWREGION_SEMANTIC_INTENT=RESTORE_PINNED_AWEIGIT_NO_THROW_INVALID_DRAW_BEHAVIOR
+A6_ADAM7_BACKING=YES
+A6_ADAM7_OWNER=RG35XX_ADAPTER_PNG_BACKING
+A6_ADAM7_TRIGGER=REAL_GAME_IMAGE_CREATEIMAGE_BYTES_INTERLACE_1
+A6_ADAM7_SCOPE=PNG_INTERLACE_METHOD_1_7_PASS_DECODE
+A6_ADAM7_GAME_SPECIFIC_NAMES=NO
+A6_ADAM7_HOST_GATE=PASS
 CANONICAL_GITLINK_MUTATED=NO
 EOF
 
-R2OUT="$ROOT/out/a6-realgame-r2"
-rm -rf "$R2OUT"
-mkdir -p "$R2OUT"
-cp "$OUT/freej2me-rg35xx.jar" "$R2OUT/freej2me-rg35xx.jar"
-cp "$OUT/JAVA6-COMPAT-AUDIT.tsv" "$R2OUT/JAVA6-COMPAT-AUDIT.tsv"
-cp "$OUT/CANONICAL-DIFF-MANIFEST.txt" "$R2OUT/CANONICAL-DIFF-MANIFEST.txt"
-cp "$BUILD/a6-midletloader.javap" "$R2OUT/A6-MIDLETLOADER-JAVAP.txt"
-cp "$BUILD/a6-platformgraphics.javap" "$R2OUT/A6-PLATFORMGRAPHICS-JAVAP.txt"
+R3OUT="$ROOT/out/a6-realgame-r3"
+rm -rf "$R3OUT"
+mkdir -p "$R3OUT"
+cp "$OUT/freej2me-rg35xx.jar" "$R3OUT/freej2me-rg35xx.jar"
+cp "$OUT/JAVA6-COMPAT-AUDIT.tsv" "$R3OUT/JAVA6-COMPAT-AUDIT.tsv"
+cp "$OUT/CANONICAL-DIFF-MANIFEST.txt" "$R3OUT/CANONICAL-DIFF-MANIFEST.txt"
+cp "$BUILD/a6-midletloader.javap" "$R3OUT/A6-MIDLETLOADER-JAVAP.txt"
+cp "$BUILD/a6-platformgraphics.javap" "$R3OUT/A6-PLATFORMGRAPHICS-JAVAP.txt"
+cp "$BUILD/a6-core2d.javap" "$R3OUT/A6-CORE2D-JAVAP.txt"
+cp "$BUILD/a6-adam7-host-gate.txt" "$R3OUT/A6-ADAM7-HOST-GATE.txt"
 
-cat > "$R2OUT/A6-REALGAME-FIX-R2-IDENTITY.txt" <<EOF
+cat > "$R3OUT/A6-REALGAME-FIX-R3-IDENTITY.txt" <<EOF
 PROJECT=RG35XX-AWEIGIT-R1
-STAGE=A6-REALGAME-FIX-R2
+STAGE=A6-REALGAME-FIX-R3
 PRODUCTION_BASELINE=ffff492c0f2f0ccc1e0c1548addcec99c73fff09
 AWEIGIT_COMMIT=ca11dfe8ea1cc273d92460f9a83bbf192023fa63
 A5_PLATFORM_JAR_SHA256=3cc31a9f1b00e6756fb5a314fe7af64e8c9b28cb03dedea4b0a58c7327169db4
 A6_PLATFORM_JAR_SHA256=$(sha256sum "$OUT/freej2me-rg35xx.jar" | awk '{print $1}')
 A6_CLASSLOADER_OVERLAY=YES
-A6_CLASSLOADER_REWRITES=2
 A6_DRAWREGION_NULL_GUARD=YES
-A6_DRAWREGION_REWRITES=1
+A6_ADAM7_BACKING=YES
+A6_ADAM7_HOST_GATE=PASS
 A6_GAME_SPECIFIC_NAMES=NO
 BUILD-PASS=YES
 DEVICE-PASS=NO
@@ -123,7 +151,7 @@ DEVICE-TEST-PENDING=YES
 STABLE=NO
 EOF
 
-(cd "$R2OUT" && sha256sum freej2me-rg35xx.jar JAVA6-COMPAT-AUDIT.tsv CANONICAL-DIFF-MANIFEST.txt A6-MIDLETLOADER-JAVAP.txt A6-PLATFORMGRAPHICS-JAVAP.txt A6-REALGAME-FIX-R2-IDENTITY.txt > SHA256SUMS.txt)
+(cd "$R3OUT" && sha256sum * > SHA256SUMS.txt)
 
-echo A6_REALGAME_R2_BUILD=PASS
-cat "$R2OUT/A6-REALGAME-FIX-R2-IDENTITY.txt"
+echo A6_REALGAME_R3_BUILD=PASS
+cat "$R3OUT/A6-REALGAME-FIX-R3-IDENTITY.txt"
