@@ -17,7 +17,7 @@ fail(){ echo "A5_CORE2D_BUILD_FAIL=$*" >&2; exit 1; }
 grep -q 'A4_RAW2D_OVERLAY=YES' "$BUILD/JAVA6-COMPAT-AUDIT.tsv" || fail "A4 raw2d stage not present"
 [ -z "$(git -C "$UPSTREAM" status --porcelain --untracked-files=no)" ] || fail "canonical dirty before A5"
 
-python3 "$ROOT/scripts/stage-a5-rg35xx-core2d.py" "$BUILD/stage-src" "$BUILD/JAVA6-COMPAT-AUDIT.tsv"
+python3 "$ROOT/scripts/stage-a5-rg35xx-core2d-v2.py" "$BUILD/stage-src" "$BUILD/JAVA6-COMPAT-AUDIT.tsv"
 [ -z "$(git -C "$UPSTREAM" status --porcelain --untracked-files=no)" ] || fail "canonical dirty after A5 staging"
 
 rm -rf "$BUILD/classes"
