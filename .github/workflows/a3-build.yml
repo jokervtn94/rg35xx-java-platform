@@ -39,7 +39,7 @@ jobs:
             -v "$GITHUB_WORKSPACE:/work" \
             -w /work \
             "$TOOLCHAIN" \
-            bash ./scripts/build-a3.sh native
+            bash -lc 'git config --global --add safe.directory /work/upstream/freej2me-miyoomini && ./scripts/build-a3.sh native'
 
       - name: Finalize identity and hashes
         run: ./scripts/build-a3.sh finalize
