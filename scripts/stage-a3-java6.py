@@ -266,7 +266,12 @@ if n != 1:
 text = text.replace("Path url = findJarResource(resource);", "JarEntry url = findJarResource(resource);")
 text = text.replace("Path url;", "JarEntry url;")
 text = text.replace("InputStream stream = Files.newInputStream(url,StandardOpenOption.READ);", "InputStream stream = jarFile.getInputStream(url);")
-# The canonical source has five active stream opens through NIO. Strip block
+manifest_stream = "InputStream is = Files.newInputStream(url,StandardOpenOption.READ);"
+if text.count(manifest_stream) != 1:
+    raise SystemExit("A3_STAGE_FAIL MIDletLoader manifest NIO stream anchor drift")
+text = text.replace(manifest_stream, "InputStream is = jarFile.getInputStream(url);")
+note("REWRITE", rel, "manifest-stream-nio-to-jarfile count=1")
+# All executable stream opens must now be Java-6 JarFile based. Strip block
 # comments correctly before this guard so the commented copy helper is ignored.
 if "Files.newInputStream(" in re.sub(r"/\*.*?\*/", "", text, flags=re.S):
     raise SystemExit("A3_STAGE_FAIL active MIDletLoader NIO stream use remains")
