@@ -1,0 +1,38 @@
+RG35XX-AWEIGIT-R1 - A5 CORE INTEGRATION
+========================================
+
+Muc tieu
+--------
+Mot package duy nhat kiem Level-2 core integration tren RG35XX that:
+resize 240x320 -> 640x480, resource stream, Image/transparency, PNG resource,
+mutable/copy Image, font/text, Sprite 8 transforms, collision, TiledLayer,
+LayerManager va RMS persistence qua 2 JamVM process A -> B.
+
+Audio/media van HOLD.
+
+Cai dat
+-------
+1. Extract All toan bo ZIP.
+2. Cam SD RG35XX vao PC.
+3. Double-click INSTALL-A5-RG35XX.cmd.
+4. Chi nhap ky tu o dia, vi du H.
+5. Neu [PASS], thao SD an toan va gan vao RG35XX.
+
+Test
+----
+Chay: RG35XX-AWEIGIT-R1-A5-CORE
+
+Test la tu dong. Man hinh logical 240x320 se hien cac khoi mau va duoc scale len LCD 640x480.
+Package se chay Phase A, sau do khoi dong JamVM Phase B de verify RMS persistence.
+Khong can bam phim de dat PASS.
+
+Quan trong
+----------
+- Neu mot boundary fail, probe van co gang chay cac boundary con lai de thu du evidence trong mot lan.
+- DEVICE_PASS khong duoc gan tu dong.
+- Khong danh gia STABLE tu test nay.
+
+Thu evidence
+------------
+Sau khi test ket thuc, cam SD lai PC va double-click COLLECT-A5-EVIDENCE.cmd.
+Upload file RG35XX-AWEIGIT-R1-A5-EVIDENCE-*.zip vao ChatGPT.
