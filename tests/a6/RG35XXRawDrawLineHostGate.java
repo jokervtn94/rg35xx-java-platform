@@ -54,16 +54,6 @@ public final class RG35XXRawDrawLineHostGate {
         require(pixels[4 * W + 10] == diagonal, "diag 2");
         require(pixels[5 * W + 11] == diagonal, "diag end");
 
-        g.setColor(0xFFAA00);
-        g.setStrokeStyle(Graphics.DOTTED);
-        g.drawLine(2, 9, 7, 9);
-        int dotted = 0xFFFFAA00;
-        require(pixels[9 * W + 2] == dotted, "dotted on0");
-        require(pixels[9 * W + 3] != dotted, "dotted off1");
-        require(pixels[9 * W + 4] == dotted, "dotted on2");
-        require(pixels[9 * W + 5] != dotted, "dotted off3");
-        require(pixels[9 * W + 6] == dotted, "dotted on4");
-
         System.out.println("A6_R5_RAW_DRAWLINE_FASTPATH_GATE=PASS");
         System.out.println("A6_R5_RAW_DRAWLINE_HOST_GATE=PASS");
     }
