@@ -37,9 +37,15 @@ DIAG_CLASSES="$BUILD/corpus3-renderdiag-classes"
 DST="$ROOT/out/a6-corpus3-renderdiag"
 rm -rf "$DIAG_ADAPTER" "$DIAG_CLASSES" "$DST"
 mkdir -p "$DIAG_ADAPTER" "$DIAG_CLASSES" "$DST"
+
+# IMPORTANT: build-a6-perf-a1.sh has already materialized all accepted staged
+# Java overlays, including the inline Adam7 Core2D change, into adapter/java.
+# Copy that exact staged adapter view and add telemetry to it. Never start from
+# a pristine pre-R4 Core2D source here.
 cp -a "$ROOT/adapter/java/." "$DIAG_ADAPTER/"
 CORE="$DIAG_ADAPTER/org/recompile/rg35xx/RG35XXCore2D.java"
 [ -f "$CORE" ] || fail "Core2D source missing"
+grep -q 'decodeAdam7' "$CORE" || fail "accepted Adam7 Core2D parent source missing"
 
 python3 - "$CORE" <<'PY'
 import sys
@@ -64,6 +70,7 @@ PY
 grep -q 'RG35XX_GOW_BLIT_DIAG' "$CORE" || fail "diagnostic marker missing"
 grep -q 'ALPHA_NZ=' "$CORE" || fail "alpha diagnostic missing"
 grep -q 'CHANGED=' "$CORE" || fail "changed diagnostic missing"
+grep -q 'decodeAdam7' "$CORE" || fail "Adam7 lost while staging diagnostic"
 
 find "$BUILD/stage-src" "$DIAG_ADAPTER" -type f -name '*.java' -print | LC_ALL=C sort > "$BUILD/corpus3-renderdiag-sources.list"
 "$JAVA8/bin/javac" -encoding UTF-8 -source 1.6 -target 1.6 \
@@ -75,14 +82,25 @@ DIAG_JAR="$DST/freej2me-rg35xx.jar"
 "$JAVA8/bin/jar" cfm "$DIAG_JAR" "$BUILD/manifests/rg35xx-aweigit-r1.mf" -C "$DIAG_CLASSES" .
 if [ -d "$UPSTREAM/META-INF" ]; then "$JAVA8/bin/jar" uf "$DIAG_JAR" -C "$UPSTREAM" META-INF; fi
 
+# javac can rewrite the nested RawImage class' classfile metadata when the
+# enclosing Core2D is recompiled. Allow that binary delta ONLY when the
+# executable javap instructions are identical to the exact PERF-A1 parent.
+"$JAVA8/bin/javap" -classpath "$PARENT_JAR" -p -c 'org.recompile.rg35xx.RG35XXCore2D$RawImage' > "$BUILD/corpus3-parent-rawimage.javap"
+"$JAVA8/bin/javap" -classpath "$DIAG_JAR" -p -c 'org.recompile.rg35xx.RG35XXCore2D$RawImage' > "$BUILD/corpus3-diag-rawimage.javap"
+cmp -s "$BUILD/corpus3-parent-rawimage.javap" "$BUILD/corpus3-diag-rawimage.javap" || fail "RawImage executable bytecode changed"
+echo A6_CORPUS3_RENDERDIAG_RAWIMAGE_BYTECODE_GATE=PASS
+
 python3 - "$PARENT_JAR" "$DIAG_JAR" <<'PY'
 import sys,zipfile,hashlib
 base,new=sys.argv[1:3]
 with zipfile.ZipFile(base) as a, zipfile.ZipFile(new) as b:
     if set(a.namelist()) != set(b.namelist()): raise SystemExit('A6_CORPUS3_RENDERDIAG_SCOPE_FAIL entry set')
     diff=[n for n in sorted(a.namelist()) if hashlib.sha256(a.read(n)).digest()!=hashlib.sha256(b.read(n)).digest()]
-expected=['org/recompile/rg35xx/RG35XXCore2D.class']
-if diff != expected: raise SystemExit('A6_CORPUS3_RENDERDIAG_SCOPE_FAIL changed='+repr(diff))
+allowed=[
+ 'org/recompile/rg35xx/RG35XXCore2D$RawImage.class',
+ 'org/recompile/rg35xx/RG35XXCore2D.class'
+]
+if diff != allowed: raise SystemExit('A6_CORPUS3_RENDERDIAG_SCOPE_FAIL changed='+repr(diff))
 print('A6_CORPUS3_RENDERDIAG_CHANGED_ENTRIES='+','.join(diff))
 print('A6_CORPUS3_RENDERDIAG_SCOPE_GATE=PASS')
 PY
@@ -101,6 +119,9 @@ PY
 
 "$JAVA8/bin/javap" -classpath "$DIAG_JAR" -p -c org.recompile.rg35xx.RG35XXCore2D > "$DST/A6-CORPUS3-RENDERDIAG-CORE2D-JAVAP.txt"
 grep -q 'RG35XX_GOW_BLIT_DIAG' "$DST/A6-CORPUS3-RENDERDIAG-CORE2D-JAVAP.txt" || fail "diagnostic bytecode marker missing"
+grep -q 'decodeAdam7' "$DST/A6-CORPUS3-RENDERDIAG-CORE2D-JAVAP.txt" || fail "accepted Adam7 bytecode lost"
+cp "$BUILD/corpus3-parent-rawimage.javap" "$DST/A6-CORPUS3-PARENT-RAWIMAGE-JAVAP.txt"
+cp "$BUILD/corpus3-diag-rawimage.javap" "$DST/A6-CORPUS3-DIAG-RAWIMAGE-JAVAP.txt"
 
 cp "$PARENT/librg35xx_input.so" "$DST/librg35xx_input.so"
 cp "$PARENT/librg35xx_video.so" "$DST/librg35xx_video.so"
@@ -110,6 +131,7 @@ cp "$PARENT/CANONICAL-DIFF-MANIFEST.txt" "$DST/CANONICAL-DIFF-MANIFEST.txt"
 cat >> "$DST/CANONICAL-DIFF-MANIFEST.txt" <<EOF
 A6_CORPUS3_PARENT_RESULT=FAIL_VISUAL_MISSING_CHARACTER_AND_MONSTER_SPRITES
 A6_CORPUS3_RENDERDIAG_SCOPE=RG35XXCore2D_BLIT_TELEMETRY_ONLY
+A6_CORPUS3_RENDERDIAG_RAWIMAGE_BINARY_DELTA=JAVAC_METADATA_ONLY_BYTECODE_IDENTICAL
 A6_CORPUS3_RENDERDIAG_SEMANTIC_CHANGE=NO
 A6_CORPUS3_RUNTIME_NATIVE=EXACT_PERF_A1
 CANONICAL_GITLINK_MUTATED=NO
@@ -136,6 +158,8 @@ INPUT_NATIVE_SHA256=$(sha256sum "$DST/librg35xx_input.so" | awk '{print $1}')
 VIDEO_NATIVE_SHA256=$(sha256sum "$DST/librg35xx_video.so" | awk '{print $1}')
 PARENT_VISUAL_RESULT=FAIL_MISSING_CHARACTER_AND_MONSTER_SPRITES
 DIAGNOSTIC_SCOPE=RG35XXCore2D_BLIT_TELEMETRY_ONLY
+DIAGNOSTIC_RAWIMAGE_GATE=BYTECODE_IDENTICAL
+DIAGNOSTIC_ADAM7=PRESERVED
 DIAGNOSTIC_KEYS_LIMIT=160
 DIAGNOSTIC_FIELDS=SRC_DIM,REGION_DIM,TRANSFORM,SRCXY,DST_DIM,DSTXY,CLIP,VIS,ALPHA_NZ,WRITES,CHANGED
 SEMANTIC_CHANGE=NO
