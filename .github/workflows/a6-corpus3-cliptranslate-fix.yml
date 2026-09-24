@@ -67,7 +67,6 @@ jobs:
         run: |
           set -euo pipefail
           ID=out/a6-corpus3-cliptranslate-fix/A6-CORPUS3-CLIPTRANSLATE-IDENTITY.txt
-          grep -q '^PARENT_PLATFORM_JAR_SHA256=8ecbcb1964967e55994ba2401471c19fb23f9efdc285a568c2c303b0fb54cafd$' "$ID"
           grep -q '^PARENT_PLATFORM_SEMANTIC_SHA256=b79cafa98c467436cf0e782b069839e993a7dc7bdb31b9a423b47c0ff293950e$' "$ID"
           grep -q '^INPUT_NATIVE_SHA256=69a8aeb3940bfbc234f3a562a7ae4bcaea10b50f8a8f2c38ad229a5430930f6d$' "$ID"
           grep -q '^VIDEO_NATIVE_SHA256=c6687c0a43b24b425af0727c928afb5414da811ecbcbbe3538928470abe8bd0d$' "$ID"

@@ -39,7 +39,9 @@ PY
 INPUT_SHA="$(sha256sum "$PARENT/librg35xx_input.so" | awk '{print $1}')"
 VIDEO_SHA="$(sha256sum "$PARENT/librg35xx_video.so" | awk '{print $1}')"
 
-[ "$PARENT_SHA" = "8ecbcb1964967e55994ba2401471c19fb23f9efdc285a568c2c303b0fb54cafd" ] || fail "parent jar hash changed $PARENT_SHA"
+# JAR container SHA is recorded but not used as the semantic lock because fresh
+# jar creation can change ZIP metadata. The decompressed-entry semantic digest
+# below is the exact Java content lock already used by PERF-A1 itself.
 [ "$PARENT_SEMANTIC" = "b79cafa98c467436cf0e782b069839e993a7dc7bdb31b9a423b47c0ff293950e" ] || fail "parent semantic changed $PARENT_SEMANTIC"
 [ "$INPUT_SHA" = "69a8aeb3940bfbc234f3a562a7ae4bcaea10b50f8a8f2c38ad229a5430930f6d" ] || fail "input native changed $INPUT_SHA"
 [ "$VIDEO_SHA" = "c6687c0a43b24b425af0727c928afb5414da811ecbcbbe3538928470abe8bd0d" ] || fail "PERF-A1 video changed $VIDEO_SHA"
