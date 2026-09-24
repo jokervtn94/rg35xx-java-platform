@@ -1,0 +1,97 @@
+name: A6 Corpus3 God of War Clip Translate Fix
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - rg35xx-aweigit-r1-a6-real-game-regression
+    paths:
+      - '.github/workflows/a6-corpus3-cliptranslate-fix.yml'
+      - 'scripts/build-a6-corpus3-cliptranslate-fix.sh'
+      - 'scripts/stage-a6-corpus3-cliptranslate-fix.py'
+      - 'tests/a6/RG35XXRawClipTranslateHostGate.java'
+
+permissions:
+  contents: read
+
+jobs:
+  a6-corpus3-cliptranslate-fix:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout A6 branch and pinned canonical submodule
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Set up JDK 8 for Java 6 bytecode output
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Materialize A4 DEVICE-PASS raw2D baseline
+        run: bash ./scripts/build-a4-raw2d-java.sh
+
+      - name: Stage PERF-P1 cached native presenter
+        run: python3 ./scripts/stage-a6-rg35xx-video-perf-p1.py "$GITHUB_WORKSPACE"
+
+      - name: Stage PERF-P2 direct truecolor packer
+        run: python3 ./scripts/stage-a6-rg35xx-video-perf-p2.py "$GITHUB_WORKSPACE"
+
+      - name: Stage PERF-P3 exact 3to2 scaler
+        run: python3 ./scripts/stage-a6-rg35xx-video-perf-p3.py "$GITHUB_WORKSPACE"
+
+      - name: Stage PERF-A1 native latest-frame async presenter
+        run: python3 ./scripts/stage-a6-rg35xx-perf-a1-async-native.py "$GITHUB_WORKSPACE"
+
+      - name: Build exact PERF-A1 ARMv5 soft-float native adapters
+        env:
+          TOOLCHAIN: docker.io/miyoocfw/toolchain-shared-uclibc@sha256:6f6761867b4e4dcc27c99bf25fb91b2910264165f27bdd40b1c17e6f98cf751e
+        run: |
+          docker pull "$TOOLCHAIN"
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/work" \
+            -w /work \
+            "$TOOLCHAIN" \
+            bash -lc 'git config --global --add safe.directory /work/upstream/freej2me-miyoomini && ./scripts/build-a3.sh native'
+
+      - name: Apply accepted A5 headless Core2D overlay
+        run: bash ./scripts/build-a5-core2d-java.sh
+
+      - name: Build evidence-owned clip/translate fix
+        run: bash ./scripts/build-a6-corpus3-cliptranslate-fix.sh
+
+      - name: Verify exact scope and protected identities
+        run: |
+          set -euo pipefail
+          ID=out/a6-corpus3-cliptranslate-fix/A6-CORPUS3-CLIPTRANSLATE-IDENTITY.txt
+          grep -q '^PARENT_PLATFORM_JAR_SHA256=8ecbcb1964967e55994ba2401471c19fb23f9efdc285a568c2c303b0fb54cafd$' "$ID"
+          grep -q '^PARENT_PLATFORM_SEMANTIC_SHA256=b79cafa98c467436cf0e782b069839e993a7dc7bdb31b9a423b47c0ff293950e$' "$ID"
+          grep -q '^INPUT_NATIVE_SHA256=69a8aeb3940bfbc234f3a562a7ae4bcaea10b50f8a8f2c38ad229a5430930f6d$' "$ID"
+          grep -q '^VIDEO_NATIVE_SHA256=c6687c0a43b24b425af0727c928afb5414da811ecbcbbe3538928470abe8bd0d$' "$ID"
+          grep -q '^A6_CORPUS3_OWNER=RG35XX_RAW_PLATFORMGRAPHICS_TRANSLATE_CLIP_DOUBLE_SHIFT$' "$ID"
+          grep -q '^A6_CORPUS3_DELTA=RAW_TRANSLATE_PRESERVE_DEVICE_CLIP$' "$ID"
+          grep -q '^A6_CORPUS3_CHANGED_SCOPE=PlatformGraphics_CLASS_ONLY$' "$ID"
+          grep -q '^A6_CORPUS3_CLIPTRANSLATE_SOURCE_GATE=PASS$' "$ID"
+          grep -q '^A6_CORPUS3_CLIPTRANSLATE_HOST_GATE=PASS$' "$ID"
+          grep -q '^A6_R5P3I2_DRAWRECT_REGRESSION_GATE=PASS$' "$ID"
+          grep -q '^A6_R5_DRAWLINE_REGRESSION_GATE=PASS$' "$ID"
+          grep -q '^A6_R5P3_POLYGON_REGRESSION_GATE=PASS$' "$ID"
+          grep -q '^A6_R4_ADAM7_REGRESSION_GATE=PASS$' "$ID"
+          grep -q '^PERF_A1_NATIVE=UNCHANGED$' "$ID"
+          grep -q '^PNG_DECODER=UNCHANGED$' "$ID"
+          grep -q '^AUDIO_MEDIA=UNCHANGED_HOLD$' "$ID"
+          grep -q '^CANONICAL_GITLINK_MUTATED=NO$' "$ID"
+          grep -q '^BUILD-PASS=YES$' "$ID"
+          strings out/a6-corpus3-cliptranslate-fix/librg35xx_video.so | grep -q 'RG35XX_PERF_A1_ASYNC=ENABLED MODE=LATEST_ONLY SLOTS=3 SOURCE=240x320 WORKER=P3_SCALE_PLUS_SDL_FLIP'
+          grep -q '^CANONICAL_GITLINK_MUTATED=NO$' out/a6-corpus3-cliptranslate-fix/CANONICAL-DIFF-MANIFEST.txt
+          echo A6_CORPUS3_CLIPTRANSLATE_CI_SCOPE_LOCK=PASS
+
+      - name: Upload Corpus3 clip/translate candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: RG35XX-AWEIGIT-R1-A6-CORPUS3-CLIPTRANSLATE-${{ github.sha }}
+          path: out/a6-corpus3-cliptranslate-fix/
+          if-no-files-found: error
