@@ -18,13 +18,22 @@ public final class RG35XXRawDrawLineHostGate {
         g.setColor(0x000000);
         g.fillRect(0, 0, W, H);
 
-        g.setColor(0x12AB34);
+        // Critical real-game font workload: drawLine(x,y,x,y) is a putPixel.
+        g.setColor(0x3366CC);
         g.setStrokeStyle(Graphics.SOLID);
+        g.drawLine(7, 6, 7, 6);
+        require(pixels[6 * W + 7] == 0xFF3366CC, "single pixel fast path");
+
+        g.setColor(0x12AB34);
         g.drawLine(1, 1, 5, 1);
         int expected = 0xFF12AB34;
         for (int x = 1; x <= 5; x++) require(pixels[1 * W + x] == expected, "solid horizontal x=" + x);
         require(pixels[1 * W] == 0xFF000000, "solid left bound");
         require(pixels[1 * W + 6] == 0xFF000000, "solid right bound");
+
+        g.setColor(0x8844AA);
+        g.drawLine(12, 2, 12, 6);
+        for (int y = 2; y <= 6; y++) require(pixels[y * W + 12] == 0xFF8844AA, "solid vertical y=" + y);
 
         g.setClip(2, 2, 3, 3);
         g.setColor(0xCC5500);
@@ -45,6 +54,17 @@ public final class RG35XXRawDrawLineHostGate {
         require(pixels[4 * W + 10] == diagonal, "diag 2");
         require(pixels[5 * W + 11] == diagonal, "diag end");
 
+        g.setColor(0xFFAA00);
+        g.setStrokeStyle(Graphics.DOTTED);
+        g.drawLine(2, 9, 7, 9);
+        int dotted = 0xFFFFAA00;
+        require(pixels[9 * W + 2] == dotted, "dotted on0");
+        require(pixels[9 * W + 3] != dotted, "dotted off1");
+        require(pixels[9 * W + 4] == dotted, "dotted on2");
+        require(pixels[9 * W + 5] != dotted, "dotted off3");
+        require(pixels[9 * W + 6] == dotted, "dotted on4");
+
+        System.out.println("A6_R5_RAW_DRAWLINE_FASTPATH_GATE=PASS");
         System.out.println("A6_R5_RAW_DRAWLINE_HOST_GATE=PASS");
     }
 
