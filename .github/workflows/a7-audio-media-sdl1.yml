@@ -73,6 +73,7 @@ jobs:
             -w /work \
             "$TOOLCHAIN" \
             bash -lc 'git config --global --add safe.directory /work/upstream/freej2me-miyoomini && bash ./scripts/build-a7-audio-native.sh'
+          sudo chown -R "$(id -u):$(id -g)" out/a7-audio-sdl1
 
       - name: Build one Java 6 WAV plus MIDI integration test MIDlet
         run: bash ./scripts/build-a7-audio-test-midlet.sh
