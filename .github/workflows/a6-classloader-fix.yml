@@ -1,4 +1,4 @@
-name: A6 RG35XX Real Game Fix R3
+name: A6 RG35XX Real Game Fix R4
 
 on:
   workflow_dispatch:
@@ -22,7 +22,7 @@ permissions:
   contents: read
 
 jobs:
-  a6-realgame-r3:
+  a6-realgame-r4:
     runs-on: ubuntu-22.04
     timeout-minutes: 30
     steps:
@@ -55,13 +55,13 @@ jobs:
       - name: Apply accepted A5 headless Core2D overlay
         run: bash ./scripts/build-a5-core2d-java.sh
 
-      - name: Apply A6 evidence-driven real-game R3 overlays
+      - name: Apply A6 evidence-driven real-game R4 overlays
         run: bash ./scripts/build-a6-classloader-fix.sh
 
       - name: Finalize protected identity
         run: ./scripts/build-a3.sh finalize
 
-      - name: Verify A6 R3 scope and protected payload locks
+      - name: Verify A6 R4 scope and protected payload locks
         run: |
           set -euo pipefail
           grep -q '^A6_CLASSLOADER_OVERLAY=YES$' out/a3/CANONICAL-DIFF-MANIFEST.txt
@@ -69,24 +69,27 @@ jobs:
           grep -q '^A6_DRAWREGION_NULL_GUARD=YES$' out/a3/CANONICAL-DIFF-MANIFEST.txt
           grep -q '^A6_DRAWREGION_GAME_SPECIFIC_NAMES=NO$' out/a3/CANONICAL-DIFF-MANIFEST.txt
           grep -q '^A6_ADAM7_BACKING=YES$' out/a3/CANONICAL-DIFF-MANIFEST.txt
+          grep -q '^A6_ADAM7_IMPLEMENTATION=INLINE_EXISTING_RG35XXCORE2D_NO_NEW_CLASS$' out/a3/CANONICAL-DIFF-MANIFEST.txt
+          grep -q '^A6_ADAM7_SEPARATE_CLASS=NO$' out/a3/CANONICAL-DIFF-MANIFEST.txt
+          grep -q '^A6_ADAM7_STATIC_INITIALIZER=NO$' out/a3/CANONICAL-DIFF-MANIFEST.txt
           grep -q '^A6_ADAM7_GAME_SPECIFIC_NAMES=NO$' out/a3/CANONICAL-DIFF-MANIFEST.txt
           grep -q '^A6_ADAM7_HOST_GATE=PASS$' out/a3/CANONICAL-DIFF-MANIFEST.txt
           grep -q '^CANONICAL_GITLINK_MUTATED=NO$' out/a3/CANONICAL-DIFF-MANIFEST.txt
-          grep -q '^BUILD-PASS=YES$' out/a6-realgame-r3/A6-REALGAME-FIX-R3-IDENTITY.txt
-          grep -q '^DEVICE-PASS=NO$' out/a6-realgame-r3/A6-REALGAME-FIX-R3-IDENTITY.txt
-          grep -q '^STABLE=NO$' out/a6-realgame-r3/A6-REALGAME-FIX-R3-IDENTITY.txt
-          grep -q '^A6_ADAM7_HOST_GATE=PASS$' out/a6-realgame-r3/A6-ADAM7-HOST-GATE.txt
+          grep -q '^BUILD-PASS=YES$' out/a6-realgame-r4/A6-REALGAME-FIX-R4-IDENTITY.txt
+          grep -q '^DEVICE-PASS=NO$' out/a6-realgame-r4/A6-REALGAME-FIX-R4-IDENTITY.txt
+          grep -q '^STABLE=NO$' out/a6-realgame-r4/A6-REALGAME-FIX-R4-IDENTITY.txt
+          grep -q '^A6_ADAM7_HOST_GATE=PASS$' out/a6-realgame-r4/A6-ADAM7-HOST-GATE.txt
           test "$(sha256sum out/a3/librg35xx_input.so | awk '{print $1}')" = '69a8aeb3940bfbc234f3a562a7ae4bcaea10b50f8a8f2c38ad229a5430930f6d'
           test "$(sha256sum out/a3/librg35xx_video.so | awk '{print $1}')" = '9094819d7c81576b63bd0cde9531404a3fb82b8d5b845dbae152152f2e1a2a7a'
-          cp out/a3/BUILD-IDENTITY.txt out/a6-realgame-r3/A6-PLATFORM-BUILD-IDENTITY.txt
-          cp out/a3/librg35xx_input.so out/a6-realgame-r3/librg35xx_input.so
-          cp out/a3/librg35xx_video.so out/a6-realgame-r3/librg35xx_video.so
-          (cd out/a6-realgame-r3 && sha256sum * > A6-ARTIFACT-SHA256SUMS.txt)
-          echo A6_REALGAME_R3_SCOPE_LOCK=PASS
+          cp out/a3/BUILD-IDENTITY.txt out/a6-realgame-r4/A6-PLATFORM-BUILD-IDENTITY.txt
+          cp out/a3/librg35xx_input.so out/a6-realgame-r4/librg35xx_input.so
+          cp out/a3/librg35xx_video.so out/a6-realgame-r4/librg35xx_video.so
+          (cd out/a6-realgame-r4 && sha256sum * > A6-ARTIFACT-SHA256SUMS.txt)
+          echo A6_REALGAME_R4_SCOPE_LOCK=PASS
 
-      - name: Upload A6 real-game R3 fixed platform
+      - name: Upload A6 real-game R4 fixed platform
         uses: actions/upload-artifact@v4
         with:
-          name: RG35XX-AWEIGIT-R1-A6-REALGAME-R3-${{ github.sha }}
-          path: out/a6-realgame-r3/
+          name: RG35XX-AWEIGIT-R1-A6-REALGAME-R4-${{ github.sha }}
+          path: out/a6-realgame-r4/
           if-no-files-found: error
