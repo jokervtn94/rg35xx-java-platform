@@ -16,10 +16,26 @@ PLATFORM_SHA="$(sha256sum "$BASE/freej2me-rg35xx.jar" | awk '{print $1}')"
 INPUT_SHA="$(sha256sum "$ROOT/out/a3/librg35xx_input.so" | awk '{print $1}')"
 VIDEO_SHA="$(sha256sum "$ROOT/out/a3/librg35xx_video.so" | awk '{print $1}')"
 
-# Exact tested Java platform and input native must remain unchanged.
-[ "$PLATFORM_SHA" = '8ecbcb1964967e55994ba2401471c19fb23f9efdc285a568c2c303b0fb54cafd' ] || fail "platform JAR changed $PLATFORM_SHA"
+# Whole-JAR ZIP hashes vary because jar entries carry build timestamps.  Instead
+# hash the complete sorted entry set as name-length+name+content-length+content.
+# The expected digest was computed from the exact R5P3I2 JAR that completed
+# real-device gameplay on the original RG35XX.
+PLATFORM_SEMANTIC_SHA="$(python3 - "$BASE/freej2me-rg35xx.jar" <<'PY'
+import sys,zipfile,hashlib,struct
+h=hashlib.sha256()
+with zipfile.ZipFile(sys.argv[1]) as z:
+    for n in sorted(z.namelist()):
+        b=z.read(n); nb=n.encode('utf-8')
+        h.update(struct.pack('>I',len(nb))); h.update(nb)
+        h.update(struct.pack('>Q',len(b))); h.update(b)
+print(h.hexdigest())
+PY
+)"
+EXPECTED_SEMANTIC_SHA='b79cafa98c467436cf0e782b069839e993a7dc7bdb31b9a423b47c0ff293950e'
+[ "$PLATFORM_SEMANTIC_SHA" = "$EXPECTED_SEMANTIC_SHA" ] || fail "platform semantic digest changed $PLATFORM_SEMANTIC_SHA"
 [ "$INPUT_SHA" = '69a8aeb3940bfbc234f3a562a7ae4bcaea10b50f8a8f2c38ad229a5430930f6d' ] || fail "input native changed $INPUT_SHA"
 [ "$VIDEO_SHA" != '9094819d7c81576b63bd0cde9531404a3fb82b8d5b845dbae152152f2e1a2a7a' ] || fail "video native did not change"
+echo A6_PERF_P1_JAVA_ENTRY_SEMANTIC_GATE=PASS
 
 # Static owner/scope gates on the staged native presenter.
 SRC="$ROOT/adapter/native/rg35xx_video_sdl1.c"
@@ -34,7 +50,6 @@ s=open(sys.argv[1],encoding='utf-8').read()
 start=s.index('Java_org_recompile_rg35xx_RG35XXVideo_presentARGB')
 end=s.index('Java_org_recompile_rg35xx_RG35XXVideo_shutdownDisplay', start)
 b=s[start:end]
-# Divisions may exist only in geometry-map rebuild, exactly once per axis.
 if b.count('((long long)x * width) / dw') != 1:
     raise SystemExit('A6_PERF_P1_GATE_FAIL x division count='+str(b.count('((long long)x * width) / dw')))
 if b.count('((long long)y * height) / dh') != 1:
@@ -53,6 +68,8 @@ PROJECT=RG35XX-AWEIGIT-R1
 STAGE=A6-PERF-P1-CACHED-NATIVE-PRESENTER
 BASE_DEVICE_PLATFORM=R5P3I2
 BASE_PLATFORM_JAR_SHA256=$PLATFORM_SHA
+BASE_PLATFORM_SEMANTIC_SHA256=$PLATFORM_SEMANTIC_SHA
+BASE_DEVICE_TESTED_SEMANTIC_SHA256=$EXPECTED_SEMANTIC_SHA
 INPUT_NATIVE_SHA256=$INPUT_SHA
 VIDEO_NATIVE_SHA256=$VIDEO_SHA
 PERF_EVIDENCE_BASELINE_FPS_APPROX=10.4
@@ -63,7 +80,8 @@ A6_PERF_P1_XY_MAP=CACHED_ON_GEOMETRY_CHANGE
 A6_PERF_P1_BLACK_CLEAR=GEOMETRY_CHANGE_ONLY
 A6_PERF_P1_PIXEL_FORMAT=UNCHANGED_SDL_MAPRGB
 A6_PERF_P1_SCALING=UNCHANGED_NEAREST_NEIGHBOR
-A6_PERF_P1_JAVA_PLATFORM=UNCHANGED_EXACT_R5P3I2
+A6_PERF_P1_JAVA_PLATFORM=ENTRY_BYTE_EXACT_R5P3I2
+A6_PERF_P1_JAVA_ENTRY_SEMANTIC_GATE=PASS
 A6_PERF_P1_INPUT_NATIVE=UNCHANGED
 BUILD-PASS=YES
 DEVICE-PASS=NO
@@ -73,7 +91,8 @@ EOF
 cat >> "$DST/CANONICAL-DIFF-MANIFEST.txt" <<EOF
 A6_PERF_P1_OWNER=RG35XX_NATIVE_PRESENT_SCALER
 A6_PERF_P1_SCOPE=VIDEO_NATIVE_CACHED_XY_MAP+GEOMETRY_CLEAR_ONLY
-A6_PERF_P1_JAVA_PLATFORM=UNCHANGED_EXACT_R5P3I2
+A6_PERF_P1_JAVA_PLATFORM=ENTRY_BYTE_EXACT_R5P3I2
+A6_PERF_P1_JAVA_ENTRY_SEMANTIC_GATE=PASS
 CANONICAL_GITLINK_MUTATED=NO
 EOF
 (cd "$DST" && sha256sum * > A6-ARTIFACT-SHA256SUMS.txt)
