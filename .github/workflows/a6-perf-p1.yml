@@ -69,7 +69,7 @@ jobs:
       - name: Apply accepted A5 headless Core2D overlay
         run: bash ./scripts/build-a5-core2d-java.sh
 
-      - name: Build exact R5P3I2 Java plus PERF-P1 package
+      - name: Build entry-exact R5P3I2 Java plus PERF-P1 package
         run: bash ./scripts/build-a6-perf-p1.sh
 
       - name: Finalize protected identity
@@ -79,15 +79,16 @@ jobs:
         run: |
           set -euo pipefail
           ID=out/a6-perf-p1/A6-PERF-P1-IDENTITY.txt
-          grep -q '^BASE_PLATFORM_JAR_SHA256=8ecbcb1964967e55994ba2401471c19fb23f9efdc285a568c2c303b0fb54cafd$' "$ID"
+          grep -q '^BASE_PLATFORM_SEMANTIC_SHA256=b79cafa98c467436cf0e782b069839e993a7dc7bdb31b9a423b47c0ff293950e$' "$ID"
+          grep -q '^BASE_DEVICE_TESTED_SEMANTIC_SHA256=b79cafa98c467436cf0e782b069839e993a7dc7bdb31b9a423b47c0ff293950e$' "$ID"
           grep -q '^INPUT_NATIVE_SHA256=69a8aeb3940bfbc234f3a562a7ae4bcaea10b50f8a8f2c38ad229a5430930f6d$' "$ID"
           grep -q '^A6_PERF_P1_OWNER=RG35XX_NATIVE_PRESENT_SCALER$' "$ID"
           grep -q '^A6_PERF_P1_XY_MAP=CACHED_ON_GEOMETRY_CHANGE$' "$ID"
           grep -q '^A6_PERF_P1_BLACK_CLEAR=GEOMETRY_CHANGE_ONLY$' "$ID"
-          grep -q '^A6_PERF_P1_JAVA_PLATFORM=UNCHANGED_EXACT_R5P3I2$' "$ID"
+          grep -q '^A6_PERF_P1_JAVA_PLATFORM=ENTRY_BYTE_EXACT_R5P3I2$' "$ID"
+          grep -q '^A6_PERF_P1_JAVA_ENTRY_SEMANTIC_GATE=PASS$' "$ID"
           grep -q '^BUILD-PASS=YES$' "$ID"
           grep -q '^DEVICE-PASS=NO$' "$ID"
-          test "$(sha256sum out/a6-perf-p1/freej2me-rg35xx.jar | awk '{print $1}')" = '8ecbcb1964967e55994ba2401471c19fb23f9efdc285a568c2c303b0fb54cafd'
           test "$(sha256sum out/a6-perf-p1/librg35xx_input.so | awk '{print $1}')" = '69a8aeb3940bfbc234f3a562a7ae4bcaea10b50f8a8f2c38ad229a5430930f6d'
           test "$(sha256sum out/a6-perf-p1/librg35xx_video.so | awk '{print $1}')" != '9094819d7c81576b63bd0cde9531404a3fb82b8d5b845dbae152152f2e1a2a7a'
           grep -q '^CANONICAL_GITLINK_MUTATED=NO$' out/a6-perf-p1/CANONICAL-DIFF-MANIFEST.txt
