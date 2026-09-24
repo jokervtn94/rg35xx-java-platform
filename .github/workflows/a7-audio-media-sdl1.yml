@@ -81,7 +81,7 @@ jobs:
           grep -q '^A6_ACCEPTED_PARENT_SEMANTIC_SHA256=53f229dbf14621a2a27a7249cb1355b1a2367bebc51a761959d3bd54985565d6$' "$ID"
           grep -q '^INPUT_NATIVE_SHA256=69a8aeb3940bfbc234f3a562a7ae4bcaea10b50f8a8f2c38ad229a5430930f6d$' "$ID"
           grep -q '^VIDEO_NATIVE_SHA256=c6687c0a43b24b425af0727c928afb5414da811ecbcbbe3538928470abe8bd0d$' "$ID"
-          grep -q '^A7_AUDIO_JAVA_CHANGED_SCOPE=RG35XXLauncher_CLASS_ONLY$' "$ID"
+          grep -q '^A7_AUDIO_JAVA_CHANGED_SCOPE=RG35XXLauncher_CLASS_FAMILY_ONLY$' "$ID"
           grep -q '^A7_AUDIO_CANONICAL_MMAPI=UNCHANGED$' "$ID"
           grep -q '^A7_AUDIO_BACKEND=SDL1_MIXER_DYNAMIC$' "$ID"
           grep -q '^A7_AUDIO_DEVICE_INIT=LAZY$' "$ID"
