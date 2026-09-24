@@ -1,0 +1,118 @@
+name: A6 RG35XX PERF ARCH-DIAG Present Timing
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - rg35xx-aweigit-r1-a6-real-game-regression
+    paths:
+      - '.github/workflows/a6-perf-archdiag.yml'
+      - 'scripts/stage-a6-rg35xx-perf-archdiag.py'
+      - 'scripts/build-a6-perf-archdiag.sh'
+      - 'scripts/stage-a6-rg35xx-video-perf-p1.py'
+      - 'scripts/stage-a6-rg35xx-video-perf-p2.py'
+      - 'scripts/stage-a6-rg35xx-video-perf-p3.py'
+      - 'scripts/build-a6-perf-p3.sh'
+      - 'scripts/stage-a6-rg35xx-raw-drawrect-r5p3i2.py'
+      - 'scripts/build-a6-raw-drawrect-r5p3i2.sh'
+      - 'scripts/stage-a6-rg35xx-input-lifecycle-r5p3i1.py'
+      - 'scripts/build-a6-input-lifecycle-r5p3i1-v2.sh'
+      - 'scripts/stage-a6-rg35xx-raw-rect-polygon-r5p3.py'
+      - 'scripts/build-a6-raw-rect-polygon-r5p3.sh'
+      - 'scripts/stage-a6-rg35xx-raw-drawline-r5.py'
+      - 'scripts/build-a6-raw-drawline-r5.sh'
+      - 'scripts/build-a6-parent-trace-r4t.sh'
+      - 'scripts/stage-a6-rg35xx-parent-trace-r4t.py'
+      - 'scripts/build-a6-classloader-fix.sh'
+      - 'scripts/stage-a6-rg35xx-classloader-race.py'
+      - 'scripts/stage-a6-rg35xx-drawregion-null-guard.py'
+      - 'scripts/stage-a6-rg35xx-adam7.py'
+      - 'scripts/build-a5-core2d-java.sh'
+      - 'scripts/stage-a5-rg35xx-core2d-v2.py'
+      - 'scripts/build-a4-raw2d-java.sh'
+      - 'scripts/build-a3.sh'
+      - 'adapter/**'
+
+permissions:
+  contents: read
+
+jobs:
+  a6-perf-archdiag:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 40
+    steps:
+      - name: Checkout A6 branch and pinned canonical submodule
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Set up JDK 8 for Java 6 bytecode output
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Materialize A4 DEVICE-PASS raw2D baseline
+        run: bash ./scripts/build-a4-raw2d-java.sh
+
+      - name: Stage PERF-P1 cached native presenter
+        run: python3 ./scripts/stage-a6-rg35xx-video-perf-p1.py "$GITHUB_WORKSPACE"
+
+      - name: Stage PERF-P2 direct truecolor packer
+        run: python3 ./scripts/stage-a6-rg35xx-video-perf-p2.py "$GITHUB_WORKSPACE"
+
+      - name: Stage PERF-P3 exact 3to2 scaler
+        run: python3 ./scripts/stage-a6-rg35xx-video-perf-p3.py "$GITHUB_WORKSPACE"
+
+      - name: Stage sampled architecture present timing
+        run: python3 ./scripts/stage-a6-rg35xx-perf-archdiag.py "$GITHUB_WORKSPACE"
+
+      - name: Build ARCH-DIAG RG35XX ARMv5 soft-float native adapters
+        env:
+          TOOLCHAIN: docker.io/miyoocfw/toolchain-shared-uclibc@sha256:6f6761867b4e4dcc27c99bf25fb91b2910264165f27bdd40b1c17e6f98cf751e
+        run: |
+          docker pull "$TOOLCHAIN"
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/work" \
+            -w /work \
+            "$TOOLCHAIN" \
+            bash -lc 'git config --global --add safe.directory /work/upstream/freej2me-miyoomini && ./scripts/build-a3.sh native'
+
+      - name: Apply accepted A5 headless Core2D overlay
+        run: bash ./scripts/build-a5-core2d-java.sh
+
+      - name: Build exact R5P3I2 Java plus architecture diagnostic package
+        run: bash ./scripts/build-a6-perf-archdiag.sh
+
+      - name: Finalize protected identity
+        run: ./scripts/build-a3.sh finalize
+
+      - name: Verify ARCH-DIAG scope and locks
+        run: |
+          set -euo pipefail
+          ID=out/a6-perf-archdiag/A6-PERF-ARCHDIAG-IDENTITY.txt
+          grep -q '^BASE_PLATFORM_SEMANTIC_SHA256=b79cafa98c467436cf0e782b069839e993a7dc7bdb31b9a423b47c0ff293950e$' "$ID"
+          grep -q '^INPUT_NATIVE_SHA256=69a8aeb3940bfbc234f3a562a7ae4bcaea10b50f8a8f2c38ad229a5430930f6d$' "$ID"
+          grep -q '^PARENT_PERF_P3_VIDEO_SHA256=c361433a2c853986318938961fa978d01f085640a3a6e839e2b26656f38ff999$' "$ID"
+          grep -q '^A6_ARCHDIAG_SAMPLE_EVERY_FRAMES=60$' "$ID"
+          grep -q '^A6_ARCHDIAG_REPORT_EVERY_FRAMES=300$' "$ID"
+          grep -q '^A6_ARCHDIAG_PHASES=ARRAY,SCALE,RELEASE,FLIP,TOTAL$' "$ID"
+          grep -q '^A6_ARCHDIAG_SEMANTIC_CHANGE=NO$' "$ID"
+          grep -q '^BUILD-PASS=YES$' "$ID"
+          grep -q '^DEVICE-PASS=NO$' "$ID"
+          test "$(sha256sum out/a6-perf-archdiag/librg35xx_input.so | awk '{print $1}')" = '69a8aeb3940bfbc234f3a562a7ae4bcaea10b50f8a8f2c38ad229a5430930f6d'
+          test "$(sha256sum out/a6-perf-archdiag/librg35xx_video.so | awk '{print $1}')" != 'c361433a2c853986318938961fa978d01f085640a3a6e839e2b26656f38ff999'
+          strings out/a6-perf-archdiag/librg35xx_video.so | grep -q 'RG35XX_PERF_P3_SCALER=FAST_3_TO_2_240x320_TO_360x480'
+          strings out/a6-perf-archdiag/librg35xx_video.so | grep -q 'RG35XX_ARCH_DIAG_PRESENT SAMPLES='
+          grep -q '^CANONICAL_GITLINK_MUTATED=NO$' out/a6-perf-archdiag/CANONICAL-DIFF-MANIFEST.txt
+          cp out/a3/BUILD-IDENTITY.txt out/a6-perf-archdiag/A6-PLATFORM-BUILD-IDENTITY.txt
+          (cd out/a6-perf-archdiag && sha256sum * > A6-ARTIFACT-SHA256SUMS.txt)
+          echo A6_ARCHDIAG_SCOPE_LOCK=PASS
+
+      - name: Upload PERF ARCH-DIAG platform
+        uses: actions/upload-artifact@v4
+        with:
+          name: RG35XX-AWEIGIT-R1-A6-PERF-ARCHDIAG-${{ github.sha }}
+          path: out/a6-perf-archdiag/
+          if-no-files-found: error
