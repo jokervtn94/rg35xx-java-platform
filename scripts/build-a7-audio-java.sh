@@ -57,6 +57,10 @@ if [ -d "$UPSTREAM/META-INF" ]; then
   "$JAVA8/bin/jar" uf "$CANDIDATE_JAR" -C "$UPSTREAM" META-INF
 fi
 
+# The only edited Java source is adapter-owned RG35XXLauncher.java. Recompiling
+# that source deterministically regenerates its outer class plus four nested
+# classes. Lock the exact five-entry class family; no canonical/MMAPI class may
+# differ from the accepted A6 parent.
 python3 - "$BASE_JAR" "$CANDIDATE_JAR" <<'PY'
 import sys,zipfile,hashlib
 base,new=sys.argv[1:3]
@@ -64,7 +68,13 @@ with zipfile.ZipFile(base) as a, zipfile.ZipFile(new) as b:
     if set(a.namelist()) != set(b.namelist()):
         raise SystemExit('A7_AUDIO_JAVA_SCOPE_FAIL entry-set')
     diff=[n for n in sorted(a.namelist()) if hashlib.sha256(a.read(n)).digest()!=hashlib.sha256(b.read(n)).digest()]
-expected=['org/recompile/rg35xx/RG35XXLauncher.class']
+expected=[
+    'org/recompile/rg35xx/RG35XXLauncher$1.class',
+    'org/recompile/rg35xx/RG35XXLauncher$2.class',
+    'org/recompile/rg35xx/RG35XXLauncher$FramePresenter.class',
+    'org/recompile/rg35xx/RG35XXLauncher$InputPump.class',
+    'org/recompile/rg35xx/RG35XXLauncher.class',
+]
 if diff != expected:
     raise SystemExit('A7_AUDIO_JAVA_SCOPE_FAIL changed='+repr(diff))
 print('A7_AUDIO_CHANGED_JAR_ENTRIES='+','.join(diff))
@@ -119,7 +129,7 @@ A7_PLATFORM_JAR_SHA256=$CANDIDATE_SHA
 A7_PLATFORM_SEMANTIC_SHA256=$CANDIDATE_SEMANTIC
 INPUT_NATIVE_SHA256=$INPUT_SHA
 VIDEO_NATIVE_SHA256=$VIDEO_SHA
-A7_AUDIO_JAVA_CHANGED_SCOPE=RG35XXLauncher_CLASS_ONLY
+A7_AUDIO_JAVA_CHANGED_SCOPE=RG35XXLauncher_CLASS_FAMILY_ONLY
 A7_AUDIO_CANONICAL_MMAPI=UNCHANGED
 A7_AUDIO_BACKEND=SDL1_MIXER_DYNAMIC
 A7_AUDIO_DEVICE_INIT=LAZY
