@@ -51,7 +51,7 @@ if body.count('((long long)x * width) / dw') != 1 or body.count('((long long)y *
     raise SystemExit('A6_PERF_P3_STAGE_FAIL coordinate division regression')
 # Keep black-map + generic fallback only.
 if body.count('SDL_MapRGB_p(screen->format') != 2:
-    raise SystemExit('A6_PERF_P3_STAGE_FAIL MapRGB source count=%d' % body.count('SDL_MapRGB_p(screen->format')))
+    raise SystemExit("A6_PERF_P3_STAGE_FAIL MapRGB source count=%d" % body.count("SDL_MapRGB_p(screen->format"))
 
 p.write_text(s, encoding='utf-8')
 print('A6_PERF_P3_VIDEO_STAGE=PASS')
