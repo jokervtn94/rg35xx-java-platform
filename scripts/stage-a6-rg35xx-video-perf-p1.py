@@ -8,12 +8,6 @@ root = Path(sys.argv[1]).resolve()
 p = root / 'adapter/native/rg35xx_video_sdl1.c'
 s = p.read_text(encoding='utf-8')
 
-old_globals = '''static pSDL_MapRGB SDL_MapRGB_p;\nstatic pSDL_VideoDriverName SDL_VideoDriverName_p;\n'''
-new_globals = '''static pSDL_MapRGB SDL_MapRGB_p;\nstatic pSDL_VideoDriverName SDL_VideoDriverName_p;\n\n/* PERF-P1: cache nearest-neighbour source coordinates.  The old presenter\n * performed 64-bit division for every destination pixel on every frame.\n * RG35XX is ARMv5, so those divisions are especially expensive. */\nstatic int perf_map_sw = -1;\nstatic int perf_map_sh = -1;\nstatic int perf_map_dw = -1;\nstatic int perf_map_dh = -1;\nstatic int perf_map_ox = -1;\nstatic int perf_map_oy = -1;\nstatic int perf_xmap[RG35XX_LCD_W];\nstatic int perf_ymap[RG35XX_LCD_H];\nstatic unsigned long perf_frame_count;\nstatic unsigned long perf_start_ms;\n'''
-if s.count(old_globals) != 1:
-    raise SystemExit('A6_PERF_P1_STAGE_FAIL globals anchor count=%d' % s.count(old_globals))
-s = s.replace(old_globals, new_globals, 1)
-
 old_include = '''#include <stdio.h>\n#include <stdlib.h>\n'''
 new_include = '''#include <stdio.h>\n#include <stdlib.h>\n#include <sys/time.h>\n'''
 if s.count(old_include) != 1:
@@ -21,14 +15,13 @@ if s.count(old_include) != 1:
 s = s.replace(old_include, new_include, 1)
 
 old_defs = '''#define SDL_SWSURFACE 0x00000000u\n#define RG35XX_LCD_W 640\n#define RG35XX_LCD_H 480\n'''
-new_defs = '''#define SDL_SWSURFACE 0x00000000u\n#define RG35XX_LCD_W 640\n#define RG35XX_LCD_H 480\n\nstatic unsigned long perf_now_ms(void) {\n    struct timeval tv;\n    gettimeofday(&tv, 0);\n    return (unsigned long)tv.tv_sec * 1000ul + (unsigned long)(tv.tv_usec / 1000);\n}\n'''
+new_defs = '''#define SDL_SWSURFACE 0x00000000u\n#define RG35XX_LCD_W 640\n#define RG35XX_LCD_H 480\n\n/* PERF-P1: cache nearest-neighbour source coordinates.  The old presenter\n * performed 64-bit division for every destination pixel on every frame.\n * RG35XX is ARMv5, so those divisions are especially expensive. */\nstatic int perf_map_sw = -1;\nstatic int perf_map_sh = -1;\nstatic int perf_map_dw = -1;\nstatic int perf_map_dh = -1;\nstatic int perf_map_ox = -1;\nstatic int perf_map_oy = -1;\nstatic int perf_xmap[RG35XX_LCD_W];\nstatic int perf_ymap[RG35XX_LCD_H];\nstatic unsigned long perf_frame_count;\nstatic unsigned long perf_start_ms;\n\nstatic unsigned long perf_now_ms(void) {\n    struct timeval tv;\n    gettimeofday(&tv, 0);\n    return (unsigned long)tv.tv_sec * 1000ul + (unsigned long)(tv.tv_usec / 1000);\n}\n'''
 if s.count(old_defs) != 1:
     raise SystemExit('A6_PERF_P1_STAGE_FAIL defs anchor count=%d' % s.count(old_defs))
 s = s.replace(old_defs, new_defs, 1)
 
 start = s.index('JNIEXPORT jint JNICALL Java_org_recompile_rg35xx_RG35XXVideo_presentARGB')
 end = s.index('\nJNIEXPORT void JNICALL Java_org_recompile_rg35xx_RG35XXVideo_shutdownDisplay', start)
-old_func = s[start:end]
 new_func = r'''JNIEXPORT jint JNICALL Java_org_recompile_rg35xx_RG35XXVideo_presentARGB(JNIEnv *env, jclass cls, jintArray pixels, jint width, jint height) {
     jint *src;
     jsize length;
@@ -54,7 +47,7 @@ new_func = r'''JNIEXPORT jint JNICALL Java_org_recompile_rg35xx_RG35XXVideo_pres
         for (y = 0; y < dh; ++y)
             perf_ymap[y] = (int)(((long long)y * height) / dh);
 
-        /* Clear only when geometry changes.  Content never writes outside the
+        /* Clear only when geometry changes. Content never writes outside the
          * aspect-fit rectangle, so the black side bars remain black. */
         black = SDL_MapRGB_p(screen->format, 0, 0, 0);
         for (y = 0; y < RG35XX_LCD_H; ++y) {
@@ -89,8 +82,7 @@ new_func = r'''JNIEXPORT jint JNICALL Java_org_recompile_rg35xx_RG35XXVideo_pres
     (*env)->ReleaseIntArrayElements(env, pixels, src, JNI_ABORT);
     if (SDL_Flip_p(screen) != 0) return 6;
 
-    /* Very-low-overhead performance telemetry: one line every 300 presents.
-     * Unlike the A6 diagnostic traces, this does not log or flush per input. */
+    /* Very-low-overhead performance telemetry: one line every 300 presents. */
     ++perf_frame_count;
     if (perf_frame_count == 1) perf_start_ms = perf_now_ms();
     if ((perf_frame_count % 300ul) == 0ul) {
@@ -105,14 +97,11 @@ new_func = r'''JNIEXPORT jint JNICALL Java_org_recompile_rg35xx_RG35XXVideo_pres
 '''
 s = s[:start] + new_func + s[end:]
 
-# Fail closed: per-frame scaler must use cached source indices, not division.
 body = s[s.index('Java_org_recompile_rg35xx_RG35XXVideo_presentARGB'):s.index('Java_org_recompile_rg35xx_RG35XXVideo_shutdownDisplay')]
 if 'int sx = perf_xmap[x];' not in body or 'int sy = perf_ymap[y];' not in body:
     raise SystemExit('A6_PERF_P1_STAGE_FAIL cached map missing')
-if '((long long)x * width) / dw' not in body or '((long long)y * height) / dh' not in body:
-    raise SystemExit('A6_PERF_P1_STAGE_FAIL map construction missing')
 if body.count('((long long)x * width) / dw') != 1 or body.count('((long long)y * height) / dh') != 1:
-    raise SystemExit('A6_PERF_P1_STAGE_FAIL unexpected per-frame division duplication')
+    raise SystemExit('A6_PERF_P1_STAGE_FAIL unexpected division count')
 
 p.write_text(s, encoding='utf-8')
 print('A6_PERF_P1_VIDEO_STAGE=PASS')
