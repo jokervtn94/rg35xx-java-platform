@@ -48,9 +48,9 @@ b=s[start:end]
 if b.count('((long long)x * width) / dw') != 1 or b.count('((long long)y * height) / dh') != 1:
     raise SystemExit('A6_PERF_P4_GATE_FAIL coordinate division regression')
 if b.count('SDL_MapRGB_p(screen->format') != 2:
-    raise SystemExit('A6_PERF_P4_GATE_FAIL MapRGB source count='+str(b.count('SDL_MapRGB_p(screen->format'))))
+    raise SystemExit("A6_PERF_P4_GATE_FAIL MapRGB source count=" + str(b.count("SDL_MapRGB_p(screen->format")))
 if b.count('memcpy(') != 1:
-    raise SystemExit('A6_PERF_P4_GATE_FAIL expected one vertical-row memcpy site, got '+str(b.count('memcpy(')))
+    raise SystemExit("A6_PERF_P4_GATE_FAIL expected one vertical-row memcpy site, got " + str(b.count("memcpy(")))
 if 'else if (perf2_fast_rgb)' not in b:
     raise SystemExit('A6_PERF_P4_GATE_FAIL generic PERF-P2 fallback lost')
 if 'dst0[dx++] = p0;' not in b or 'dst0[dx++] = p1;' not in b:
