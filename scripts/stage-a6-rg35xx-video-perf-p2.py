@@ -46,7 +46,7 @@ body = s[s.index('Java_org_recompile_rg35xx_RG35XXVideo_presentARGB'):s.index('J
 if 'if (perf2_fast_rgb)' not in body:
     raise SystemExit('A6_PERF_P2_STAGE_FAIL fast branch missing')
 if body.count('SDL_MapRGB_p(screen->format') != 2:
-    raise SystemExit('A6_PERF_P2_STAGE_FAIL expected black-map+fallback MapRGB calls=2, got %d' % body.count('SDL_MapRGB_p(screen->format')))
+    raise SystemExit('A6_PERF_P2_STAGE_FAIL expected black-map+fallback MapRGB calls=2, got %d' % body.count('SDL_MapRGB_p(screen->format'))
 if 'perf2_amask' not in body:
     raise SystemExit('A6_PERF_P2_STAGE_FAIL exact opaque SDL_MapRGB Amask semantics missing')
 if 'RG35XX_PERF_P2_FRAME=' not in body:
