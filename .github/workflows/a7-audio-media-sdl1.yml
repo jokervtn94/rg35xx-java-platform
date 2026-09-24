@@ -70,7 +70,7 @@ jobs:
             -v "$GITHUB_WORKSPACE:/work" \
             -w /work \
             "$TOOLCHAIN" \
-            bash -lc 'git config --global --add safe.directory /work/upstream/freej2me-miyoomini && ./scripts/build-a7-audio-native.sh'
+            bash -lc 'git config --global --add safe.directory /work/upstream/freej2me-miyoomini && bash ./scripts/build-a7-audio-native.sh'
 
       - name: Verify A7 scope and A6 protected identities
         run: |
