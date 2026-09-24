@@ -8,7 +8,7 @@ on:
     paths:
       - '.github/workflows/a6-input-lifecycle-r5p3i1.yml'
       - 'scripts/stage-a6-rg35xx-input-lifecycle-r5p3i1.py'
-      - 'scripts/build-a6-input-lifecycle-r5p3i1.sh'
+      - 'scripts/build-a6-input-lifecycle-r5p3i1-v2.sh'
       - 'scripts/stage-a6-rg35xx-raw-rect-polygon-r5p3.py'
       - 'scripts/build-a6-raw-rect-polygon-r5p3.sh'
       - 'scripts/stage-a6-rg35xx-raw-drawline-r5.py'
@@ -63,7 +63,7 @@ jobs:
         run: bash ./scripts/build-a5-core2d-java.sh
 
       - name: Build R5P3 plus input lifecycle fix
-        run: bash ./scripts/build-a6-input-lifecycle-r5p3i1.sh
+        run: bash ./scripts/build-a6-input-lifecycle-r5p3i1-v2.sh
 
       - name: Finalize protected identity
         run: ./scripts/build-a3.sh finalize
