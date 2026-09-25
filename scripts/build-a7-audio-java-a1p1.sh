@@ -9,6 +9,7 @@ JAVA8="${JAVA8:-${JAVA_HOME:-}}"
 [ -n "$JAVA8" ] || fail "JAVA8/JAVA_HOME not set"
 [ -x "$JAVA8/bin/javac" ] || fail "javac missing"
 [ -x "$JAVA8/bin/jar" ] || fail "jar missing"
+[ -x "$JAVA8/bin/javap" ] || fail "javap missing"
 
 BASE="$ROOT/out/a6-corpus3-cliptranslate-fix"
 BASE_JAR="$BASE/freej2me-rg35xx.jar"
@@ -61,9 +62,10 @@ if [ -d "$UPSTREAM/META-INF" ]; then
   "$JAVA8/bin/jar" uf "$CANDIDATE_JAR" -C "$UPSTREAM" META-INF
 fi
 
-# Exact A7-A1.1 Java scope: the adapter-owned launcher class family plus only
-# the two PlatformPlayer media implementation classes whose cache-directory
-# creation was translated from Java-7 NIO to java.io.File mkdirs().
+# Recompiling one Java source regenerates its complete PlatformPlayer class
+# family. Permit that binary family plus the A7 launcher family, then prove the
+# PlatformPlayer members not touched by the compatibility source rewrite remain
+# bytecode-equivalent with the accepted A6 parent.
 python3 - "$BASE_JAR" "$CANDIDATE_JAR" <<'PY'
 import sys,zipfile,hashlib
 base,new=sys.argv[1:3]
@@ -72,8 +74,13 @@ with zipfile.ZipFile(base) as a, zipfile.ZipFile(new) as b:
         raise SystemExit('A7_A1P1_JAVA_SCOPE_FAIL entry-set')
     diff=[n for n in sorted(a.namelist()) if hashlib.sha256(a.read(n)).digest()!=hashlib.sha256(b.read(n)).digest()]
 expected=[
+    'org/recompile/mobile/PlatformPlayer$audioplayer.class',
+    'org/recompile/mobile/PlatformPlayer$midiControl.class',
     'org/recompile/mobile/PlatformPlayer$sdlPlayer.class',
     'org/recompile/mobile/PlatformPlayer$sdlWavPlayer.class',
+    'org/recompile/mobile/PlatformPlayer$tempoControl.class',
+    'org/recompile/mobile/PlatformPlayer$volumeControl.class',
+    'org/recompile/mobile/PlatformPlayer.class',
     'org/recompile/rg35xx/RG35XXLauncher$1.class',
     'org/recompile/rg35xx/RG35XXLauncher$2.class',
     'org/recompile/rg35xx/RG35XXLauncher$FramePresenter.class',
@@ -84,12 +91,28 @@ if diff != expected:
     raise SystemExit('A7_A1P1_JAVA_SCOPE_FAIL changed='+repr(diff))
 print('A7_A1P1_CHANGED_JAR_ENTRIES='+','.join(diff))
 print('A7_A1P1_CANONICAL_MMAPI_BYTE_IDENTITY=PASS')
-print('A7_A1P1_PLATFORMPLAYER_COMPAT_CLASS_SCOPE=PASS')
+print('A7_A1P1_PLATFORMPLAYER_REGENERATED_FAMILY_SCOPE=PASS')
 print('A7_A1P1_JAVA_SCOPE_GATE=PASS')
 PY
 
+JAVAP_BASE="$BUILD/a7-a1p1-javap-base.txt"
+JAVAP_NEW="$BUILD/a7-a1p1-javap-new.txt"
+for cls in \
+  'org.recompile.mobile.PlatformPlayer' \
+  'org.recompile.mobile.PlatformPlayer$audioplayer' \
+  'org.recompile.mobile.PlatformPlayer$midiControl' \
+  'org.recompile.mobile.PlatformPlayer$tempoControl' \
+  'org.recompile.mobile.PlatformPlayer$volumeControl'; do
+  "$JAVA8/bin/javap" -classpath "$BASE_JAR" -p -c "$cls" > "$JAVAP_BASE"
+  "$JAVA8/bin/javap" -classpath "$CANDIDATE_JAR" -p -c "$cls" > "$JAVAP_NEW"
+  diff -u "$JAVAP_BASE" "$JAVAP_NEW" >/dev/null || fail "unaffected PlatformPlayer bytecode drift: $cls"
+done
+echo A7_A1P1_PLATFORMPLAYER_UNAFFECTED_BYTECODE_GATE=PASS
+
 # Runtime compatibility proof: no java.nio.file dependency may remain in the
-# two media player class files. java.io.File must be present instead.
+# two media player class files. java.io.File must be present instead. Exact
+# source anchors in stage-a7-platformplayer-java6-paths.py constrain the only
+# semantic edit to their constructor cache-directory creation blocks.
 python3 - "$CANDIDATE_JAR" <<'PY'
 import sys,zipfile
 jar=sys.argv[1]
@@ -136,6 +159,7 @@ A7_AUDIO_CANONICAL_PLATFORMPLAYER=JAVA6_PATH_COMPAT_OVERLAY_ONLY
 A7_AUDIO_PLATFORMPLAYER_COMPAT_SCOPE=MEDIA_CACHE_DIRECTORY_CREATION_ONLY
 A7_AUDIO_PLATFORMPLAYER_COMPAT_IMPL=JAVA_IO_FILE_MKDIRS
 A7_AUDIO_PLATFORMPLAYER_PLAYER_STATE_MACHINE=UNCHANGED
+A7_AUDIO_PLATFORMPLAYER_UNAFFECTED_BYTECODE=IDENTICAL_TO_A6_PARENT
 A7_AUDIO_CANONICAL_SDLMIXERMANAGER=UNCHANGED
 A7_AUDIO_ADAPTER=RG35XX_SDL1_MIXER_JNI
 A7_AUDIO_DEVICE_INIT=LAZY
@@ -162,6 +186,7 @@ A7_AUDIO_JAVA_CHANGED_SCOPE=RG35XXLauncher_CLASS_FAMILY_PLUS_PLATFORMPLAYER_PATH
 A7_AUDIO_CANONICAL_MMAPI=UNCHANGED
 A7_AUDIO_PLATFORMPLAYER_COMPAT=JAVA_IO_FILE_MKDIRS_ONLY
 A7_AUDIO_PLATFORMPLAYER_PLAYER_STATE_MACHINE=UNCHANGED
+A7_AUDIO_PLATFORMPLAYER_UNAFFECTED_BYTECODE=IDENTICAL_TO_A6_PARENT
 A7_AUDIO_BACKEND=SDL1_MIXER_DYNAMIC
 A7_AUDIO_DEVICE_INIT=LAZY
 A7_AUDIO_FRAME_COUPLING=NO
