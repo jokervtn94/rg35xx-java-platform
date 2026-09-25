@@ -71,15 +71,23 @@ jobs:
       - name: Verify A8 launcher and package boundary
         run: |
           set -euo pipefail
-          grep -q "EXPECTED_AUDIO=4522157846c33c150a85c50b4bed6f68351f1c62d54b8cd7805cbb97c5727644" packaging/a8/RG35XX-AWEIGIT-R1.sh
-          grep -q 'aplay.*-D hw:0,0.*-f S32_LE.*-c 2.*-r 44100' packaging/a8/RG35XX-AWEIGIT-R1.sh
-          grep -q '^RUNTIME_SEMANTIC_DELTA=NONE$' out/a8-production/A8-IDENTITY.txt
-          grep -q '^PLATFORM_JAR_SEMANTIC_SHA256=7cd3a4a29d4238e0d2464a213db48ba555bdf3c590aa77fe60c68b480bdc4adf$' out/a8-production/A8-IDENTITY.txt
-          grep -q '^JAVA_IDENTITY_GATE=SEMANTIC_ENTRY_CONTENT_SHA256$' out/a8-production/A8-IDENTITY.txt
-          grep -q '^NATIVE_IDENTITY_GATE=RAW_SHA256$' out/a8-production/A8-IDENTITY.txt
-          grep -q '^COMMERCIAL_GAME_JARS_BUNDLED=NO$' out/a8-production/A8-IDENTITY.txt
-          grep -q '^BUILD-PASS=YES$' out/a8-production/A8-IDENTITY.txt
-          grep -q '^DEVICE-PASS=NO$' out/a8-production/A8-IDENTITY.txt
+          ID=out/a8-production/A8-IDENTITY.txt
+          L=out/a8-production/RG35XX-AWEIGIT-R1.sh
+          P=out/a8-production/RG35XX-AWEIGIT-R1
+          PLATFORM_SHA="$(awk -F= '$1=="PLATFORM_JAR_SHA256"{print $2}' "$ID")"
+          test -n "$PLATFORM_SHA"
+          test "$PLATFORM_SHA" = "$(sha256sum "$P/freej2me-rg35xx.jar" | awk '{print $1}')"
+          grep -q "^EXPECTED_PLATFORM=$PLATFORM_SHA$" "$L"
+          grep -q '^EXPECTED_AUDIO=4522157846c33c150a85c50b4bed6f68351f1c62d54b8cd7805cbb97c5727644$' "$L"
+          grep -q '"$APLAY" -q -D hw:0,0 -t raw -f S32_LE -c 2 -r 44100 "$PRIME"' "$L"
+          grep -q '^RUNTIME_SEMANTIC_DELTA=NONE$' "$ID"
+          grep -q '^PLATFORM_JAR_SEMANTIC_SHA256=7cd3a4a29d4238e0d2464a213db48ba555bdf3c590aa77fe60c68b480bdc4adf$' "$ID"
+          grep -q '^JAVA_IDENTITY_GATE=SEMANTIC_ENTRY_CONTENT_SHA256$' "$ID"
+          grep -q '^PACKAGED_JAR_RUNTIME_GATE=RAW_SHA256_BOUND_AT_PACKAGE_BUILD$' "$ID"
+          grep -q '^NATIVE_IDENTITY_GATE=RAW_SHA256$' "$ID"
+          grep -q '^COMMERCIAL_GAME_JARS_BUNDLED=NO$' "$ID"
+          grep -q '^BUILD-PASS=YES$' "$ID"
+          grep -q '^DEVICE-PASS=NO$' "$ID"
           echo A8_PACKAGE_SCOPE_LOCK=PASS
 
       - name: Upload A8 RG35XX package
