@@ -19,7 +19,6 @@ with zipfile.ZipFile(sys.argv[1]) as z:
 print(h.hexdigest())
 PY
 }
-}
 
 for f in freej2me-rg35xx.jar librg35xx_input.so librg35xx_video.so libaudio.so; do
   [ -f "$SRC/$f" ] || fail "A7 artifact missing: $f"
