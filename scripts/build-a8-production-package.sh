@@ -19,15 +19,13 @@ with zipfile.ZipFile(sys.argv[1]) as z:
 print(h.hexdigest())
 PY
 }
+}
 
 for f in freej2me-rg35xx.jar librg35xx_input.so librg35xx_video.so libaudio.so; do
   [ -f "$SRC/$f" ] || fail "A7 artifact missing: $f"
 done
 [ -f "$LAUNCHER" ] || fail "A8 launcher missing"
 
-# A8 is packaging only. Java JAR raw bytes are not reproducible because ZIP/JAR
-# metadata may change on rebuild, so gate Java by exact entry/content semantic
-# identity. Native binaries remain exact raw-SHA gates.
 PLATFORM_SHA="$(sha256sum "$SRC/freej2me-rg35xx.jar"|awk '{print $1}')"
 PLATFORM_SEMANTIC="$(semantic_digest "$SRC/freej2me-rg35xx.jar")"
 test "$PLATFORM_SEMANTIC" = 7cd3a4a29d4238e0d2464a213db48ba555bdf3c590aa77fe60c68b480bdc4adf || fail PLATFORM_SEMANTIC_IDENTITY
@@ -39,9 +37,13 @@ rm -rf "$OUT"
 mkdir -p "$PAYLOAD"
 cp "$SRC/freej2me-rg35xx.jar" "$SRC/librg35xx_input.so" "$SRC/librg35xx_video.so" "$SRC/libaudio.so" "$PAYLOAD/"
 cp "$LAUNCHER" "$OUT/RG35XX-AWEIGIT-R1.sh"
+# The source launcher retains the exact historical A1P5 raw hash as an audit
+# marker. Bind the staged production launcher to the raw JAR bytes actually
+# packaged after semantic identity has already been proven above.
+sed -i "s/^EXPECTED_PLATFORM=.*/EXPECTED_PLATFORM=$PLATFORM_SHA/" "$OUT/RG35XX-AWEIGIT-R1.sh"
+grep -q "^EXPECTED_PLATFORM=$PLATFORM_SHA$" "$OUT/RG35XX-AWEIGIT-R1.sh" || fail LAUNCHER_PLATFORM_BIND
 chmod +x "$OUT/RG35XX-AWEIGIT-R1.sh"
 
-# Exact A1P5 all-zero PCM: 44100 frames/s * 2 channels * 4 bytes * 0.350 s.
 head -c 123480 /dev/zero > "$PAYLOAD/a7-a1p5-rw-silence-prime.s32le"
 test "$(sha256sum "$PAYLOAD/a7-a1p5-rw-silence-prime.s32le"|awk '{print $1}')" = 8c30691e755abd6791ac75887b56e20f1a56266b2eb0286bfb4007b98f7d7a7e || fail PRIME_IDENTITY
 
@@ -59,7 +61,7 @@ PROJECT=RG35XX-AWEIGIT-R1
 STAGE=A8-PRODUCTION-PACKAGE
 BASE=A7+A1P5_DEVICE_PASS
 RUNTIME_SEMANTIC_DELTA=NONE
-LAUNCHER_DELTA=GENERIC_GAME_ARGUMENT+LOGGING_ORDER_FIX
+LAUNCHER_DELTA=GENERIC_GAME_ARGUMENT+LOGGING_ORDER_FIX+PACKAGE_RAW_JAR_BIND
 A1P5_DELTA=PREJAVA_APLAY_RW_INTERLEAVED_ZERO_PCM_350MS
 PLATFORM_JAR_SHA256=$PLATFORM_SHA
 PLATFORM_JAR_SEMANTIC_SHA256=$PLATFORM_SEMANTIC
@@ -69,6 +71,7 @@ VIDEO_NATIVE_SHA256=c6687c0a43b24b425af0727c928afb5414da811ecbcbbe3538928470abe8
 AUDIO_NATIVE_SHA256=4522157846c33c150a85c50b4bed6f68351f1c62d54b8cd7805cbb97c5727644
 PRIME_PCM_SHA256=8c30691e755abd6791ac75887b56e20f1a56266b2eb0286bfb4007b98f7d7a7e
 JAVA_IDENTITY_GATE=SEMANTIC_ENTRY_CONTENT_SHA256
+PACKAGED_JAR_RUNTIME_GATE=RAW_SHA256_BOUND_AT_PACKAGE_BUILD
 NATIVE_IDENTITY_GATE=RAW_SHA256
 COMMERCIAL_GAME_JARS_BUNDLED=NO
 BUILD-PASS=YES
