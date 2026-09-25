@@ -19,7 +19,6 @@ with zipfile.ZipFile(sys.argv[1]) as z:
 print(h.hexdigest())
 PY
 }
-}
 
 for f in freej2me-rg35xx.jar librg35xx_input.so librg35xx_video.so libaudio.so; do
   [ -f "$SRC/$f" ] || fail "A7 artifact missing: $f"
@@ -37,9 +36,8 @@ rm -rf "$OUT"
 mkdir -p "$PAYLOAD"
 cp "$SRC/freej2me-rg35xx.jar" "$SRC/librg35xx_input.so" "$SRC/librg35xx_video.so" "$SRC/libaudio.so" "$PAYLOAD/"
 cp "$LAUNCHER" "$OUT/RG35XX-AWEIGIT-R1.sh"
-# The source launcher retains the exact historical A1P5 raw hash as an audit
-# marker. Bind the staged production launcher to the raw JAR bytes actually
-# packaged after semantic identity has already been proven above.
+# Semantic identity is proven above; bind the staged launcher to the exact raw
+# JAR bytes included in this package so the device-side tamper gate stays exact.
 sed -i "s/^EXPECTED_PLATFORM=.*/EXPECTED_PLATFORM=$PLATFORM_SHA/" "$OUT/RG35XX-AWEIGIT-R1.sh"
 grep -q "^EXPECTED_PLATFORM=$PLATFORM_SHA$" "$OUT/RG35XX-AWEIGIT-R1.sh" || fail LAUNCHER_PLATFORM_BIND
 chmod +x "$OUT/RG35XX-AWEIGIT-R1.sh"
