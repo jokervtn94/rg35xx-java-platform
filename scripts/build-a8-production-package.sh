@@ -19,6 +19,7 @@ with zipfile.ZipFile(sys.argv[1]) as z:
 print(h.hexdigest())
 PY
 }
+}
 
 for f in freej2me-rg35xx.jar librg35xx_input.so librg35xx_video.so libaudio.so; do
   [ -f "$SRC/$f" ] || fail "A7 artifact missing: $f"
@@ -71,6 +72,7 @@ PRIME_PCM_SHA256=8c30691e755abd6791ac75887b56e20f1a56266b2eb0286bfb4007b98f7d7a7
 JAVA_IDENTITY_GATE=SEMANTIC_ENTRY_CONTENT_SHA256
 PACKAGED_JAR_RUNTIME_GATE=RAW_SHA256_BOUND_AT_PACKAGE_BUILD
 NATIVE_IDENTITY_GATE=RAW_SHA256
+PACKAGE_MANIFEST=NON_SELF_REFERENTIAL_SHA256
 COMMERCIAL_GAME_JARS_BUNDLED=NO
 BUILD-PASS=YES
 DEVICE-PASS=NO
@@ -78,6 +80,16 @@ DEVICE-TEST-PENDING=YES
 FULL_PLATFORM_STABLE=NO
 EOF
 
-(cd "$OUT" && find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > A8-PACKAGE-SHA256SUMS.txt)
+# The package manifest deliberately excludes itself. A checksum file cannot
+# contain a stable checksum of its own final contents. Hash every other file,
+# then verify the manifest immediately as part of the build gate.
+(
+  cd "$OUT"
+  find . -type f ! -name 'A8-PACKAGE-SHA256SUMS.txt' -print0 \
+    | LC_ALL=C sort -z \
+    | xargs -0 sha256sum > A8-PACKAGE-SHA256SUMS.txt
+  sha256sum -c A8-PACKAGE-SHA256SUMS.txt
+)
+
 echo A8_PRODUCTION_PACKAGE_BUILD=PASS
 cat "$OUT/A8-IDENTITY.txt"
