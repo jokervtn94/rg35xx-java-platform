@@ -4,67 +4,91 @@ This repository ports the proven `aweigit/freej2me-miyoomini` FreeJ2ME implement
 
 ## Current accepted baseline
 
-The branch `rg35xx-aweigit-r1-stable` is the protected reference baseline for future RG35XX development.
-
-Accepted source checkpoint:
+The branch `rg35xx-aweigit-r1-stable` is now the **A8 production reference baseline** for future RG35XX development.
 
 ```text
-SOURCE_BRANCH=rg35xx-aweigit-r1-a7-audio-media
-SOURCE_COMMIT=5b7a8e88bd32a735a1342715e718eecf8cf10fad
-STATUS=DEVICE-PASS_SELECTED_SCOPE
+BASELINE=A8
+BRANCH=rg35xx-aweigit-r1-stable
+A8_CI_COMMIT=80113f50e5db59e372f02722e3ff362263490b2c
+A8_DEVICE_ACCEPTANCE=PASS
+STATUS=DEVICE-PASS
+```
+
+The A8 baseline is the accepted A7+A1P5 runtime boundary consolidated into the production launcher/package path. The original RG35XX device test confirmed the selected parent regression scope with Vua Cướp Biển and God of War.
+
+This does **not** claim universal compatibility with every J2ME game, codec or optional API.
+
+## What A8 achieved
+
+A8 is a **packaging/launcher consolidation**, not a runtime-semantic rewrite.
+
+It preserves:
+
+- canonical Aweigit J2ME implementation
+- protected JamVM/glibj
+- accepted A6 graphics/input/PERF-A1/ClipTranslate behavior
+- A7 Java 6 media compatibility
+- SDL1_mixer native audio backend
+- accepted A1P5 cold-start audio-route prime
+- accepted runtime/native identity hashes
+
+The production launcher accepts the selected external JAR as argument 1 and performs the established identity/audio gates before launching the game.
+
+Production layout:
+
+```text
+Roms/APPS/RG35XX-AWEIGIT-R1.sh
+Roms/APPS/RG35XX-AWEIGIT-R1/
+  freej2me-rg35xx.jar
+  librg35xx_input.so
+  librg35xx_video.so
+  libaudio.so
+  a7-a1p5-rw-silence-prime.s32le
+  data/
+```
+
+Commercial game JARs remain external test inputs and are not part of the production runtime package.
+
+## Real-device acceptance
+
+A8 passed the required original-RG35XX acceptance scope.
+
+### Automated / CI
+
+- A8 production package: PASS
+- package manifest verification: PASS
+- runtime identity verification: PASS
+- protected JamVM/glibj: PASS
+- A1P5 zero-PCM pre-Java prime: PASS
+- Vua Cướp Biển regression: PASS
+- God of War regression: PASS
+- PERF-A1/runtime execution: PASS
+- normal exit: PASS
+
+### Physical RG35XX confirmation
+
+The operator confirmed:
+
+- Vua Cướp Biển displays correctly.
+- Vua Cướp Biển controls work.
+- Vua Cướp Biển gameplay is normal.
+- Vua Cướp Biển does not hang.
+- God of War displays correctly.
+- God of War controls work.
+- God of War gameplay is normal.
+- God of War does not hang.
+- God of War audio is audible and normal.
+
+Therefore:
+
+```text
+A8_BUILD=PASS
+A8_DEVICE=PASS
+A8_PRODUCTION_BASELINE=YES
 FULL_PLATFORM_STABLE=NO
 ```
 
-This means the currently selected core integration and real-game regression scope has passed on original RG35XX hardware. It does **not** claim universal compatibility with every J2ME game, codec or optional API.
-
-## Canonical upstream
-
-```text
-Repository: aweigit/freej2me-miyoomini
-Pinned commit: ca11dfe8ea1cc273d92460f9a83bbf192023fa63
-Role: CANONICAL_J2ME_IMPLEMENTATION
-```
-
-The upstream pin is deliberate. Do not automatically follow newer upstream commits without an explicit audit/migration decision.
-
-## Architecture
-
-```text
-AWEIGIT CANONICAL J2ME CORE
-        |
-        v
-RG35XX ADAPTER
-        |
-        v
-RG35XX PACKAGE / LAUNCHER
-        |
-        v
-Original RG35XX hardware
-```
-
-Device-specific implementation targets the original RG35XX rather than redesigning generic J2ME semantics.
-
-## Accepted RG35XX runtime
-
-The accepted chain currently includes:
-
-- original RG35XX SDL1.2/fbcon video path
-- physical RG35XX input adapter and MIDP input lifecycle
-- Canvas/GameCanvas and core 2D rendering
-- PNG alpha and `drawRegion`
-- Sprite/TiledLayer/LayerManager paths exercised by the accepted integration chain
-- raw drawing primitives required by tested games
-- PERF-A1 asynchronous latest-frame native presenter
-- corrected `PlatformGraphics.translate()` device-space clip behavior
-- RMS where exercised by the selected corpus
-- Java 6 media compatibility overlay required by protected JamVM/glibj
-- RG35XX SDL1_mixer native audio backend
-- launcher-boundary cold-start audio-route prime before Java/SDL media playback
-- WAV playback, volume and pause/resume in the accepted A7 integration test
-- MIDI playback and END_OF_MEDIA callback in the accepted A7 integration test
-- normal application exit without hard reset in accepted tests
-
-## Real-device milestones
+## Milestones
 
 ### A4 — Smoke
 Established the basic original-RG35XX execution chain: runtime boot, LCD presentation, physical input and normal exit.
@@ -73,25 +97,19 @@ Established the basic original-RG35XX execution chain: runtime boot, LCD present
 Integrated the canonical Aweigit J2ME implementation with the RG35XX adapter and exercised the core graphics/game-layer functionality required for the production path.
 
 ### A6 — Real-game regression
-The selected A6 corpus reached DEVICE-PASS. Important accepted fixes include classloader duplicate-definition handling, Adam7 PNG support, rendering primitive compatibility, input lifecycle integration, PERF-A1 and the ClipTranslate correction.
-
-Confirmed parent games include:
-
-- `Vua-Cuop-Bien-240x320.jar`
-- `God-of-War-Betrayal_J2ME_EN_v148.jar`
-
-Commercial game JARs are test inputs only and are never bundled in this repository or release packages.
+Reached DEVICE-PASS for the selected parent corpus and established the graphics/input/PERF-A1/ClipTranslate baseline.
 
 ### A7 — Audio / Media
-A7 added the RG35XX-native SDL1/SDL_mixer audio bridge while retaining the canonical MMAPI/PlatformPlayer behavior as far as the accepted adapter boundary permits.
+Established the RG35XX-native SDL1_mixer path, Java 6 media compatibility and the accepted cold-start audio-route prime. WAV and MIDI parent regression passed.
 
-Cold-start device testing isolated an RG35XX audio-route initialization requirement. The accepted device-boundary solution primes `hw:0,0` before Java playback using approximately 350 ms of zero PCM (`S32_LE`, 44100 Hz, stereo), then starts the unchanged accepted Java/SDL1_mixer runtime.
+### A8 — Production Consolidation
+Converted the accepted A7+A1P5 device-proven boundary into the production launcher/package layout without changing accepted runtime semantics. CI passed and the consolidated build passed physical RG35XX testing.
 
-Accepted A7 testing demonstrated audible WAV and MIDI playback, WAV pause/resume, MIDI END_OF_MEDIA, protected runtime hashes, normal return and no hard reset. Vua Cướp Biển and God of War then passed parent regression on the A7 candidate.
+Detailed A8 notes and preserved A1P5 references are in `packaging/a8/README.md` and `packaging/a8/reference/`.
 
 ## Protected components
 
-The following accepted areas are treated as locked unless a new reproducible parent integration/regression failure directly identifies them as the owner:
+The following remain locked unless a new reproducible parent integration/regression failure directly identifies them as the owner:
 
 - canonical Aweigit pin
 - protected JamVM/glibj runtime
@@ -119,9 +137,11 @@ canonical behavior
 -> failure owner
 -> smallest adapter delta
 -> parent integration/regression test
+-> physical RG35XX acceptance
+-> stable promotion
 ```
 
-Micro-tests are diagnostic tools only after a parent integration or real-game regression exposes a reproducible failure. Do not resume the historical DP/VC/Golden patch chains as production development; those builds remain evidence/reference only.
+Micro-tests are diagnostic tools only after a parent integration or real-game regression exposes a reproducible failure. Do not resume historical DP/VC/Golden patch chains as production development; those builds remain evidence/reference only.
 
 ## Runtime protection
 
@@ -135,23 +155,28 @@ d7abe888d2980329434c30f18c0eec124be1f02284bf9ed28e88d7242a1f2bea
 
 Do not replace these components merely to simplify development or compilation.
 
-## Initialize the canonical source
+## Canonical source
 
-```sh
-git submodule update --init --recursive
-./scripts/verify-canonical.sh
+```text
+Repository: aweigit/freej2me-miyoomini
+Pinned commit: ca11dfe8ea1cc273d92460f9a83bbf192023fa63
+Role: CANONICAL_J2ME_IMPLEMENTATION
 ```
+
+Do not automatically follow newer upstream commits without an explicit audit/migration decision.
 
 ## Status vocabulary
 
 - `BUILD-PASS` — compilation/package gates passed; no hardware claim.
 - `DEVICE-PASS` — tested successfully on original RG35XX within the stated scope.
 - `ACCEPTED` — retained as the reference implementation for that tested scope.
-- `STABLE` — reserved for broader repeated integration/regression confidence.
+- `STABLE` — the branch used as the production development baseline.
 - `FAIL` — includes hang or hard reset during the tested scenario.
 
 ## Current direction
 
-The accepted A7+A1P5 implementation is now the reference code baseline. Future development should branch from `rg35xx-aweigit-r1-stable`, preserve accepted identities/contracts, consolidate production packaging/launcher behavior, and expand compatibility through evidence-driven real-game regression.
+**A8 is now the production reference baseline.**
+
+Future work should branch from `rg35xx-aweigit-r1-stable`, preserve accepted identities/contracts, and add compatibility only through evidence-driven real-game regression.
 
 The project intentionally does **not** claim `FULL_PLATFORM_STABLE` yet. Networking, SMS/payment, 3D/M3G/Mascot and untested MMAPI formats remain outside the currently accepted scope.
