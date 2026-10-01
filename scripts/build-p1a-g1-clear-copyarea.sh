@@ -59,7 +59,8 @@ with zipfile.ZipFile(base) as a, zipfile.ZipFile(new) as b:
     if set(a.namelist()) != set(b.namelist()):
         raise SystemExit('P1A_G1_SCOPE_FAIL entry-set')
     diff=[n for n in sorted(a.namelist()) if hashlib.sha256(a.read(n)).digest()!=hashlib.sha256(b.read(n)).digest()]
-if diff != ['org/recompile/mobile/PlatformGraphics.class']:
+expected=['org/recompile/mobile/PlatformGraphics.class','org/recompile/rg35xx/RG35XXCore2D.class']
+if diff != expected:
     raise SystemExit('P1A_G1_SCOPE_FAIL changed='+repr(diff))
 print('P1A_G1_CHANGED_JAR_ENTRIES='+','.join(diff))
 print('P1A_G1_SCOPE_GATE=PASS')
@@ -112,9 +113,10 @@ PARENT_SEMANTIC_SHA256=$BASE_SEM
 EXACT_A8_GOLDEN_PLATFORM_SHA256=057567d454ac94d4d1d08ad8fc84ef22515c00418d28057aa70e74b4042d336c
 CANDIDATE_PLATFORM_SHA256=$CAND_SHA
 CANDIDATE_PLATFORM_SEMANTIC_SHA256=$CAND_SEM
-CHANGED_JAR_ENTRIES=org/recompile/mobile/PlatformGraphics.class
-CHANGED_METHODS=clearRect,copyArea
-CORE2D_DELTA=NONE
+CHANGED_JAR_ENTRIES=org/recompile/mobile/PlatformGraphics.class,org/recompile/rg35xx/RG35XXCore2D.class
+CHANGED_METHODS=PlatformGraphics.clearRect,PlatformGraphics.copyArea,RG35XXCore2D.copyAreaAliased
+CORE2D_DELTA=copyAreaAliased_ONLY
+COPYAREA_ALIAS_ORDER=TOP_TO_BOTTOM_LEFT_TO_RIGHT
 INPUT_NATIVE_SHA256=69a8aeb3940bfbc234f3a562a7ae4bcaea10b50f8a8f2c38ad229a5430930f6d
 VIDEO_NATIVE_SHA256=c6687c0a43b24b425af0727c928afb5414da811ecbcbbe3538928470abe8bd0d
 AUDIO_NATIVE_SHA256=4522157846c33c150a85c50b4bed6f68351f1c62d54b8cd7805cbb97c5727644
