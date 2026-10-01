@@ -99,15 +99,21 @@ end=s.index('\n\tpublic void fillTriangle(int x1, int y1, int x2, int y2, int x3
 m=s[start:end]
 for token in [
     'platformImage != null && platformImage.isRG35XXRaw()',
-    'rg35xxFillPolygon(x, 0, y, 0, 3, 0xFF000000 | (color & 0x00FFFFFF));',
+    'strokeStyle = SOLID;',
+    'drawLine(xa, yy, xb, yy);',
+    'drawLine(xb, yy, xa, yy);',
+    'strokeStyle = savedStroke;',
     'gc.fillPolygon(new int[]{x1,x2,x3}, new int[]{y1,y2,y3}, 3);']:
     if token not in m:
         raise SystemExit('A9_FILLTRIANGLE_SOURCE_GATE_FAIL missing '+token)
-# The argb overload is intentionally outside the evidence-owned delta.
+if 'rg35xxFillPolygon' in m:
+    raise SystemExit('A9_FILLTRIANGLE_SOURCE_GATE_FAIL rejected generic polygon helper revived')
+# The 7-arg DirectGraphics overload is intentionally outside the evidence-owned delta.
 argb=s[end:s.index('\n\tpublic void getPixels', end)]
-if 'rg35xxFillPolygon' in argb:
+if 'platformImage.isRG35XXRaw()' in argb or 'drawLine(' in argb or 'rg35xxFillPolygon' in argb:
     raise SystemExit('A9_FILLTRIANGLE_SOURCE_GATE_FAIL 7arg overload broadened')
 print('A9_FILLTRIANGLE_SOURCE_GATE=PASS')
+print('A9_FILLTRIANGLE_REJECTED_GENERIC_POLYGON_REINTRODUCED=NO')
 PY
 
 HOST="$BUILD/a9-filltriangle-host"
@@ -168,7 +174,9 @@ VIDEO_NATIVE_SHA256=$VIDEO_SHA
 AUDIO_NATIVE_SHA256=$AUDIO_SHA
 PRIME_PCM_SHA256=8c30691e755abd6791ac75887b56e20f1a56266b2eb0286bfb4007b98f7d7a7e
 CHANGED_JAR_SCOPE=org/recompile/mobile/PlatformGraphics.class
-DELTA=STANDARD_6ARG_FILLTRIANGLE_RAW_ROUTE_TO_ACCEPTED_A6_POLYGON_RASTERIZER
+DELTA=STANDARD_6ARG_FILLTRIANGLE_RAW_SCANLINE_USING_ACCEPTED_A6_DRAWLINE
+RAW_IMPL=SCANLINE_SPANS_DELEGATE_TO_DEVICE_PROVEN_DRAWLINE
+REJECTED_GENERIC_POLYGON_REINTRODUCED=NO
 CANONICAL_AWT_FALLBACK=UNCHANGED
 DIRECTGRAPHICS_7ARG_FILLTRIANGLE=UNCHANGED
 A9_FILLTRIANGLE_SOURCE_GATE=PASS
@@ -181,6 +189,7 @@ DEVICE-TEST-PENDING=YES
 STABLE=NO
 EOF
 
-(cd "$DST" && find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > A9-ARTIFACT-SHA256SUMS.txt)
+(cd "$DST" && find . -type f ! -name 'A9-ARTIFACT-SHA256SUMS.txt' -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > A9-ARTIFACT-SHA256SUMS.txt)
+(cd "$DST" && sha256sum -c A9-ARTIFACT-SHA256SUMS.txt)
 echo A9_FILLTRIANGLE_BUILD=PASS
 cat "$DST/A9-FILLTRIANGLE-IDENTITY.txt"
