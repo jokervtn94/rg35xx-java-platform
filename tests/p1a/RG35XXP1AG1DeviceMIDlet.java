@@ -9,7 +9,7 @@ import javax.microedition.lcdui.Display;
 import javax.microedition.lcdui.Graphics;
 import javax.microedition.midlet.MIDlet;
 
-/** Original-RG35XX P1A-G1 physical platform exerciser; no commercial game. */
+/** Original-RG35XX P1A-G1 copyArea physical platform exerciser; no commercial game. */
 public final class RG35XXP1AG1DeviceMIDlet extends MIDlet {
     private Display display;
     private ProbeCanvas canvas;
@@ -96,43 +96,37 @@ public final class RG35XXP1AG1DeviceMIDlet extends MIDlet {
             int h = getHeight();
             g.setColor(programmaticPass ? 0x103010 : 0x501010);
             g.fillRect(0, 0, w, h);
-
             g.setColor(0xFFFFFF);
-            g.drawString("P1A G1 PLATFORM TEST", 8, 8, Graphics.LEFT | Graphics.TOP);
+            g.drawString("P1A G1 COPYAREA TEST", 8, 8, Graphics.LEFT | Graphics.TOP);
             g.drawString(programmaticPass ? "VECTOR CHECK: PASS" : "VECTOR CHECK: FAIL", 8, 28, Graphics.LEFT | Graphics.TOP);
 
-            // Visible clearRect panel: blue block with a black transparent-cleared window.
-            g.setColor(0x2050D0);
-            g.fillRect(12, 58, 92, 72);
-            g.clearRect(36, 78, 44, 30);
-            g.setColor(0xFFFFFF);
-            g.drawRect(11, 57, 93, 73);
+            // Panel A: horizontal/diagonal overlap, directly exercising the aliased path.
+            g.setColor(0xD04020); g.fillRect(18, 62, 64, 24);
+            g.setColor(0x20A050); g.fillRect(18, 86, 64, 24);
+            g.setColor(0x3060D0); g.fillRect(18, 110, 64, 24);
+            g.copyArea(18, 62, 64, 72, 38, 86, Graphics.LEFT | Graphics.TOP);
+            g.setColor(0xFFFFFF); g.drawRect(17, 61, 85, 97);
 
-            // Visible copyArea panel: three source bands copied with deliberate overlap.
-            g.setColor(0xD04020); g.fillRect(126, 62, 64, 24);
-            g.setColor(0x20A050); g.fillRect(126, 86, 64, 24);
-            g.setColor(0x3060D0); g.fillRect(126, 110, 64, 24);
-            g.copyArea(126, 62, 64, 72, 146, 86, Graphics.LEFT | Graphics.TOP);
-            g.setColor(0xFFFFFF);
-            g.drawRect(125, 61, 85, 97);
+            // Panel B: second overlap direction.
+            g.setColor(0xD09020); g.fillRect(132, 62, 64, 24);
+            g.setColor(0x30A0C0); g.fillRect(132, 86, 64, 24);
+            g.setColor(0x9040B0); g.fillRect(132, 110, 64, 24);
+            g.copyArea(148, 78, 48, 56, 128, 58, Graphics.LEFT | Graphics.TOP);
+            g.setColor(0xFFFFFF); g.drawRect(127, 57, 85, 97);
 
-            // Clip + translate copy panel.
-            g.setColor(0xC08020); g.fillRect(20, 168, 70, 40);
-            g.setClip(110, 170, 70, 46);
+            // Panel C: destination clip + translate.
+            g.setColor(0xC08020); g.fillRect(20, 180, 70, 40);
+            g.setClip(110, 178, 70, 46);
             g.translate(8, 5);
-            g.copyArea(20, 168, 70, 40, 105, 165, Graphics.LEFT | Graphics.TOP);
+            g.copyArea(20, 180, 70, 40, 105, 173, Graphics.LEFT | Graphics.TOP);
             g.translate(-8, -5);
             g.setClip(0, 0, w, h);
-            g.setColor(0xFFFFFF);
-            g.drawRect(109, 169, 71, 47);
+            g.setColor(0xFFFFFF); g.drawRect(109, 177, 71, 47);
 
-            g.drawString("BLUE CLEAR WINDOW / COPY OVERLAP", 8, 232, Graphics.LEFT | Graphics.TOP);
-            g.drawString("A = EXIT AFTER VISUAL REVIEW", 8, 254, Graphics.LEFT | Graphics.TOP);
-            if (!programmaticPass) {
-                g.drawString("FAIL: " + failure, 8, 276, Graphics.LEFT | Graphics.TOP);
-            } else {
-                g.drawString("EXPECT CLEAN BLOCKS, NO CORRUPTION", 8, 276, Graphics.LEFT | Graphics.TOP);
-            }
+            g.drawString("3 COPY PANELS MUST BE CLEAN", 8, 238, Graphics.LEFT | Graphics.TOP);
+            g.drawString("A = EXIT AFTER VISUAL REVIEW", 8, 258, Graphics.LEFT | Graphics.TOP);
+            if (!programmaticPass) g.drawString("FAIL: " + failure, 8, 278, Graphics.LEFT | Graphics.TOP);
+            else g.drawString("NO SMEAR / STRAY PIXELS", 8, 278, Graphics.LEFT | Graphics.TOP);
         }
 
         public void keyPressed(int keyCode) {
