@@ -68,12 +68,12 @@ Copy `tests/a8/A8-COMPAT-RUN.sh` from this repository to `Roms/APPS/A8-COMPAT-RU
 Example:
 
 ```sh
-/mnt/mmc/Roms/APPS/A8-COMPAT-RUN.sh \
+sh /mnt/mmc/Roms/APPS/A8-COMPAT-RUN.sh \
   "/mnt/mmc/Roms/JAVA/game.jar" \
   "A8-COMP-01"
 ```
 
-The wrapper calls the accepted production launcher rather than duplicating runtime launch logic.
+Using `sh` explicitly avoids relying on executable permission bits on the SD filesystem. The wrapper calls the accepted production launcher rather than duplicating runtime launch logic.
 
 ### 4. Review the evidence
 
