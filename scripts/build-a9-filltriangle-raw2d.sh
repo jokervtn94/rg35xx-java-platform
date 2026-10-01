@@ -97,22 +97,24 @@ s=open(sys.argv[1],encoding='utf-8').read()
 start=s.index('\tpublic void fillTriangle(int x1, int y1, int x2, int y2, int x3, int y3)')
 end=s.index('\n\tpublic void fillTriangle(int x1, int y1, int x2, int y2, int x3, int y3, int argbColor)', start)
 m=s[start:end]
-for token in [
+required=[
     'platformImage != null && platformImage.isRG35XXRaw()',
-    'strokeStyle = SOLID;',
-    'drawLine(xa, yy, xb, yy);',
-    'drawLine(xb, yy, xa, yy);',
-    'strokeStyle = savedStroke;',
-    'gc.fillPolygon(new int[]{x1,x2,x3}, new int[]{y1,y2,y3}, 3);']:
+    'x1 += translateX; y1 += translateY;',
+    'int[] pixels = platformImage.getRG35XXPixels();',
+    'int clipL = clipX < 0 ? 0 : clipX;',
+    'Arrays.fill(pixels, yy * pw + left, yy * pw + right + 1, argb);',
+    'gc.fillPolygon(new int[]{x1,x2,x3}, new int[]{y1,y2,y3}, 3);']
+for token in required:
     if token not in m:
         raise SystemExit('A9_FILLTRIANGLE_SOURCE_GATE_FAIL missing '+token)
-if 'rg35xxFillPolygon' in m:
-    raise SystemExit('A9_FILLTRIANGLE_SOURCE_GATE_FAIL rejected generic polygon helper revived')
-# The 7-arg DirectGraphics overload is intentionally outside the evidence-owned delta.
+for forbidden in ['rg35xxFillPolygon', 'drawLine(', 'strokeStyle = SOLID']:
+    if forbidden in m:
+        raise SystemExit('A9_FILLTRIANGLE_SOURCE_GATE_FAIL forbidden '+forbidden)
 argb=s[end:s.index('\n\tpublic void getPixels', end)]
-if 'platformImage.isRG35XXRaw()' in argb or 'drawLine(' in argb or 'rg35xxFillPolygon' in argb:
+if 'platformImage.isRG35XXRaw()' in argb or 'Arrays.fill(' in argb or 'rg35xxFillPolygon' in argb:
     raise SystemExit('A9_FILLTRIANGLE_SOURCE_GATE_FAIL 7arg overload broadened')
 print('A9_FILLTRIANGLE_SOURCE_GATE=PASS')
+print('A9_FILLTRIANGLE_R2_DIRECT_SPAN_GATE=PASS')
 print('A9_FILLTRIANGLE_REJECTED_GENERIC_POLYGON_REINTRODUCED=NO')
 PY
 
@@ -123,7 +125,9 @@ rm -rf "$HOST"; mkdir -p "$HOST"
   -d "$HOST" "$ROOT/tests/a9/RG35XXRawFillTriangleHostGate.java"
 "$JAVA8/bin/java" -cp "$CANDIDATE_JAR:$HOST" org.recompile.rg35xx.a9.RG35XXRawFillTriangleHostGate \
   | tee "$DST/A9-FILLTRIANGLE-HOST-GATE.txt"
-grep -q '^A9_FILLTRIANGLE_HOST_GATE=PASS$' "$DST/A9-FILLTRIANGLE-HOST-GATE.txt" || fail "fillTriangle host gate"
+for marker in A9_FILLTRIANGLE_HOST_GATE=PASS A9_FILLTRIANGLE_TRANSLATE_CLIP_GATE=PASS A9_FILLTRIANGLE_DEGENERATE_GATE=PASS; do
+  grep -q "^${marker}$" "$DST/A9-FILLTRIANGLE-HOST-GATE.txt" || fail "fillTriangle host gate ${marker}"
+done
 
 run_gate() {
   local src="$1" cls="$2" marker="$3" out="$4"
@@ -160,12 +164,17 @@ cp "$PG_SRC" "$DST/A9-FILLTRIANGLE-PLATFORMGRAPHICS-SOURCE.java.txt"
 
 cat > "$DST/A9-FILLTRIANGLE-IDENTITY.txt" <<EOF
 PROJECT=RG35XX-AWEIGIT-R1
-STAGE=A9-FILLTRIANGLE-RAW2D-CANDIDATE
+STAGE=A9-FILLTRIANGLE-RAW2D-R2-CANDIDATE
 AWEIGIT_COMMIT=ca11dfe8ea1cc273d92460f9a83bbf192023fa63
 EVIDENCE_GAME=Asphalt_4_Elite_Racing
 EVIDENCE_GAME_SHA256=b25c855e5b04364e1e5ec36f06f32750f73a9e4a6ef1545a9dbe2b973a6e284b
-EVIDENCE_EXCEPTION=java.lang.NullPointerException_at_org.recompile.mobile.PlatformGraphics.fillTriangle
-FAILURE_OWNER=RG35XX_RAW_PLATFORMGRAPHICS_AWT_NULL
+EVIDENCE_EXCEPTION_R1_FIXED=java.lang.NullPointerException_at_org.recompile.mobile.PlatformGraphics.fillTriangle
+R1_DEVICE_RESULT=GAMEPLAY_REACHED_BUT_LAG_AUDIO_PARTIAL_EXIT_HARD_RESET
+R1_FRAME300_FPS_X100=1841
+R1_FRAME600_FPS_X100=1587
+R1_QUEUE600_DROPPED=3
+R1_COPY_AVG_MS=1
+R2_PERFORMANCE_OWNER=R1_FILLTRIANGLE_SCANLINE_REENTERED_JAVA_DRAWLINE_PER_SPAN
 PARENT_PLATFORM_SEMANTIC_SHA256=$PARENT_SEMANTIC
 CANDIDATE_PLATFORM_JAR_SHA256=$CANDIDATE_SHA
 CANDIDATE_PLATFORM_SEMANTIC_SHA256=$CANDIDATE_SEMANTIC
@@ -174,8 +183,8 @@ VIDEO_NATIVE_SHA256=$VIDEO_SHA
 AUDIO_NATIVE_SHA256=$AUDIO_SHA
 PRIME_PCM_SHA256=8c30691e755abd6791ac75887b56e20f1a56266b2eb0286bfb4007b98f7d7a7e
 CHANGED_JAR_SCOPE=org/recompile/mobile/PlatformGraphics.class
-DELTA=STANDARD_6ARG_FILLTRIANGLE_RAW_SCANLINE_USING_ACCEPTED_A6_DRAWLINE
-RAW_IMPL=SCANLINE_SPANS_DELEGATE_TO_DEVICE_PROVEN_DRAWLINE
+DELTA=STANDARD_6ARG_FILLTRIANGLE_RAW_SCANLINE_DIRECT_ARRAYS_FILL
+RAW_IMPL=SCANLINE_CLIPPED_SPANS_DIRECT_RAW_FRAMEBUFFER_FILL
 REJECTED_GENERIC_POLYGON_REINTRODUCED=NO
 CANONICAL_AWT_FALLBACK=UNCHANGED
 DIRECTGRAPHICS_7ARG_FILLTRIANGLE=UNCHANGED
