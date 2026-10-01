@@ -74,9 +74,10 @@ jobs:
           set -euo pipefail
           ID=out/p1a-g1-clear-copyarea/P1A-G1-IDENTITY.txt
           grep -q '^PARENT_SEMANTIC_SHA256=7cd3a4a29d4238e0d2464a213db48ba555bdf3c590aa77fe60c68b480bdc4adf$' "$ID"
-          grep -q '^CHANGED_JAR_ENTRIES=org/recompile/mobile/PlatformGraphics.class$' "$ID"
-          grep -q '^CHANGED_METHODS=clearRect,copyArea$' "$ID"
-          grep -q '^CORE2D_DELTA=NONE$' "$ID"
+          grep -q '^CHANGED_JAR_ENTRIES=org/recompile/mobile/PlatformGraphics.class,org/recompile/rg35xx/RG35XXCore2D.class$' "$ID"
+          grep -q '^CHANGED_METHODS=PlatformGraphics.clearRect,PlatformGraphics.copyArea,RG35XXCore2D.copyAreaAliased$' "$ID"
+          grep -q '^CORE2D_DELTA=copyAreaAliased_ONLY$' "$ID"
+          grep -q '^COPYAREA_ALIAS_ORDER=TOP_TO_BOTTOM_LEFT_TO_RIGHT$' "$ID"
           grep -q '^GAME_SPECIFIC_CODE=NO$' "$ID"
           grep -q '^BUILD-PASS=YES$' "$ID"
           grep -q '^DEVICE-PASS=NO$' "$ID"
