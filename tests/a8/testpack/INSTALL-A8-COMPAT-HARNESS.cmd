@@ -13,12 +13,13 @@ if not defined SDROOT (
   exit /b 2
 )
 
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0INSTALL-A8-COMPAT-HARNESS.ps1" -SdRoot "%SDROOT%"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0INSTALL-A8-COMPAT-HARNESS-R3.ps1" -SdRoot "%SDROOT%"
 set "RC=%ERRORLEVEL%"
 
 if not "%RC%"=="0" (
   echo.
   echo INSTALL FAIL - exit code %RC%
+  echo Neu R3 tao A8-COMPAT-SD-DIAGNOSTIC.txt o goc SD, gui file do de phan tich.
 ) else (
   echo.
   echo INSTALL PASS
