@@ -57,7 +57,7 @@ if ([string]::IsNullOrWhiteSpace($safeId)) {
     throw 'CandidateId becomes empty after sanitization.'
 }
 
-$launcherName = "A8-$safeId-TEST.sh"
+$launcherName = "$safeId-TEST.sh"
 $launcherPath = Join-Path $appsDir $launcherName
 $launcherText = "#!/bin/sh`nexec sh /mnt/mmc/Roms/APPS/A8-COMPAT-RUN.sh `"$deviceGamePath`" `"$CandidateId`"`n"
 $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
@@ -85,4 +85,4 @@ Write-Host "JAR       : $gamePath"
 Write-Host "SHA256    : $jarHash"
 Write-Host "Launcher  : $launcherPath"
 Write-Host "Record    : $recordPath"
-Write-Host 'Launch the new A8-...-TEST entry from the RG35XX APPS menu.'
+Write-Host 'Launch the new <CandidateId>-TEST entry from the RG35XX APPS menu.'
