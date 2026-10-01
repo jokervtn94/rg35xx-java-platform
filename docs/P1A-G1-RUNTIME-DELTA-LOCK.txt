@@ -1,0 +1,2 @@
+ALLOWED_RUNTIME_CLASS=org/recompile/mobile/PlatformGraphics.class
+ALLOWED_METHODS=clearRect,copyArea
