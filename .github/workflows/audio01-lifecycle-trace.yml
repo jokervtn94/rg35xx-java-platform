@@ -75,14 +75,26 @@ jobs:
             bash -lc 'git config --global --add safe.directory /work/upstream/freej2me-miyoomini && bash ./scripts/build-a7-audio-native.sh'
           sudo chown -R "$(id -u):$(id -g)" out/a7-audio-sdl1
 
-      - name: Rebuild exact COMP-02 graphics candidate
+      - name: Rebuild COMP-02 semantic candidate
         run: bash ./scripts/build-a8-comp02-filltriangle-boundary.sh
 
-      - name: Enforce COMP-02 physical parent identities
+      - name: Enforce COMP-02 semantic parent and protected native identities
         run: |
           set -euo pipefail
           D=out/a8-comp02-filltriangle-boundary
-          test "$(sha256sum "$D/freej2me-rg35xx.jar" | awk '{print $1}')" = 3c7b22c3227a65897137c210744be1bcc41f075fa0dfa580fdcee7e47734056b
+          python3 - "$D/freej2me-rg35xx.jar" <<'PY'
+          import sys,zipfile,hashlib,struct
+          h=hashlib.sha256()
+          with zipfile.ZipFile(sys.argv[1]) as z:
+              for n in sorted(z.namelist()):
+                  b=z.read(n); nb=n.encode('utf-8')
+                  h.update(struct.pack('>I',len(nb))); h.update(nb)
+                  h.update(struct.pack('>Q',len(b))); h.update(b)
+          got=h.hexdigest()
+          exp='a3e542cc0bb674396ee27684726cf79a726bdb03297e4c5792f1d9758f5c73cb'
+          print('AUDIO01_COMP02_REBUILD_SEMANTIC='+got)
+          if got != exp: raise SystemExit('semantic mismatch')
+          PY
           test "$(sha256sum "$D/librg35xx_input.so" | awk '{print $1}')" = 69a8aeb3940bfbc234f3a562a7ae4bcaea10b50f8a8f2c38ad229a5430930f6d
           test "$(sha256sum "$D/librg35xx_video.so" | awk '{print $1}')" = c6687c0a43b24b425af0727c928afb5414da811ecbcbbe3538928470abe8bd0d
           test "$(sha256sum "$D/libaudio.so" | awk '{print $1}')" = 4522157846c33c150a85c50b4bed6f68351f1c62d54b8cd7805cbb97c5727644
@@ -103,7 +115,8 @@ jobs:
           I="$D/AUDIO01-IDENTITY.txt"
           grep -q '^STAGE=AUDIO01-LIFECYCLE-TRACE-ONLY$' "$I"
           grep -q '^FAILURE_OWNER=RG35XX_AUDIO_MEDIA$' "$I"
-          grep -q '^PLATFORM_JAR_SHA256=3c7b22c3227a65897137c210744be1bcc41f075fa0dfa580fdcee7e47734056b$' "$I"
+          grep -q '^PLATFORM_SEMANTIC_SHA256=a3e542cc0bb674396ee27684726cf79a726bdb03297e4c5792f1d9758f5c73cb$' "$I"
+          grep -q '^PHYSICAL_DEVICE_PLATFORM_REQUIRED_SHA256=3c7b22c3227a65897137c210744be1bcc41f075fa0dfa580fdcee7e47734056b$' "$I"
           grep -q '^INPUT_NATIVE_SHA256=69a8aeb3940bfbc234f3a562a7ae4bcaea10b50f8a8f2c38ad229a5430930f6d$' "$I"
           grep -q '^VIDEO_NATIVE_SHA256=c6687c0a43b24b425af0727c928afb5414da811ecbcbbe3538928470abe8bd0d$' "$I"
           grep -q '^AUDIO_PARENT_SHA256=4522157846c33c150a85c50b4bed6f68351f1c62d54b8cd7805cbb97c5727644$' "$I"
@@ -123,16 +136,21 @@ jobs:
       - name: Build GarlicOS device package
         run: bash ./scripts/build-audio01-device-package.sh
 
-      - name: Enforce device package remains diagnostic
+      - name: Enforce device package remains diagnostic and binds exact device JAR
         run: |
           set -euo pipefail
           D=out/audio01-device-package
           I="$D/PACKAGE-IDENTITY.txt"
           grep -q '^STAGE=AUDIO01-GOW-LIFECYCLE-TRACE-DEVICE-PACKAGE$' "$I"
+          grep -q '^JAVA_SOURCE=EXISTING_DEVICE_COMP02_EXACT$' "$I"
+          grep -q '^REQUIRED_DEVICE_PLATFORM_JAR_SHA256=3c7b22c3227a65897137c210744be1bcc41f075fa0dfa580fdcee7e47734056b$' "$I"
+          grep -q '^PLATFORM_JAR_BUNDLED=NO$' "$I"
           grep -q '^GAME_BUNDLED=NO$' "$I"
           grep -q '^DIAGNOSTIC_ONLY=YES$' "$I"
           grep -q '^DEVICE_PASS=NO$' "$I"
           grep -q '^STABLE=NO$' "$I"
+          test ! -f "$D/Roms/APPS/RG35XX-AUDIO01-GOW-TRACE/freej2me-rg35xx.jar"
+          grep -q 'BASEPKG=/mnt/mmc/Roms/APPS/RG35XX-A8-COMP02-FILLTRIANGLE' "$D/Roms/APPS/AUDIO01-GOW-LIFECYCLE-TRACE-TEST.sh"
           (cd "$D" && sha256sum -c PACKAGE-SHA256SUMS.txt)
           echo AUDIO01_DEVICE_PACKAGE_SCOPE_GATE=PASS
 
