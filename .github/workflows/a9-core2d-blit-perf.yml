@@ -9,6 +9,7 @@ on:
       - '.github/workflows/a9-core2d-blit-perf.yml'
       - 'scripts/stage-a9-rg35xx-core2d-blit-nocopy.py'
       - 'scripts/build-a9-core2d-blit-perf.sh'
+      - 'scripts/build-a9-core2d-blit-perf-v2.sh'
       - 'tests/a9/RG35XXCore2DBlitNoCopyHostGate.java'
       - 'scripts/stage-a9-rg35xx-filltriangle-raw2d.py'
       - 'scripts/build-a9-filltriangle-raw2d.sh'
@@ -70,7 +71,7 @@ jobs:
           sudo chown -R "$(id -u):$(id -g)" out/a7-audio-sdl1
 
       - name: Build R1 plus no-copy Core2D blit performance candidate
-        run: bash ./scripts/build-a9-core2d-blit-perf.sh
+        run: bash ./scripts/build-a9-core2d-blit-perf-v2.sh
 
       - name: Verify candidate identity summary
         run: |
@@ -78,6 +79,8 @@ jobs:
           ID=out/a9-core2d-blit-perf/A9-CORE2D-BLIT-IDENTITY.txt
           grep -q '^BASELINE=A9_R1_FUNCTIONAL_FILLTRIANGLE$' "$ID"
           grep -q '^R1_PLATFORM_SHA256=c4a5adff83c89c891531b2693558583a773a8f8297386f4d36a3cb21ee65f201$' "$ID"
+          grep -q '^R1_PLATFORM_SEMANTIC_SHA256=4eddfa373d2e52115033924e711d546b8e2cdc03b222b90b3f06c5c676e6bc52$' "$ID"
+          grep -q '^R1_PARENT_GATE=SEMANTIC_PLUS_SOURCE_PLUS_HOST_REGRESSION$' "$ID"
           grep -q '^PERF_OWNER_CANDIDATE=A5_CORE2D_TRANSFORM0_BLIT_TEMP_COPY$' "$ID"
           grep -q '^CHANGED_FROM_R1_SCOPE=org/recompile/rg35xx/RG35XXCore2D.class$' "$ID"
           grep -q '^TRANSFORM0_TEMP_COPY=REMOVED$' "$ID"
