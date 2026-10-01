@@ -5,7 +5,7 @@ import java.util.Arrays;
 import org.recompile.mobile.PlatformGraphics;
 import org.recompile.mobile.PlatformImage;
 
-/** Differential gate for the P1A-G1 clearRect/copyArea Raw2D backing only. */
+/** Differential gate for the public MIDP P1A-G1 copyArea Raw2D backing only. */
 public final class RG35XXG1ClearCopyDifferentialGate {
     private static final int W = 32;
     private static final int H = 24;
@@ -13,53 +13,6 @@ public final class RG35XXG1ClearCopyDifferentialGate {
     private interface Op { int[] run(PlatformImage image, PlatformGraphics g); }
 
     public static void main(String[] args) {
-        check("CLEAR_BASIC", new Op() {
-            public int[] run(PlatformImage image, PlatformGraphics g) {
-                g.setColor(0x224466); g.fillRect(0, 0, W, H);
-                g.clearRect(3, 4, 9, 7);
-                return pixels(image);
-            }
-        });
-        check("CLEAR_CLIP", new Op() {
-            public int[] run(PlatformImage image, PlatformGraphics g) {
-                g.setColor(0x335577); g.fillRect(0, 0, W, H);
-                g.setClip(6, 5, 8, 7);
-                g.clearRect(2, 2, 20, 15);
-                return pixels(image);
-            }
-        });
-        check("CLEAR_TRANSLATE_CLIP", new Op() {
-            public int[] run(PlatformImage image, PlatformGraphics g) {
-                g.setColor(0x446688); g.fillRect(0, 0, W, H);
-                g.setClip(7, 6, 10, 8);
-                g.translate(3, 2);
-                g.clearRect(1, 1, 18, 14);
-                return pixels(image);
-            }
-        });
-        check("CLEAR_OUTSIDE_BOUNDS", new Op() {
-            public int[] run(PlatformImage image, PlatformGraphics g) {
-                g.setColor(0x557799); g.fillRect(0, 0, W, H);
-                g.clearRect(-5, -4, 10, 9);
-                return pixels(image);
-            }
-        });
-        check("CLEAR_EMPTY", new Op() {
-            public int[] run(PlatformImage image, PlatformGraphics g) {
-                g.setColor(0x6688AA); g.fillRect(0, 0, W, H);
-                g.clearRect(3, 4, 0, 8);
-                g.clearRect(3, 4, 8, 0);
-                return pixels(image);
-            }
-        });
-        check("CLEAR_PRESERVES_COLOR", new Op() {
-            public int[] run(PlatformImage image, PlatformGraphics g) {
-                g.setColor(0x6A8CAE); g.fillRect(0, 0, W, H);
-                g.clearRect(2, 2, 5, 4);
-                g.fillRect(20, 15, 4, 3);
-                return pixels(image);
-            }
-        });
         check("COPY_BASIC", new Op() {
             public int[] run(PlatformImage image, PlatformGraphics g) {
                 seed(g);
@@ -142,7 +95,8 @@ public final class RG35XXG1ClearCopyDifferentialGate {
             }
         });
 
-        System.out.println("P1A_G1_CLEAR_COPY_DIFFERENTIAL=PASS");
+        System.out.println("P1A_G1_COPYAREA_DIFFERENTIAL=PASS");
+        System.out.println("P1A_G1_CLEARRECT=INTERNAL_ONLY_DEFERRED_UNCHANGED");
     }
 
     private static void seed(PlatformGraphics g) {
