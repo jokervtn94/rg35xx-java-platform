@@ -40,7 +40,7 @@ Game JAR la input ben ngoai, KHONG nam trong goi nay.
    - tao candidate record
    - tao launcher trong Roms\APPS
 5. Launcher co dang:
-   A8-A8-COMP-01-TEST.sh
+   A8-COMP-01-TEST.sh
 
 Co the lap lai buoc nay cho nhieu JAR voi Candidate ID khac nhau.
 
@@ -48,7 +48,7 @@ BUOC 3 - CHAY TEST TREN RG35XX
 ------------------------------
 1. Dua SD ve RG35XX.
 2. Mo menu APPS.
-3. Chay entry A8-...-TEST tuong ung.
+3. Chay entry <CandidateId>-TEST tuong ung.
 4. Harness se goi dung A8 production launcher va luu evidence tai:
    /mnt/mmc/A8-COMPAT-EVIDENCE/
 
