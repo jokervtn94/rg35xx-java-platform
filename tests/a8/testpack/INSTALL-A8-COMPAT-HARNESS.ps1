@@ -22,7 +22,11 @@ if (-not (Test-Path -LiteralPath $root -PathType Container)) {
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $sourceWrapper = Join-Path $scriptDir 'A8-COMPAT-RUN.sh'
 if (-not (Test-Path -LiteralPath $sourceWrapper -PathType Leaf)) {
-    throw "Harness payload missing: $sourceWrapper"
+    $parentDir = Split-Path -Parent $scriptDir
+    $sourceWrapper = Join-Path $parentDir 'A8-COMPAT-RUN.sh'
+}
+if (-not (Test-Path -LiteralPath $sourceWrapper -PathType Leaf)) {
+    throw "Harness payload missing. Expected A8-COMPAT-RUN.sh beside this installer or in its parent directory."
 }
 
 $appsDir = Join-Path $root 'Roms\APPS'
