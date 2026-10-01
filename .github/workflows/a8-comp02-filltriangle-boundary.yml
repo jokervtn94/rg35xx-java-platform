@@ -9,6 +9,8 @@ on:
       - '.github/workflows/a8-comp02-filltriangle-boundary.yml'
       - 'scripts/stage-a8-comp02-filltriangle-boundary.py'
       - 'scripts/build-a8-comp02-filltriangle-boundary.sh'
+      - 'scripts/build-a8-comp02-device-package.sh'
+      - 'packaging/a8-comp02/RG35XX-A8-COMP02-FILLTRIANGLE.sh'
       - 'tests/a8/RG35XXRawFillTriangleHostGate.java'
       - 'docs/A8-COMP02-FILLTRIANGLE-BOUNDARY-ONLY.md'
 
@@ -120,9 +122,39 @@ jobs:
           (cd "$D" && sha256sum -c A8-COMP02-SHA256SUMS.txt)
           echo A8_COMP02_SCOPE_LOCK=PASS
 
-      - name: Upload experimental candidate for review only
+      - name: Build hash-gated physical test package
+        run: bash ./scripts/build-a8-comp02-device-package.sh
+
+      - name: Enforce physical package remains experimental
+        run: |
+          set -euo pipefail
+          D=out/a8-comp02-device-package
+          I="$D/PACKAGE-IDENTITY.txt"
+          grep -q '^STAGE=A8-COMP02-FILLTRIANGLE-PHYSICAL-TEST-PACKAGE$' "$I"
+          grep -q '^PRODUCTION_PARENT=A8_GOLDEN_ONLY$' "$I"
+          grep -q '^INPUT_NATIVE_SHA256=69a8aeb3940bfbc234f3a562a7ae4bcaea10b50f8a8f2c38ad229a5430930f6d$' "$I"
+          grep -q '^VIDEO_NATIVE_SHA256=c6687c0a43b24b425af0727c928afb5414da811ecbcbbe3538928470abe8bd0d$' "$I"
+          grep -q '^AUDIO_NATIVE_SHA256=4522157846c33c150a85c50b4bed6f68351f1c62d54b8cd7805cbb97c5727644$' "$I"
+          grep -q '^PRIME_PCM_SHA256=8c30691e755abd6791ac75887b56e20f1a56266b2eb0286bfb4007b98f7d7a7e$' "$I"
+          grep -q '^TARGET_JAR_BUNDLED=NO$' "$I"
+          grep -q '^BUILD-PASS=YES$' "$I"
+          grep -q '^DEVICE-PASS=NO$' "$I"
+          grep -q '^PHYSICAL-TEST=PENDING$' "$I"
+          grep -q '^STABLE=NO$' "$I"
+          grep -q '^DEVICE_PASS=NO_PENDING_PHYSICAL_REVIEW' "$D/RG35XX-A8-COMP02-FILLTRIANGLE.sh"
+          (cd "$D" && sha256sum -c PACKAGE-SHA256SUMS.txt)
+          echo A8_COMP02_DEVICE_PACKAGE_SCOPE_LOCK=PASS
+
+      - name: Upload experimental candidate for audit
         uses: actions/upload-artifact@v4
         with:
           name: RG35XX-A8-COMP02-FILLTRIANGLE-BOUNDARY-${{ github.sha }}
           path: out/a8-comp02-filltriangle-boundary/
+          if-no-files-found: error
+
+      - name: Upload original-RG35XX physical test package
+        uses: actions/upload-artifact@v4
+        with:
+          name: RG35XX-A8-COMP02-FILLTRIANGLE-DEVICE-TEST-${{ github.sha }}
+          path: out/a8-comp02-device-package/
           if-no-files-found: error
