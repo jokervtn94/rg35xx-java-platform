@@ -25,7 +25,7 @@ The launcher remains responsible for:
 - `A8-COMPAT-RUN.sh` — RG35XX-side wrapper. Runs one external JAR through the accepted A8 launcher and archives the result under a unique evidence directory.
 - `PREPARE-A8-CANDIDATE.ps1` — optional PC-side helper for exact JAR SHA256 and candidate record creation.
 - `testpack/INSTALL-A8-COMPAT-HARNESS.cmd` — installs only the wrapper to the SD card after verifying the accepted A8 launcher exists.
-- `testpack/REGISTER-A8-COMPAT-GAME.cmd` — registers one external JAR, records SHA256, and creates a menu-launchable `A8-...-TEST.sh` entry under `Roms/APPS`.
+- `testpack/REGISTER-A8-COMPAT-GAME.cmd` — registers one external JAR, records SHA256, and creates a menu-launchable `<CandidateId>-TEST.sh` entry under `Roms/APPS`.
 - `testpack/COLLECT-A8-COMPAT-EVIDENCE.cmd` — collects the device evidence into one ZIP after testing.
 
 ## Required rule
@@ -76,13 +76,13 @@ The registration helper:
 - verifies the JAR is on the selected SD card,
 - computes the exact SHA256,
 - writes a candidate identity record,
-- creates an APPS launcher such as `A8-A8-COMP-01-TEST.sh`.
+- creates an APPS launcher such as `A8-COMP-01-TEST.sh`.
 
 Commercial/copyrighted JARs remain external inputs and are never added to the repository or production package.
 
 ### 3. Run from the original RG35XX APPS menu
 
-Launch the generated `A8-...-TEST` entry. It invokes the accepted production A8 launcher through the compatibility wrapper, so no shell command needs to be typed manually.
+Launch the generated `<CandidateId>-TEST` entry. It invokes the accepted production A8 launcher through the compatibility wrapper, so no shell command needs to be typed manually.
 
 Evidence is written under:
 
