@@ -50,16 +50,25 @@ powershell -ExecutionPolicy Bypass -File .\PREPARE-A8-CANDIDATE.ps1 -JarPath "C:
 
 This produces an identity record. The JAR itself is never added to the repository.
 
-### 2. Copy the JAR to the RG35XX SD card
+### 2. Copy the JAR and wrapper to the RG35XX SD card
 
 Keep commercial/copyrighted JARs outside the production runtime package.
+
+For example:
+
+```text
+Roms/JAVA/game.jar
+Roms/APPS/A8-COMPAT-RUN.sh
+```
+
+Copy `tests/a8/A8-COMPAT-RUN.sh` from this repository to `Roms/APPS/A8-COMPAT-RUN.sh` on the SD card. The accepted production launcher remains unchanged at `Roms/APPS/RG35XX-AWEIGIT-R1.sh`.
 
 ### 3. Run on the original RG35XX
 
 Example:
 
 ```sh
-/mnt/mmc/Roms/APPS/RG35XX-AWEIGIT-R1/tests/A8-COMPAT-RUN.sh \
+/mnt/mmc/Roms/APPS/A8-COMPAT-RUN.sh \
   "/mnt/mmc/Roms/JAVA/game.jar" \
   "A8-COMP-01"
 ```
@@ -71,7 +80,7 @@ The wrapper calls the accepted production launcher rather than duplicating runti
 Evidence is written under:
 
 ```text
-/mnt/mmc/A8-COMPAT-EVIDENCE/<candidate-id>/
+/mnt/mmc/A8-COMPAT-EVIDENCE/<candidate-id>-<timestamp>/
 ```
 
 Expected files:
