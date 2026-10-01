@@ -144,6 +144,9 @@ public final class RG35XXGraphicsDifferentialInventory {
             }
         }, "RAW_EXCEPTION");
 
+        // Current accepted A6 raw fillPolygon has an intentionally narrow
+        // rectangle-only branch. A generic four-point polygon therefore
+        // returns without throwing but does not match canonical AWT output.
         unexpected += expect("GAP_DG_FILLPOLYGON_GENERIC", new Op() {
             public int[] run(PlatformImage image, PlatformGraphics g) {
                 int[] xs = {4, 20, 18, 7};
@@ -151,7 +154,7 @@ public final class RG35XXGraphicsDifferentialInventory {
                 g.fillPolygon(xs, 0, ys, 0, 4, 0xB04488CC);
                 return pixels(image);
             }
-        }, "RAW_EXCEPTION");
+        }, "MISMATCH");
 
         unexpected += expect("GAP_DG_DRAWPIXELS_INT", new Op() {
             public int[] run(PlatformImage image, PlatformGraphics g) {
