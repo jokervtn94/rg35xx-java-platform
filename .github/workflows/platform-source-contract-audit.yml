@@ -1,0 +1,71 @@
+name: RG35XX Platform Source Contract Audit
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - platform-source-contract-audit-v1
+    paths:
+      - 'scripts/audit-platform-source-coverage.py'
+      - 'docs/RG35XX-PLATFORM-SOURCE-COVERAGE-AUDIT-v1.md'
+      - 'docs/RG35XX-PLATFORM-SOURCE-COVERAGE-MATRIX-v1.tsv'
+      - '.github/workflows/platform-source-contract-audit.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  source-contract-audit:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout audit branch and pinned canonical submodule
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Lock audit lineage and canonical pin
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor e7b0860310fd5204e1d1f2d01c992002b8660df2 HEAD
+          test "$(git -C upstream/freej2me-miyoomini rev-parse HEAD)" = ca11dfe8ea1cc273d92460f9a83bbf192023fa63
+          echo PLATFORM_AUDIT_LINEAGE=PASS
+
+      - name: Run repeatable platform source audit
+        run: |
+          set -euo pipefail
+          python3 scripts/audit-platform-source-coverage.py
+          grep -q '^DOCS_ONLY=YES$' build/platform-source-audit/SUMMARY.txt
+          grep -q '^RUNTIME_CHANGE=NO$' build/platform-source-audit/SUMMARY.txt
+          grep -q '^CANONICAL_COMMIT=ca11dfe8ea1cc273d92460f9a83bbf192023fa63$' build/platform-source-audit/SUMMARY.txt
+          grep -q '^PHYSICAL_DEVICE_PASS_INFERRED=NO$' build/platform-source-audit/SUMMARY.txt
+          grep -q '^A3_DEFERRED_TREE_GATE=PASS$' build/platform-source-audit/SUMMARY.txt
+          echo PLATFORM_SOURCE_AUDIT_GATE=PASS
+
+      - name: Assert known Raw2D gaps remain visible to audit
+        run: |
+          set -euo pipefail
+          T=build/platform-source-audit/PLATFORMGRAPHICS-METHOD-COVERAGE.tsv
+          grep -P '^clearRect\t' "$T" | grep -q 'RAW2D_REVIEW_REQUIRED_NO_STAGE_MENTION'
+          grep -P '^copyArea\t' "$T" | grep -q 'RAW2D_REVIEW_REQUIRED_NO_STAGE_MENTION'
+          grep -P '^drawArc\t' "$T" | grep -q 'RAW2D_REVIEW_REQUIRED_NO_STAGE_MENTION'
+          grep -P '^fillArc\t' "$T" | grep -q 'RAW2D_REVIEW_REQUIRED_NO_STAGE_MENTION'
+          grep -P '^fillRoundRect\t' "$T" | grep -q 'RAW2D_REVIEW_REQUIRED_NO_STAGE_MENTION'
+          echo PLATFORM_KNOWN_GAP_VISIBILITY_GATE=PASS
+
+      - name: Assert deferred 3D capability is explicit
+        run: |
+          set -euo pipefail
+          T=build/platform-source-audit/A3-DEFERRED-TREES.tsv
+          grep -q $'^org/lwjgl\tYES\tDEFERRED_CAPABILITY$' "$T"
+          grep -q $'^ru/woesss/j2me/micro3d\tYES\tDEFERRED_CAPABILITY$' "$T"
+          grep -q $'^com/mascotcapsule/micro3d\tYES\tDEFERRED_CAPABILITY$' "$T"
+          grep -q $'^javax/microedition/m3g\tYES\tDEFERRED_CAPABILITY$' "$T"
+          echo PLATFORM_3D_DEFERRED_GATE=PASS
+
+      - name: Upload audit outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: RG35XX-PLATFORM-SOURCE-CONTRACT-AUDIT-${{ github.sha }}
+          path: build/platform-source-audit/
+          if-no-files-found: error
