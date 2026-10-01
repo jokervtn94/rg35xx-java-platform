@@ -25,7 +25,7 @@ The exact hashes above are intentionally not duplicated here because this manife
 | ID | Game | JAR filename | JAR SHA256 | Test status | Notes |
 |---|---|---|---|---|---|
 | A8-COMP-01 | Asphalt Nitro | `Asphalt Nitro [320x240] (BlackBerry 8520) (andrew-lviv.net).jar` | `b1ced935017042c4b69491ab2d34209200a178d52bd247d77cf4e598134571ff` | FAIL | BlackBerry-specific JAR requires unsupported `net.rim.device.api.system.SystemListener2`; A8 runtime identity PASS; not an RG35XX adapter regression. See `A8-COMPAT-RESULT-A8-COMP-01.md`. |
-| A8-COMP-02 | TBD | TBD | TBD | NOT_TESTED | Prefer standard MIDP/CLDC (generic/Nokia/Sony Ericsson), not vendor-specific BlackBerry RIM API. |
+| A8-COMP-02 | Asphalt 4 : Elite Racing | `Asphalt_4_-_Elite_Racing_240x320-1.0-646694-mobiles24.jar` | `b25c855e5b04364e1e5ec36f06f32750f73a9e4a6ef1545a9dbe2b973a6e284b` | PARTIAL | Technical runtime path PASS: MIDP2 Canvas, rendering/presenter, RMS, MIDI/WAV, clean shutdown and normal exit reached. Manual RG35XX display/input/gameplay/audio observation is still pending. See `A8-COMPAT-RESULT-A8-COMP-02.md`. |
 | A8-COMP-03 | TBD | TBD | TBD | NOT_TESTED | Different graphics/audio path preferred |
 | A8-COMP-04 | TBD | TBD | TBD | NOT_TESTED | Different lifecycle/RMS behavior preferred |
 | A8-COMP-05 | TBD | TBD | TBD | NOT_TESTED | Different media/API behavior preferred |
