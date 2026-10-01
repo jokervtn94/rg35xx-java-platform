@@ -45,36 +45,59 @@ Performance telemetry observed in the log:
 - At 300 submits: 298 presented, 0 dropped, `FPS_X100=2060`.
 - At 600 submits: 595 presented, 3 dropped, `FPS_X100=1623`.
 
-One ALSA underrun recovery message appeared during playback. This did not stop the runtime and later audio operations continued, so it is recorded as an observation rather than a blocking failure.
+One ALSA underrun recovery message appeared during playback. The runtime continued afterwards, but this remains relevant to the observed incomplete audio and short stalls.
 
-## Missing manual device observation
+## Manual original-RG35XX observation
 
-The generated `OBSERVATION.txt` still contains `NOT_TESTED` for visual display, controls, gameplay, audible audio, lifecycle, performance, hang/crash, and exit review.
+The user subsequently confirmed the following on the original RG35XX:
 
-Therefore the runtime log is strong technical evidence, but it does not by itself establish that the game was visually correct, controllable, audibly correct, or acceptable during real gameplay.
+- Graphics/menu presentation: visually correct.
+- Input: controls operate normally in the menu.
+- Gameplay: FAIL. The game reaches the menu, but attempting to load actual gameplay causes the game to exit.
+- Audio: PARTIAL. Audible feedback is heard when selecting a menu item, but other expected game audio is not heard.
+- Performance: PARTIAL/FAIL. The game can intermittently freeze/stall for several seconds.
+- Lifecycle/exit: the gameplay transition results in the application leaving instead of entering the race/gameplay state.
+
+This means the earlier technical log was not sufficient to describe real usability. The candidate cannot be considered DEVICE-PASS.
+
+## Failure-boundary interpretation
+
+The failure is now narrowed to the transition from working menu state into gameplay loading.
+
+The current evidence does **not** show:
+
+- a Java exception;
+- an OutOfMemoryError;
+- a protected runtime/hash failure;
+- a graphics adapter failure during menu rendering; or
+- an input adapter failure during menu navigation.
+
+Instead, the runtime log shows audio shutdown followed by `MIDlet sent Destroyed Notification` and process exit code 0. Therefore the immediate exit cause is not yet assigned to the RG35XX adapter. Possible causes such as a game-controlled exit path, resource/load failure, hidden exception path, media/resource incompatibility, or another gameplay-only dependency require focused reproduction evidence before any runtime change is justified.
 
 ## Result
 
 ```text
-BOOT=TECHNICAL_PASS
-GRAPHICS=DEVICE_REVIEW_REQUIRED
-INPUT=DEVICE_REVIEW_REQUIRED
-GAMEPLAY=DEVICE_REVIEW_REQUIRED
-AUDIO=TECHNICAL_PASS_DEVICE_AUDIBILITY_REVIEW_REQUIRED
-MEDIA=TECHNICAL_PASS
+BOOT=PASS
+GRAPHICS=PASS_MENU
+INPUT=PASS_MENU
+GAMEPLAY=FAIL_EXIT_ON_GAMEPLAY_LOAD
+AUDIO=PARTIAL_MENU_SELECT_ONLY
+MEDIA=TECHNICAL_PASS_BUT_DEVICE_AUDIO_INCOMPLETE
 RMS=TECHNICAL_PASS
-LIFECYCLE=TECHNICAL_PASS_DEVICE_REVIEW_REQUIRED
-PERFORMANCE=TECHNICAL_EVIDENCE_PRESENT_DEVICE_REVIEW_REQUIRED
-HANG_CRASH=NO_RUNTIME_EXCEPTION_OBSERVED_DEVICE_REVIEW_REQUIRED
-EXIT=TECHNICAL_PASS
+LIFECYCLE=FAIL_GAMEPLAY_TRANSITION_EXITS
+PERFORMANCE=PARTIAL_INTERMITTENT_MULTI_SECOND_STALLS
+HANG_CRASH=PARTIAL_INTERMITTENT_STALLS_NO_LOGGED_EXCEPTION
+EXIT=PROCESS_EXIT_0_AFTER_MIDLET_DESTROYED_NOTIFICATION
 
-RESULT=PARTIAL
-FAILURE_OWNER=UNASSIGNED
-A8_RUNTIME_REGRESSION=NO_EVIDENCE
-A9_RUNTIME_CHANGE=NOT_JUSTIFIED
-DEVICE_PASS=NO_PENDING_MANUAL_OBSERVATION
+RESULT=FAIL
+FAILURE_OWNER=UNRESOLVED_GAMEPLAY_TRANSITION
+A8_RUNTIME_REGRESSION=NOT_ESTABLISHED
+A9_RUNTIME_CHANGE=NOT_JUSTIFIED_YET
+DEVICE_PASS=NO
 ```
 
 ## Next action
 
-Use the original RG35XX to confirm display, controls, actual gameplay progression, audible audio quality, hang/crash behavior, and normal exit. If those observations pass, this candidate can be promoted from `PARTIAL` to `PASS` without changing A8 runtime code.
+Do not advance to A8-COMP-03 yet and do not modify the protected A8 production runtime.
+
+Use this exact JAR and reproduce only the menu -> gameplay transition while adding diagnostic evidence sufficient to identify why the MIDlet destroys/exits at that point. The diagnostic target should be narrow: capture the caller/reason for MIDlet destruction, uncaught thread failures, memory state around the transition, and resource/media operations immediately before exit. Any behavioral fix must wait until that evidence identifies the owner.
