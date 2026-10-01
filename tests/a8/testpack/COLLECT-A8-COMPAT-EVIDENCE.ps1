@@ -3,7 +3,7 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$SdRoot,
 
-    [string]$OutputDir = "."
+    [string]$OutputDir
 )
 
 $ErrorActionPreference = 'Stop'
@@ -16,15 +16,32 @@ function Resolve-SdRoot {
     return [System.IO.Path]::GetFullPath($v)
 }
 
+function Resolve-OutputDir {
+    param([string]$Value)
+
+    if ([string]::IsNullOrWhiteSpace($Value)) {
+        $candidate = $PSScriptRoot
+    } else {
+        $candidate = $Value.Trim().Trim('"')
+    }
+
+    if ([string]::IsNullOrWhiteSpace($candidate)) {
+        $candidate = (Get-Location).Path
+    }
+
+    $resolved = [System.IO.Path]::GetFullPath($candidate)
+    if (-not (Test-Path -LiteralPath $resolved -PathType Container)) {
+        New-Item -ItemType Directory -Path $resolved -Force | Out-Null
+    }
+    return $resolved
+}
+
 $root = Resolve-SdRoot $SdRoot
 if (-not (Test-Path -LiteralPath $root -PathType Container)) {
     throw "SD root not found: $root"
 }
 
-if (-not (Test-Path -LiteralPath $OutputDir -PathType Container)) {
-    New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
-}
-$resolvedOutput = [System.IO.Path]::GetFullPath($OutputDir)
+$resolvedOutput = Resolve-OutputDir $OutputDir
 
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 $stage = Join-Path ([System.IO.Path]::GetTempPath()) ("A8-COMPAT-EVIDENCE-$stamp")
@@ -54,6 +71,7 @@ if (Test-Path -LiteralPath $candidateDir -PathType Container) {
 $optionalFiles = @(
     'A8-COMPAT-HARNESS-INSTALL-RESULT.txt',
     'A8-COMPAT-SD-DIAGNOSTIC.txt',
+    'A8-CANONICAL-RESTORE-RESULT.txt',
     'RG35XX-AWEIGIT-R1-RESULT.txt'
 )
 foreach ($name in $optionalFiles) {
@@ -72,7 +90,9 @@ if (-not $copiedAnything) {
 @(
     'PROJECT=RG35XX-AWEIGIT-R1',
     'BASELINE=A8',
+    'COLLECTOR=R4_OUTPUTDIR_SAFE',
     "SD_ROOT=$root",
+    "OUTPUT_DIR=$resolvedOutput",
     "EVIDENCE_RECORD_COUNT=$($records.Count)",
     "COLLECTED_AT=$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss zzz')"
 ) | Set-Content -LiteralPath (Join-Path $stage 'COLLECT-MANIFEST.txt') -Encoding UTF8
