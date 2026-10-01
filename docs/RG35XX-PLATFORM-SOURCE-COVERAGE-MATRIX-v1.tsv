@@ -1,0 +1,71 @@
+AREA	CLASS_OR_METHOD	CANONICAL_AWEIGIT	CURRENT_RG35XX	CLASSIFICATION	PHYSICAL_EVIDENCE	NEXT_ACTION
+Graphics	PlatformGraphics constructor/reset	AWT BufferedImage + Graphics2D state	A4 raw int[] surface; gc/canvas intentionally null; raw reset/clip/color/font state	RG35XX_RAW_BACKING	A4 Canvas/GameCanvas PASS	PROTECT
+Graphics	clearRect	gc.clearRect	No accepted raw overlay found	MISSING_RG35XX_BACKING	NOT_TESTED	PLATFORM_COMPLETION
+Graphics	copyArea	canvas.getSubimage + gc.drawImage	No accepted raw overlay found	MISSING_RG35XX_BACKING	NOT_TESTED	PLATFORM_COMPLETION
+Graphics	drawArc	gc.drawArc	No accepted raw overlay found	MISSING_RG35XX_BACKING	NOT_TESTED	PLATFORM_COMPLETION
+Graphics	drawChar	Delegates drawString	A5 raw drawString path	RG35XX_RAW_BACKING_PARTIAL_FONT	Text tests partial	VERIFY
+Graphics	drawChars	Delegates drawString	A5 raw drawString path	RG35XX_RAW_BACKING_PARTIAL_FONT	Text tests partial	VERIFY
+Graphics	drawImage(Image,x,y,anchor)	AWT image blit	A5 raw blit	RG35XX_RAW_BACKING	PNG/alpha real-game evidence	PROTECT
+Graphics	drawImage(Image,x,y)	AWT image blit	A5 raw blit	RG35XX_RAW_BACKING	PNG/alpha real-game evidence	PROTECT
+Graphics	drawImage2(Image,...)	AWT image blit	A5 raw blit	RG35XX_RAW_BACKING	accepted image chain	PROTECT
+Graphics	drawImage2(BufferedImage,...)	gc.drawImage(BufferedImage)	No raw equivalent; BufferedImage is AWT-only	MISSING_RG35XX_BACKING	NOT_TESTED	AUDIT_CALLERS
+Graphics	drawImage2Test(BufferedImage,...)	AWT canvas pixel fallback	No raw equivalent	MISSING_RG35XX_BACKING	NOT_TESTED	AUDIT_CALLERS
+Graphics	flushGraphics	AWT subimage -> LCD gc	A4 raw copy/present chain	RG35XX_RAW_BACKING	A4 repeated flush PASS	PROTECT
+Graphics	drawRegion	AWT subimage/transform	A5 Core2D raw transform/blit + accepted clip correction	RG35XX_RAW_BACKING	drawRegion/Tier-0 accepted	PROTECT
+Graphics	drawRGB	BufferedImage temp + gc.drawImage	A5 raw copy/source-over path	RG35XX_RAW_BACKING	accepted graphics chain	PROTECT
+Graphics	drawLine	gc.drawLine	A6 raw line implementation	RG35XX_RAW_BACKING	A6 host + physical parent evidence	PROTECT
+Graphics	drawRect	gc.drawRect	A6 four device-proven drawLine calls	RG35XX_RAW_BACKING	A6 host + physical parent evidence	PROTECT
+Graphics	drawRoundRect	gc.drawRoundRect	No accepted raw overlay found	MISSING_RG35XX_BACKING	NOT_TESTED	PLATFORM_COMPLETION
+Graphics	drawString / drawSubstring	AWT FontMetrics + gc.drawString	A5 headless bitmap glyph renderer	RG35XX_RAW_BACKING_PARTIAL_FONT	Text rendered in accepted corpus	PLATFORM_COMPLETION
+Graphics	fillArc	gc.fillArc	No accepted raw overlay found	MISSING_RG35XX_BACKING	NOT_TESTED	PLATFORM_COMPLETION
+Graphics	fillRect	gc.fillRect	A4 raw clipped fill	RG35XX_RAW_BACKING	A4 PASS	PROTECT
+Graphics	fillRoundRect	gc.fillRoundRect + gc.fillRect	No accepted raw overlay found	MISSING_RG35XX_BACKING	NOT_TESTED	PLATFORM_COMPLETION
+Graphics	setColor	AWT Color + gc.setColor	A4 keeps MIDP color state, skips AWT gc	RG35XX_RAW_BACKING	A4 PASS	PROTECT
+Graphics	setFont	AWT font + metrics	A4/A5 raw font state/backing	RG35XX_RAW_BACKING_PARTIAL_FONT	accepted text scope	VERIFY
+Graphics	setClip / clipRect / translate	Graphics2D clip/transform	A4 raw clip/translate; A6 ClipTranslate correction	RG35XX_RAW_BACKING	GoW + host regression PASS	PROTECT
+Graphics	setAlphaRGB	gc.setColor(new Color(argb,true))	No accepted raw overlay	MISSING_RG35XX_BACKING	NOT_TESTED	PLATFORM_COMPLETION
+DirectGraphics	drawImage(...,manipulation)	getCanvas + BufferedImage manipulation	raw image getCanvas is null; no accepted DirectGraphics raw path	MISSING_RG35XX_BACKING	NOT_TESTED	PLATFORM_COMPLETION
+DirectGraphics	drawPixels(byte[])	BufferedImage temp + gc.drawImage	No raw overlay found	MISSING_RG35XX_BACKING	NOT_TESTED	PLATFORM_COMPLETION
+DirectGraphics	drawPixels(int[])	BufferedImage temp + gc.drawImage	No raw overlay found	MISSING_RG35XX_BACKING	NOT_TESTED	PLATFORM_COMPLETION
+DirectGraphics	drawPixels(short[])	BufferedImage temp + gc.drawImage	No raw overlay found	MISSING_RG35XX_BACKING	NOT_TESTED	PLATFORM_COMPLETION
+DirectGraphics	drawPolygon	setAlphaRGB + gc.drawPolygon	No raw overlay found	MISSING_RG35XX_BACKING	NOT_TESTED	PLATFORM_COMPLETION
+DirectGraphics	drawTriangle(7arg)	setAlphaRGB + gc.drawPolygon	No accepted raw overlay	MISSING_RG35XX_BACKING	NOT_TESTED	PLATFORM_COMPLETION
+DirectGraphics	fillPolygon	gc.fillPolygon	A6 raw path only for 4-point axis-aligned rectangle; generic polygon intentionally absent	RG35XX_RAW_BACKING_PARTIAL	rectangle host gate only	PLATFORM_COMPLETION
+Graphics	fillTriangle(6arg MIDP)	gc.fillPolygon triangle	Missing on exact A8; COMP-02 owner-scoped candidate proved gap on device	MISSING_A8_BACKING_PROVEN_GAP	COMP-02 scoped DEVICE-PASS	INTEGRATE_ONLY_IN_PLATFORM_COMPLETION
+DirectGraphics	fillTriangle(7arg color)	setAlphaRGB + gc.fillPolygon	No accepted raw overlay; COMP-02 intentionally did not change it	MISSING_RG35XX_BACKING	NOT_TESTED	PLATFORM_COMPLETION
+DirectGraphics	getPixels(byte[])	Canonical implementation is a stub/log only	Same canonical limitation	CANONICAL_LIMITATION	NOT_TESTED	DO_NOT_RG35XX_FIX_WITHOUT_CANONICAL_DECISION
+DirectGraphics	getPixels(int[])	canvas.getRGB	raw canvas is null; no overlay found	MISSING_RG35XX_BACKING	NOT_TESTED	PLATFORM_COMPLETION
+DirectGraphics	getPixels(short[])	canvas.getRGB + conversion	raw canvas is null; no overlay found	MISSING_RG35XX_BACKING	NOT_TESTED	PLATFORM_COMPLETION
+Image	blank mutable image	BufferedImage ARGB	A4 int[] ARGB raw backing	RG35XX_RAW_BACKING	A4 PASS	PROTECT
+Image	resource/InputStream/byte[] decode	ImageIO read; canonical comments cover PNG/JPG/etc.	A5 Core2D decoder is PNG-only; later Adam7 expands PNG only	RG35XX_RAW_BACKING_PARTIAL_FORMAT	PNG/alpha accepted	PLATFORM_COMPLETION
+Image	copy / RGB / subimage transform	AWT copy/transform	A5 Core2D raw copy/transform	RG35XX_RAW_BACKING	accepted image/drawRegion	PROTECT
+Image	getRGB/getARGB/getPixel/setPixel	BufferedImage access	A5 raw pixel access	RG35XX_RAW_BACKING	accepted image chain	PROTECT
+Image	getCanvas / transformImage(BufferedImage)	AWT internal backing	raw getCanvas null; AWT transform not a raw API	RAW_NULL_INTERFACE	3D callers deferred	AUDIT_CALLERS
+Font	metrics/glyph rendering	Aweigit AWT font resource/FontMetrics	RG35XXCore2D bitmap glyph/metrics; unknown glyph -> box; limited style fidelity	RG35XX_RAW_BACKING_PARTIAL_FONT	basic text accepted	PLATFORM_COMPLETION
+Canvas	paint/repaint/fullscreen	Canonical Canvas semantics	Canonical retained; backing replaced below PlatformImage/Graphics	CANONICAL_UNCHANGED	A4 Canvas PASS	PROTECT
+GameCanvas	getGraphics/flushGraphics/getKeyStates	Canonical GameCanvas semantics	Canonical retained; MobilePlatform key state + raw presenter	CANONICAL_UNCHANGED	A4 GameCanvas PASS	PROTECT
+Pointer	Canvas pointer API	Canonical reports pointer events and dispatch methods	RG35XX adapter currently has no pointer/touch-emulation producer	FRONTEND_CAPABILITY_GAP	NOT_TESTED	PLATFORM_COMPLETION_OR_EXPLICIT_UNSUPPORTED
+Display	callSerially/setCurrent	Canonical timer/display lifecycle	No RG35XX semantic rewrite identified	CANONICAL_UNCHANGED	partly exercised by games	VERIFY_MODULE
+Haptic	Display.vibrate / SdlMixerManager haptic	Miyoo SDL2 haptic backend	RG35XX libaudio returns init=-1 and vibrate no-op	HARDWARE_CAPABILITY_UNRESOLVED	NOT_TESTED	HARDWARE_PROBE_THEN_SCOPE
+MobilePlatform	keyPressed/released/repeated + keyState	Canonical owner	RG35XX dispatcher terminates at MobilePlatform	RG35XX_NATIVE_BOUNDARY	D-pad/FIRE + GameCanvas PASS	PROTECT
+MobilePlatform	resizeLCD	Canonical recreates PlatformImage	Should route to raw constructor but not current-A8 physical acceptance scope	UNVERIFIED	NOT_TESTED_CURRENT_CHAIN	MODULE_TEST
+MIDletLoader	manifest/resource/class loading	Pinned Aweigit uses Java7 NIO zipfs	A3 rewrites to Java6 JarFile/JarEntry while preserving flow	RG35XX_JAVA6_COMPAT	games launch on device	PROTECT_AND_MODULE_TEST
+Launcher	logical width/height	Aweigit CLI takes JAR,width,height,volume	RG35XXLauncher accepts width/height; A8 production shell hardcodes 240x320	FRONTEND_CAPABILITY_GAP	240x320 accepted	GENERIC_PLATFORM_LAUNCHER
+Input	raw hardware acquisition	Miyoo SDL2 frontend keyboard mapping	RG35XX /dev/input/js0 device-proven 12-bit semantic bitmap	RG35XX_NATIVE_BOUNDARY	M1.8 + A4 scoped PASS	PROTECT
+Input	L2/R2	Miyoo frontend exposes L2->7 and R2->9	RG35XX tested 12-bit contract has no L2/R2 semantics	FRONTEND_CAPABILITY_GAP	NO_CURRENT_DEVICE_EVIDENCE	HARDWARE_PROBE_REQUIRED
+Input	keymap.cfg / mode switching	Miyoo frontend supports configurable map/hotkeys	RG35XX dispatcher is fixed mapping	FRONTEND_CAPABILITY_GAP	NOT_TESTED	PLATFORM_COMPLETION
+Video	physical display/present	Miyoo SDL2 renderer; 640x480 target	RG35XX SDL1/fbcon 640x480 + accepted PERF-A1 staging	RG35XX_NATIVE_BOUNDARY	physical PASS	PROTECT_FINAL_BINARY
+Video	rotation	Miyoo frontend supports rotation hotkey	No equivalent RG35XX production frontend function	FRONTEND_CAPABILITY_GAP	NOT_TESTED	OPTIONAL_PLATFORM_COMPLETION
+Video	non-240x320 performance	Miyoo renderer scales generic source dimensions	RG35XX generic fallback exists; PERF-A1 fast path specific to 240x320	RG35XX_NATIVE_BOUNDARY_PARTIAL_PERF	Tier-0 mostly 240x320	MODULE_TEST
+Media	PlatformPlayer MMAPI state/control	Canonical Aweigit owns semantics	A7 only replaces java.nio directory creation with java.io File.mkdirs	RG35XX_JAVA6_COMPAT	accepted scoped media evidence	PROTECT
+Media	SdlMixerManager JNI surface	Canonical SDL2_mixer JNI behavior	RG35XX SDL1_mixer adapter mirrors JNI surface / single music channel semantics	RG35XX_NATIVE_BOUNDARY	historical audible acceptance; exact-A8 revalidation required	PROTECT_PENDING_EXACT_A8
+Media	haptic	SDL2 haptic in canonical native	No-op on RG35XX adapter	HARDWARE_CAPABILITY_UNRESOLVED	NOT_TESTED	HARDWARE_PROBE
+RMS	RecordStore/RecordStoreImpl core	Canonical RecordStoreImpl handles CRUD/enumeration/listeners	A3 Java6 syntax/TWR compatibility; logical semantics retained	RG35XX_JAVA6_COMPAT	RMS exercised in accepted chain	PROTECT_AND_MODULE_TEST
+RMS	authmode/writable/vendor suite overloads	Canonical source contains TODO/partial semantics	No RG35XX-specific divergence identified	CANONICAL_LIMITATION	NOT_FULLY_VALIDATED	DO_NOT_PATCH_AS_RG35XX
+RMS	getSizeAvailable	Canonical manager returns fixed 1 MiB TODO	Same canonical behavior	CANONICAL_LIMITATION	NOT_TESTED	DO_NOT_PATCH_AS_RG35XX
+3D	javax.microedition.m3g	Aweigit supports M3G with native GLES backend	A3 removes entire package from staged Java build	DEFERRED_CAPABILITY	NOT_TESTED	HARDWARE_PROBE_AND_PORT_WORKSTREAM
+3D	MascotCapsule/Micro3D	Aweigit ships Java + GLES2 native backend	A3 removes com.mascotcapsule.micro3d and ru.woesss.j2me.micro3d	DEFERRED_CAPABILITY	NOT_TESTED	HARDWARE_PROBE_AND_PORT_WORKSTREAM
+3D	LWJGL/OpenGL support tree	Used by Aweigit 3D stack	A3 removes org.lwjgl	DEFERRED_CAPABILITY	NOT_TESTED	DO_NOT_REENABLE_BLINDLY
+IO/Network	javax.microedition.io + MicroEmu file/network adapters	Present in canonical staged source except Java6 rewrites where needed	No complete original-RG35XX module acceptance found in current Golden map	UNVERIFIED	NOT_TESTED_AS_MODULE	MODULE_AUDIT_AND_TEST
+PIM/PKI/Sensor	javax.microedition.pim/pki/sensor	Present in canonical source tree	Not part of current Golden physical contract	UNVERIFIED	NOT_TESTED	MODULE_AUDIT
+Vendor APIs	Nokia/Samsung/Siemens non-3D APIs	Present in pinned canonical tree	Generally compiled unless deferred by A3; physical coverage not comprehensive	UNVERIFIED	NOT_TESTED_AS_PLATFORM_MATRIX	MODULE_AUDIT
