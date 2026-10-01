@@ -49,7 +49,7 @@ if (-not $gamePath.StartsWith($rootPrefix, [System.StringComparison]::OrdinalIgn
 }
 
 $relative = $gamePath.Substring($rootPrefix.Length).TrimStart('\','/')
-$deviceGamePath = '/mnt/mmc/' + ($relative -replace '\\','/')
+$deviceGamePath = '/mnt/mmc/' + $relative.Replace('\','/')
 $jarHash = (Get-FileHash -LiteralPath $gamePath -Algorithm SHA256).Hash.ToLowerInvariant()
 
 $safeId = ($CandidateId -replace '[^A-Za-z0-9._-]', '_')
