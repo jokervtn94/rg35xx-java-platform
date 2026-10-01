@@ -38,6 +38,31 @@ public final class RG35XXRawFillTriangleHostGate {
         require(pixel(clipped, 3, 4) == 0xFFFFFFFF,
                 "raw fillTriangle wrote outside clip bounds");
 
+        Image translated = Image.createImage(16, 16);
+        Graphics tg = translated.getGraphics();
+        tg.translate(3, 2);
+        tg.setClip(0, 0, 8, 8);
+        tg.setColor(0x3366AA);
+        tg.fillTriangle(1, 1, 7, 1, 1, 7);
+
+        require(pixel(translated, 5, 4) == 0xFF3366AA,
+                "raw fillTriangle did not apply translation");
+        require(pixel(translated, 2, 2) == 0xFFFFFFFF,
+                "raw fillTriangle wrote before translated origin");
+        require(pixel(translated, 11, 9) == 0xFFFFFFFF,
+                "raw fillTriangle wrote outside translated clip");
+
+        Image degenerate = Image.createImage(12, 12);
+        Graphics dg = degenerate.getGraphics();
+        dg.setColor(0x884422);
+        dg.fillTriangle(2, 5, 8, 5, 4, 5);
+        require(pixel(degenerate, 2, 5) == 0xFF884422,
+                "raw degenerate fillTriangle missed left endpoint");
+        require(pixel(degenerate, 8, 5) == 0xFF884422,
+                "raw degenerate fillTriangle missed right endpoint");
+
         System.out.println("A9_FILLTRIANGLE_HOST_GATE=PASS");
+        System.out.println("A9_FILLTRIANGLE_TRANSLATE_CLIP_GATE=PASS");
+        System.out.println("A9_FILLTRIANGLE_DEGENERATE_GATE=PASS");
     }
 }
