@@ -1,0 +1,64 @@
+name: RG35XX Whole Canonical Source Audit
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - platform-source-contract-audit-v1
+    paths:
+      - 'scripts/audit-whole-source-contract.py'
+      - '.github/workflows/platform-whole-source-audit.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  whole-source-audit:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout audit branch and pinned canonical submodule
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Lock lineage and canonical pin
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor e7b0860310fd5204e1d1f2d01c992002b8660df2 HEAD
+          test "$(git -C upstream/freej2me-miyoomini rev-parse HEAD)" = ca11dfe8ea1cc273d92460f9a83bbf192023fa63
+          echo WHOLE_SOURCE_LINEAGE=PASS
+
+      - name: Run whole canonical source inventory
+        run: |
+          set -euo pipefail
+          python3 scripts/audit-whole-source-contract.py
+          S=build/platform-whole-source-audit/SUMMARY.txt
+          grep -q '^DOCS_ONLY=YES$' "$S"
+          grep -q '^RUNTIME_CHANGE=NO$' "$S"
+          grep -q '^CANONICAL_COMMIT=ca11dfe8ea1cc273d92460f9a83bbf192023fa63$' "$S"
+          grep -q '^PHYSICAL_DEVICE_PASS_INFERRED=NO$' "$S"
+          grep -q '^WHOLE_SOURCE_STATIC_AUDIT=PASS$' "$S"
+          echo WHOLE_SOURCE_AUDIT_GATE=PASS
+
+      - name: Assert provider inventory exposes known incomplete surfaces
+        run: |
+          set -euo pipefail
+          T=build/platform-whole-source-audit/PROVIDER-PRESENCE.tsv
+          grep -q $'^FILE_PROVIDER\t.*\tYES$' "$T"
+          grep -q $'^HTTP_PROVIDER\t.*\tYES$' "$T"
+          grep -q $'^SOCKET_PROVIDER\t.*\tYES$' "$T"
+          grep -q $'^DATAGRAM_PROVIDER\t.*\tYES$' "$T"
+          grep -q $'^SMS_PROVIDER\t.*\tYES$' "$T"
+          grep -q $'^BLUETOOTH_LOCALDEVICE\t.*\tNO$' "$T"
+          grep -q $'^BTSPP_PROVIDER\t.*\tNO$' "$T"
+          grep -q $'^SENSOR_MANAGER\t.*\tNO$' "$T"
+          grep -q $'^LOCATION_API_ROOT\t.*\tNO$' "$T"
+          echo PROVIDER_PRESENCE_GATE=PASS
+
+      - name: Upload whole-source audit
+        uses: actions/upload-artifact@v4
+        with:
+          name: RG35XX-WHOLE-SOURCE-AUDIT-${{ github.sha }}
+          path: build/platform-whole-source-audit/
+          if-no-files-found: error
