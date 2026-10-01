@@ -24,8 +24,8 @@ The exact hashes above are intentionally not duplicated here because this manife
 
 | ID | Game | JAR filename | JAR SHA256 | Test status | Notes |
 |---|---|---|---|---|---|
-| A8-COMP-01 | TBD | TBD | TBD | NOT_TESTED | Chinese J2ME candidate |
-| A8-COMP-02 | TBD | TBD | TBD | NOT_TESTED | Different API/profile preferred |
+| A8-COMP-01 | Asphalt Nitro | `Asphalt Nitro [320x240] (BlackBerry 8520) (andrew-lviv.net).jar` | `b1ced935017042c4b69491ab2d34209200a178d52bd247d77cf4e598134571ff` | FAIL | BlackBerry-specific JAR requires unsupported `net.rim.device.api.system.SystemListener2`; A8 runtime identity PASS; not an RG35XX adapter regression. See `A8-COMPAT-RESULT-A8-COMP-01.md`. |
+| A8-COMP-02 | TBD | TBD | TBD | NOT_TESTED | Prefer standard MIDP/CLDC (generic/Nokia/Sony Ericsson), not vendor-specific BlackBerry RIM API. |
 | A8-COMP-03 | TBD | TBD | TBD | NOT_TESTED | Different graphics/audio path preferred |
 | A8-COMP-04 | TBD | TBD | TBD | NOT_TESTED | Different lifecycle/RMS behavior preferred |
 | A8-COMP-05 | TBD | TBD | TBD | NOT_TESTED | Different media/API behavior preferred |
