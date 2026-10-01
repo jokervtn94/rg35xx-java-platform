@@ -23,7 +23,10 @@ The launcher remains responsible for:
 ## Files
 
 - `A8-COMPAT-RUN.sh` — RG35XX-side wrapper. Runs one external JAR through the accepted A8 launcher and archives the result under a unique evidence directory.
-- `PREPARE-A8-CANDIDATE.ps1` — PC-side helper. Computes exact JAR SHA256 and creates a candidate identity/observation record before device testing.
+- `PREPARE-A8-CANDIDATE.ps1` — optional PC-side helper for exact JAR SHA256 and candidate record creation.
+- `testpack/INSTALL-A8-COMPAT-HARNESS.cmd` — installs only the wrapper to the SD card after verifying the accepted A8 launcher exists.
+- `testpack/REGISTER-A8-COMPAT-GAME.cmd` — registers one external JAR, records SHA256, and creates a menu-launchable `<CandidateId>-TEST.sh` entry under `Roms/APPS`.
+- `testpack/COLLECT-A8-COMPAT-EVIDENCE.cmd` — collects the device evidence into one ZIP after testing.
 
 ## Required rule
 
@@ -40,42 +43,46 @@ manual display/input/gameplay observation
 
 A game failure does not justify modifying A8 by itself.
 
-## Suggested workflow
+## Recommended menu-driven workflow
 
-### 1. Prepare the candidate on PC
+### 1. Install the compatibility harness
 
-```powershell
-powershell -ExecutionPolicy Bypass -File .\PREPARE-A8-CANDIDATE.ps1 -JarPath "C:\Games\game.jar" -GameName "Game Name" -Source "source description"
+Use the files under `tests/a8/testpack` and run:
+
+```text
+INSTALL-A8-COMPAT-HARNESS.cmd
 ```
 
-This produces an identity record. The JAR itself is never added to the repository.
+This copies only `A8-COMPAT-RUN.sh` to `Roms/APPS`. The accepted A8 runtime is not modified.
 
-### 2. Copy the JAR and wrapper to the RG35XX SD card
+### 2. Copy and register an external game JAR
 
-Keep commercial/copyrighted JARs outside the production runtime package.
-
-For example:
+Copy the JAR to the SD card, for example:
 
 ```text
 Roms/JAVA/game.jar
-Roms/APPS/A8-COMPAT-RUN.sh
 ```
 
-Copy `tests/a8/A8-COMPAT-RUN.sh` from this repository to `Roms/APPS/A8-COMPAT-RUN.sh` on the SD card. The accepted production launcher remains unchanged at `Roms/APPS/RG35XX-AWEIGIT-R1.sh`.
+Then run:
 
-### 3. Run on the original RG35XX
-
-Example:
-
-```sh
-sh /mnt/mmc/Roms/APPS/A8-COMPAT-RUN.sh \
-  "/mnt/mmc/Roms/JAVA/game.jar" \
-  "A8-COMP-01"
+```text
+REGISTER-A8-COMPAT-GAME.cmd
 ```
 
-Using `sh` explicitly avoids relying on executable permission bits on the SD filesystem. The wrapper calls the accepted production launcher rather than duplicating runtime launch logic.
+Supply the SD drive, JAR path, and a unique candidate ID such as `A8-COMP-01`.
 
-### 4. Review the evidence
+The registration helper:
+
+- verifies the JAR is on the selected SD card,
+- computes the exact SHA256,
+- writes a candidate identity record,
+- creates an APPS launcher such as `A8-COMP-01-TEST.sh`.
+
+Commercial/copyrighted JARs remain external inputs and are never added to the repository or production package.
+
+### 3. Run from the original RG35XX APPS menu
+
+Launch the generated `<CandidateId>-TEST` entry. It invokes the accepted production A8 launcher through the compatibility wrapper, so no shell command needs to be typed manually.
 
 Evidence is written under:
 
@@ -83,7 +90,7 @@ Evidence is written under:
 /mnt/mmc/A8-COMPAT-EVIDENCE/<candidate-id>-<timestamp>/
 ```
 
-Expected files:
+Expected files include:
 
 ```text
 IDENTITY.txt
@@ -91,7 +98,25 @@ RUNTIME-RESULT.txt
 OBSERVATION.txt
 ```
 
-Complete `OBSERVATION.txt` after the real-device run.
+### 4. Collect evidence on PC
+
+Run:
+
+```text
+COLLECT-A8-COMPAT-EVIDENCE.cmd
+```
+
+The collector creates an `A8-COMPAT-EVIDENCE-<timestamp>.zip` suitable for analysis.
+
+## Direct shell workflow
+
+The lower-level wrapper can still be invoked directly when needed:
+
+```sh
+sh /mnt/mmc/Roms/APPS/A8-COMPAT-RUN.sh \
+  "/mnt/mmc/Roms/JAVA/game.jar" \
+  "A8-COMP-01"
+```
 
 ## Observation result vocabulary
 
