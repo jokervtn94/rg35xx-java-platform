@@ -52,6 +52,14 @@ public final class RG35XXG1ClearCopyDifferentialGate {
                 return pixels(image);
             }
         });
+        check("CLEAR_PRESERVES_COLOR", new Op() {
+            public int[] run(PlatformImage image, PlatformGraphics g) {
+                g.setColor(0x6A8CAE); g.fillRect(0, 0, W, H);
+                g.clearRect(2, 2, 5, 4);
+                g.fillRect(20, 15, 4, 3);
+                return pixels(image);
+            }
+        });
         check("COPY_BASIC", new Op() {
             public int[] run(PlatformImage image, PlatformGraphics g) {
                 seed(g);
@@ -82,6 +90,34 @@ public final class RG35XXG1ClearCopyDifferentialGate {
                 return pixels(image);
             }
         });
+        check("COPY_OVERLAP_RIGHT", new Op() {
+            public int[] run(PlatformImage image, PlatformGraphics g) {
+                seed(g);
+                g.copyArea(2, 4, 14, 8, 6, 4, PlatformGraphics.LEFT | PlatformGraphics.TOP);
+                return pixels(image);
+            }
+        });
+        check("COPY_OVERLAP_LEFT", new Op() {
+            public int[] run(PlatformImage image, PlatformGraphics g) {
+                seed(g);
+                g.copyArea(7, 4, 14, 8, 2, 4, PlatformGraphics.LEFT | PlatformGraphics.TOP);
+                return pixels(image);
+            }
+        });
+        check("COPY_OVERLAP_DOWN", new Op() {
+            public int[] run(PlatformImage image, PlatformGraphics g) {
+                seed(g);
+                g.copyArea(4, 2, 12, 10, 4, 6, PlatformGraphics.LEFT | PlatformGraphics.TOP);
+                return pixels(image);
+            }
+        });
+        check("COPY_OVERLAP_UP", new Op() {
+            public int[] run(PlatformImage image, PlatformGraphics g) {
+                seed(g);
+                g.copyArea(4, 7, 12, 10, 4, 2, PlatformGraphics.LEFT | PlatformGraphics.TOP);
+                return pixels(image);
+            }
+        });
         check("COPY_OVERLAP_FORWARD", new Op() {
             public int[] run(PlatformImage image, PlatformGraphics g) {
                 seed(g);
@@ -98,7 +134,7 @@ public final class RG35XXG1ClearCopyDifferentialGate {
         });
         check("COPY_ALPHA_SOURCE_OVER", new Op() {
             public int[] run(PlatformImage image, PlatformGraphics g) {
-                g.setColor(0x204060); g.fillRect(0, 0, W, H);
+                g.setColor(0x204060); g.fillRect(15, 10, 6, 5);
                 int[] src = new int[6 * 5]; Arrays.fill(src, 0x8040C020);
                 g.drawRGB(src, 0, 6, 2, 2, 6, 5, true);
                 g.copyArea(2, 2, 6, 5, 15, 10, PlatformGraphics.LEFT | PlatformGraphics.TOP);
