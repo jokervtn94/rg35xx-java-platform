@@ -37,7 +37,19 @@ function Convert-ToDevicePath {
         throw "Path is outside selected SD root: $WindowsPath"
     }
     $relative = $WindowsPath.Substring($rootPrefix.Length).TrimStart('\','/')
-    return '/mnt/mmc/' + ($relative -replace '\\','/')
+    return '/mnt/mmc/' + $relative.Replace('\','/')
+}
+
+function Write-DiagnosticAndFail {
+    param(
+        [System.Collections.Generic.List[string]]$Lines,
+        [string]$Path,
+        [string]$Message
+    )
+    $Lines.Add("FAIL_REASON=$Message")
+    $Lines.Add("TIMESTAMP=$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss zzz')")
+    $Lines | Set-Content -LiteralPath $Path -Encoding UTF8
+    throw "$Message Diagnostic: $Path"
 }
 
 $root = Resolve-SdRoot $SdRoot
@@ -67,27 +79,28 @@ $resultFile = Join-Path $root 'A8-COMPAT-HARNESS-INSTALL-RESULT.txt'
 $mode = $null
 $selectedPayload = $null
 $scanLines = New-Object System.Collections.Generic.List[string]
+$canonicalPresent = Test-Path -LiteralPath $canonicalLauncher -PathType Leaf
 
 $scanLines.Add('PROJECT=RG35XX-AWEIGIT-R1')
 $scanLines.Add('BASELINE=A8')
+$scanLines.Add('INSTALLER=R3_LAYOUT_AUTODETECT')
 $scanLines.Add("SD_ROOT=$root")
-$scanLines.Add("CANONICAL_LAUNCHER_PRESENT=$([bool](Test-Path -LiteralPath $canonicalLauncher -PathType Leaf))")
+$scanLines.Add("CANONICAL_LAUNCHER_PRESENT=$canonicalPresent")
 
-if (Test-Path -LiteralPath $canonicalLauncher -PathType Leaf) {
+if ($canonicalPresent) {
     $mode = 'CANONICAL_A8_LAUNCHER'
+    $scanLines.Add('A8_BASE_DISCOVERY=CANONICAL_LAUNCHER')
 } else {
     $jamvm = Join-Path $root 'CFW\java\bin\jamvm'
     $glibj = Join-Path $root 'CFW\java\share\classpath\glibj.zip'
 
     if (-not (Test-Path -LiteralPath $jamvm -PathType Leaf)) {
         $scanLines.Add('JAMVM=NOT_FOUND')
-        $scanLines | Set-Content -LiteralPath $diagnosticFile -Encoding UTF8
-        throw "Protected JamVM not found: $jamvm. Diagnostic: $diagnosticFile"
+        Write-DiagnosticAndFail $scanLines $diagnosticFile "Protected JamVM not found: $jamvm."
     }
     if (-not (Test-Path -LiteralPath $glibj -PathType Leaf)) {
         $scanLines.Add('GLIBJ=NOT_FOUND')
-        $scanLines | Set-Content -LiteralPath $diagnosticFile -Encoding UTF8
-        throw "Protected glibj not found: $glibj. Diagnostic: $diagnosticFile"
+        Write-DiagnosticAndFail $scanLines $diagnosticFile "Protected glibj not found: $glibj."
     }
 
     $jamvmHash = Get-Sha256Lower $jamvm
@@ -97,8 +110,7 @@ if (Test-Path -LiteralPath $canonicalLauncher -PathType Leaf) {
 
     if ($jamvmHash -ne $Expected.JamVM -or $glibjHash -ne $Expected.GlibJ) {
         $scanLines.Add('PROTECTED_RUNTIME_IDENTITY=FAIL')
-        $scanLines | Set-Content -LiteralPath $diagnosticFile -Encoding UTF8
-        throw "Protected JamVM/glibj identity does not match accepted A8. Diagnostic: $diagnosticFile"
+        Write-DiagnosticAndFail $scanLines $diagnosticFile 'Protected JamVM/glibj identity does not match accepted A8.'
     }
     $scanLines.Add('PROTECTED_RUNTIME_IDENTITY=PASS')
 
@@ -130,8 +142,8 @@ if (Test-Path -LiteralPath $canonicalLauncher -PathType Leaf) {
         $vh = Get-Sha256Lower (Join-Path $dir.FullName 'librg35xx_video.so')
         $ah = Get-Sha256Lower (Join-Path $dir.FullName 'libaudio.so')
         $rh = Get-Sha256Lower (Join-Path $dir.FullName 'a7-a1p5-rw-silence-prime.s32le')
-
         $isExact = ($ph -eq $Expected.Platform -and $ih -eq $Expected.Input -and $vh -eq $Expected.Video -and $ah -eq $Expected.Audio -and $rh -eq $Expected.Prime)
+
         $scanLines.Add("PAYLOAD_DIR=$($dir.FullName)")
         $scanLines.Add("  PLATFORM_SHA256=$ph")
         $scanLines.Add("  INPUT_SHA256=$ih")
@@ -150,16 +162,13 @@ if (Test-Path -LiteralPath $canonicalLauncher -PathType Leaf) {
 
     if ($exactMatches.Count -eq 0) {
         $scanLines.Add('A8_EXACT_PAYLOAD=NOT_FOUND')
-        $scanLines | Set-Content -LiteralPath $diagnosticFile -Encoding UTF8
-        throw "Canonical launcher is absent and no exact A8 payload was found. Diagnostic: $diagnosticFile"
+        Write-DiagnosticAndFail $scanLines $diagnosticFile 'Canonical launcher is absent and no exact A8 payload was found.'
     }
 
     $selectedPayload = $exactMatches | Sort-Object @{ Expression = { if ($_.Name -eq 'RG35XX-AWEIGIT-R1') { 0 } else { 1 } } }, FullName | Select-Object -First 1
     $devicePkg = Convert-ToDevicePath $root $selectedPayload.FullName
     if ($devicePkg.Contains("'")) {
-        $scanLines.Add('BRIDGE_CREATE=FAIL_UNSUPPORTED_QUOTE_IN_PATH')
-        $scanLines | Set-Content -LiteralPath $diagnosticFile -Encoding UTF8
-        throw "Selected payload path contains an unsupported single quote: $devicePkg"
+        Write-DiagnosticAndFail $scanLines $diagnosticFile "Selected payload path contains an unsupported single quote: $devicePkg"
     }
 
     $bridgeTemplate = @'
@@ -278,11 +287,10 @@ exit "$RC"
 
 $destinationWrapper = Join-Path $appsDir 'A8-COMPAT-RUN.sh'
 Copy-Item -LiteralPath $sourceWrapper -Destination $destinationWrapper -Force
-
 $sourceHash = Get-Sha256Lower $sourceWrapper
 $destinationHash = Get-Sha256Lower $destinationWrapper
 if ($sourceHash -ne $destinationHash) {
-    throw 'Harness copy verification failed'
+    Write-DiagnosticAndFail $scanLines $diagnosticFile 'Harness copy verification failed.'
 }
 
 $scanLines.Add("INSTALL_MODE=$mode")
@@ -291,14 +299,18 @@ $scanLines.Add('INSTALL_RESULT=PASS')
 $scanLines.Add("TIMESTAMP=$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss zzz')")
 $scanLines | Set-Content -LiteralPath $diagnosticFile -Encoding UTF8
 
+$payloadForResult = ''
+if ($selectedPayload) { $payloadForResult = $selectedPayload.FullName }
+
 @(
     'PROJECT=RG35XX-AWEIGIT-R1',
     'BASELINE=A8',
+    'INSTALLER=R3_LAYOUT_AUTODETECT',
     'ACTION=INSTALL_COMPAT_HARNESS_ONLY',
     "SD_ROOT=$root",
     "INSTALL_MODE=$mode",
     "CANONICAL_LAUNCHER=$canonicalLauncher",
-    "VERIFIED_PAYLOAD=$($selectedPayload.FullName)",
+    "VERIFIED_PAYLOAD=$payloadForResult",
     "BRIDGE_LAUNCHER=$bridgeLauncher",
     'PRODUCTION_RUNTIME_MODIFIED=NO',
     "HARNESS_DESTINATION=$destinationWrapper",
