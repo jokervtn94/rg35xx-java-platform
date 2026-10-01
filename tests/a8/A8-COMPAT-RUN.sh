@@ -2,7 +2,8 @@
 # A8 compatibility test wrapper for original RG35XX.
 # This script does not modify the accepted A8 runtime or production launcher.
 
-PROD_LAUNCHER=/mnt/mmc/Roms/APPS/RG35XX-AWEIGIT-R1.sh
+CANONICAL_LAUNCHER=/mnt/mmc/Roms/APPS/RG35XX-AWEIGIT-R1.sh
+BRIDGE_LAUNCHER=/mnt/mmc/Roms/APPS/A8-COMPAT-PRODUCTION-BRIDGE.sh
 PROD_RESULT=/mnt/mmc/RG35XX-AWEIGIT-R1-RESULT.txt
 EVIDENCE_ROOT=/mnt/mmc/A8-COMPAT-EVIDENCE
 
@@ -17,7 +18,20 @@ usage() {
 [ -n "$GAME" ] || usage
 [ -n "$CANDIDATE" ] || usage
 [ -f "$GAME" ] || { echo "ERROR: game JAR not found: $GAME"; exit 3; }
-[ -f "$PROD_LAUNCHER" ] || { echo "ERROR: A8 production launcher not found: $PROD_LAUNCHER"; exit 4; }
+
+if [ -f "$CANONICAL_LAUNCHER" ]; then
+  PROD_LAUNCHER="$CANONICAL_LAUNCHER"
+  BASE_MODE=CANONICAL_A8_LAUNCHER
+elif [ -f "$BRIDGE_LAUNCHER" ]; then
+  PROD_LAUNCHER="$BRIDGE_LAUNCHER"
+  BASE_MODE=VERIFIED_A8_PAYLOAD_BRIDGE
+else
+  echo "ERROR: no verified A8 launcher/bridge found"
+  echo "Expected one of:"
+  echo "  $CANONICAL_LAUNCHER"
+  echo "  $BRIDGE_LAUNCHER"
+  exit 4
+fi
 
 SAFE_ID=$(printf '%s' "$CANDIDATE" | tr -c 'A-Za-z0-9._-' '_')
 [ -n "$SAFE_ID" ] || SAFE_ID=A8-COMP-UNKNOWN
@@ -33,6 +47,8 @@ JAR_SHA256=$(sha256sum "$GAME" 2>/dev/null | awk '{print $1}')
 {
   echo "PROJECT=RG35XX-AWEIGIT-R1"
   echo "BASELINE=A8"
+  echo "BASE_MODE=$BASE_MODE"
+  echo "BASE_LAUNCHER=$PROD_LAUNCHER"
   echo "CANDIDATE_ID=$CANDIDATE"
   echo "JAR_FILENAME=$JAR_NAME"
   echo "JAR_PATH=$GAME"
@@ -66,6 +82,7 @@ EOF
 
 rm -f "$PROD_RESULT"
 echo "A8 compatibility run: $CANDIDATE"
+echo "Base mode: $BASE_MODE"
 echo "JAR: $JAR_NAME"
 echo "SHA256: $JAR_SHA256"
 echo "Evidence: $OUTDIR"

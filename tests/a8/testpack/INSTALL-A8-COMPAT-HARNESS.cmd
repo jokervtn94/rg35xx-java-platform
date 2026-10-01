@@ -19,6 +19,7 @@ set "RC=%ERRORLEVEL%"
 if not "%RC%"=="0" (
   echo.
   echo INSTALL FAIL - exit code %RC%
+  echo Neu R3 tao A8-COMPAT-SD-DIAGNOSTIC.txt o goc SD, gui file do de phan tich.
 ) else (
   echo.
   echo INSTALL PASS
