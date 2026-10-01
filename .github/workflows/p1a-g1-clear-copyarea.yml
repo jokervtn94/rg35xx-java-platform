@@ -9,7 +9,11 @@ on:
       - '.github/workflows/p1a-g1-clear-copyarea.yml'
       - 'scripts/stage-p1a-g1-clear-copyarea.py'
       - 'scripts/build-p1a-g1-clear-copyarea.sh'
+      - 'scripts/build-p1a-g1-device-package.sh'
       - 'tests/p1a/RG35XXG1ClearCopyDifferentialGate.java'
+      - 'tests/p1a/RG35XXP1AG1Vectors.java'
+      - 'tests/p1a/RG35XXP1AG1CanonicalVectorGenerator.java'
+      - 'tests/p1a/RG35XXP1AG1DeviceMIDlet.java'
       - 'docs/P1A-G1-CLEAR-COPYAREA-SCOPE.md'
 
 permissions:
@@ -84,9 +88,33 @@ jobs:
           grep -q '^STABLE=NO$' "$ID"
           echo P1A_G1_CI_SCOPE_LOCK=PASS
 
+      - name: Build synthetic GarlicOS platform exerciser
+        run: bash ./scripts/build-p1a-g1-device-package.sh
+
+      - name: Verify device package stays synthetic and pending physical review
+        run: |
+          set -euo pipefail
+          ID=out/p1a-g1-device-package/P1A-G1-DEVICE-PACKAGE-IDENTITY.txt
+          grep -q '^PACKAGE_TYPE=SYNTHETIC_PLATFORM_EXERCISER$' "$ID"
+          grep -q '^GAME_CONTENT=NONE$' "$ID"
+          grep -q '^AUDIO_PRIME=NOT_USED_GRAPHICS_SCOPE_ONLY$' "$ID"
+          grep -q '^BUILD-PASS=YES$' "$ID"
+          grep -q '^DEVICE-PASS=NO$' "$ID"
+          grep -q '^STABLE=NO$' "$ID"
+          test -f out/p1a-g1-device-package/SD/Roms/APPS/P1A-G1-PLATFORM-TEST.sh
+          test -f out/p1a-g1-device-package/SD/Roms/APPS/RG35XX-P1A-G1/p1a-g1-platform-test.jar
+          echo P1A_G1_DEVICE_PACKAGE_SCOPE_LOCK=PASS
+
       - name: Upload build audit
         uses: actions/upload-artifact@v4
         with:
           name: RG35XX-P1A-G1-AUDIT-${{ github.sha }}
           path: out/p1a-g1-clear-copyarea/
+          if-no-files-found: error
+
+      - name: Upload physical platform-test package
+        uses: actions/upload-artifact@v4
+        with:
+          name: RG35XX-P1A-G1-DEVICE-TEST-${{ github.sha }}
+          path: out/p1a-g1-device-package/
           if-no-files-found: error
