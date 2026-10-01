@@ -13,7 +13,9 @@ if not defined SDROOT (
   exit /b 2
 )
 
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0COLLECT-A8-COMPAT-EVIDENCE.ps1" -SdRoot "%SDROOT%" -OutputDir "%~dp0"
+rem R4: do not pass %%~dp0 as -OutputDir. Its trailing backslash can produce
+rem an illegal quoted Windows path. PowerShell resolves output to $PSScriptRoot.
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0COLLECT-A8-COMPAT-EVIDENCE.ps1" -SdRoot "%SDROOT%"
 set "RC=%ERRORLEVEL%"
 
 if not "%RC%"=="0" (
