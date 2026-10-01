@@ -9,7 +9,7 @@ PKG="$APPS/RG35XX-AUDIO01-GOW-TRACE"
 LAUNCHER="$APPS/AUDIO01-GOW-LIFECYCLE-TRACE-TEST.sh"
 fail(){ echo "AUDIO01_PACKAGE_FAIL=$*" >&2; exit 1; }
 
-for f in freej2me-rg35xx.jar librg35xx_input.so librg35xx_video.so libaudio.so a7-a1p5-rw-silence-prime.s32le RUNTIME-SHA256SUMS.txt AUDIO01-IDENTITY.txt; do
+for f in librg35xx_input.so librg35xx_video.so libaudio.so a7-a1p5-rw-silence-prime.s32le AUDIO01-IDENTITY.txt; do
   [ -f "$SRC/$f" ] || fail "missing $f"
 done
 
@@ -20,14 +20,23 @@ TRACE_AUDIO_SHA="$(awk -F= '$1=="AUDIO_TRACE_SHA256"{print $2}' "$SRC/AUDIO01-ID
 
 rm -rf "$OUT"
 mkdir -p "$PKG"
-cp "$SRC/freej2me-rg35xx.jar" "$SRC/librg35xx_input.so" "$SRC/librg35xx_video.so" \
-   "$SRC/libaudio.so" "$SRC/a7-a1p5-rw-silence-prime.s32le" "$SRC/RUNTIME-SHA256SUMS.txt" \
-   "$SRC/AUDIO01-IDENTITY.txt" "$PKG/"
+cp "$SRC/librg35xx_input.so" "$SRC/librg35xx_video.so" "$SRC/libaudio.so" \
+   "$SRC/a7-a1p5-rw-silence-prime.s32le" "$SRC/AUDIO01-IDENTITY.txt" "$PKG/"
+
+cat > "$PKG/RUNTIME-SHA256SUMS.txt" <<EOF
+69a8aeb3940bfbc234f3a562a7ae4bcaea10b50f8a8f2c38ad229a5430930f6d  librg35xx_input.so
+c6687c0a43b24b425af0727c928afb5414da811ecbcbbe3538928470abe8bd0d  librg35xx_video.so
+$TRACE_AUDIO_SHA  libaudio.so
+8c30691e755abd6791ac75887b56e20f1a56266b2eb0286bfb4007b98f7d7a7e  a7-a1p5-rw-silence-prime.s32le
+EOF
+(cd "$PKG" && sha256sum -c RUNTIME-SHA256SUMS.txt)
 
 cat > "$LAUNCHER" <<'EOF'
 #!/bin/sh
 APP="$(CDPATH= cd -- "$(dirname -- "$0")" 2>/dev/null && pwd)"
 PKG="$APP/RG35XX-AUDIO01-GOW-TRACE"
+BASEPKG=/mnt/mmc/Roms/APPS/RG35XX-A8-COMP02-FILLTRIANGLE
+BASEJAR="$BASEPKG/freej2me-rg35xx.jar"
 GAME=/mnt/mmc/Roms/JAVA/God-of-War-Betrayal_J2ME_EN_v148.jar
 EXPECTED_GAME=e256ca47cde2b27735a4f4d3d826003ac5bbc723f91629bd5d093d948c1f9a98
 JAMVM=/mnt/mmc/CFW/java/bin/jamvm
@@ -58,9 +67,10 @@ fail() {
 
 [ -x "$JAMVM" ] || fail JAMVM_MISSING
 [ -f "$GLIBJ" ] || fail GLIBJ_MISSING
+[ -f "$BASEJAR" ] || fail EXACT_COMP02_PLATFORM_MISSING
 [ -f "$GAME" ] || fail GOW_JAR_MISSING
-[ -d "$PKG" ] || fail PAYLOAD_MISSING
-for F in freej2me-rg35xx.jar librg35xx_input.so librg35xx_video.so libaudio.so a7-a1p5-rw-silence-prime.s32le RUNTIME-SHA256SUMS.txt AUDIO01-IDENTITY.txt; do
+[ -d "$PKG" ] || fail TRACE_PAYLOAD_MISSING
+for F in librg35xx_input.so librg35xx_video.so libaudio.so a7-a1p5-rw-silence-prime.s32le RUNTIME-SHA256SUMS.txt AUDIO01-IDENTITY.txt; do
   [ -f "$PKG/$F" ] || fail "MISSING:$F"
 done
 
@@ -69,7 +79,7 @@ APLAY="$(command -v aplay 2>/dev/null || true)"
 
 JB=$(sha256sum "$JAMVM"|awk '{print $1}')
 GB=$(sha256sum "$GLIBJ"|awk '{print $1}')
-PH=$(sha256sum "$PKG/freej2me-rg35xx.jar"|awk '{print $1}')
+PH=$(sha256sum "$BASEJAR"|awk '{print $1}')
 IH=$(sha256sum "$PKG/librg35xx_input.so"|awk '{print $1}')
 VH=$(sha256sum "$PKG/librg35xx_video.so"|awk '{print $1}')
 AH=$(sha256sum "$PKG/libaudio.so"|awk '{print $1}')
@@ -80,18 +90,20 @@ EXPECTED_AUDIO=$(awk -F= '$1=="AUDIO_TRACE_SHA256"{print $2}' "$PKG/AUDIO01-IDEN
 {
   echo 'TEST_ID=AUDIO01-GOW-LIFECYCLE-TRACE'
   echo 'DEVICE=ORIGINAL_RG35XX'
-  echo 'BASE=COMP02_FILLTRIANGLE_DEVICE_PASS'
+  echo 'BASE=EXACT_PHYSICAL_COMP02_FILLTRIANGLE_DEVICE_PASS_JAR'
   echo 'FAILURE_OWNER=RG35XX_AUDIO_MEDIA'
   echo 'DIAGNOSTIC_ONLY=YES'
+  echo 'JAVA_SOURCE=EXISTING_DEVICE_COMP02_EXACT'
   echo 'JAVA_CHANGED=NO'
   echo 'GRAPHICS_CHANGED=NO'
   echo 'INPUT_CHANGED=NO'
   echo 'VIDEO_CHANGED=NO'
+  echo "BASE_PLATFORM_JAR=$BASEJAR"
+  echo "PLATFORM_JAR_SHA256=$PH"
   echo "JAR_PATH=$GAME"
   echo "JAR_SHA256=$GH"
   echo "JAMVM_SHA256_BEFORE=$JB"
   echo "GLIBJ_SHA256_BEFORE=$GB"
-  echo "PLATFORM_JAR_SHA256=$PH"
   echo "INPUT_NATIVE_SHA256=$IH"
   echo "VIDEO_NATIVE_SHA256=$VH"
   echo "AUDIO_TRACE_SHA256=$AH"
@@ -117,14 +129,14 @@ OBS
 
 [ "$JB" = "$EXPECTED_JAMVM" ] || fail JAMVM_HASH_MISMATCH
 [ "$GB" = "$EXPECTED_GLIBJ" ] || fail GLIBJ_HASH_MISMATCH
-[ "$PH" = "$EXPECTED_PLATFORM" ] || fail PLATFORM_HASH_MISMATCH
+[ "$PH" = "$EXPECTED_PLATFORM" ] || fail EXACT_COMP02_PLATFORM_HASH_MISMATCH
 [ "$IH" = "$EXPECTED_INPUT" ] || fail INPUT_HASH_MISMATCH
 [ "$VH" = "$EXPECTED_VIDEO" ] || fail VIDEO_HASH_MISMATCH
 [ "$PRH" = "$EXPECTED_PRIME" ] || fail PRIME_HASH_MISMATCH
 [ "$GH" = "$EXPECTED_GAME" ] || fail GAME_HASH_MISMATCH
 [ -n "$EXPECTED_AUDIO" ] || fail TRACE_AUDIO_EXPECTED_MISSING
 [ "$AH" = "$EXPECTED_AUDIO" ] || fail TRACE_AUDIO_HASH_MISMATCH
-(cd "$PKG" && sha256sum -c RUNTIME-SHA256SUMS.txt) >>"$OUT" 2>&1 || fail RUNTIME_HASH_MISMATCH
+(cd "$PKG" && sha256sum -c RUNTIME-SHA256SUMS.txt) >>"$OUT" 2>&1 || fail TRACE_RUNTIME_HASH_MISMATCH
 
 echo 'PROJECT=RG35XX-AWEIGIT-R1' >>"$OUT"
 echo 'STAGE=AUDIO01-GOW-LIFECYCLE-TRACE-PHYSICAL' >>"$OUT"
@@ -143,7 +155,7 @@ mkdir -p "$DATA" || fail DATA_DIR_CREATE_FAIL
 echo 'REAL_GAME_PROCESS=START' >>"$OUT"
 LD_LIBRARY_PATH="$PKG${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
   "$JAMVM" -Xmx64m -Drg35xx.raw2d=true -Drg35xx.native.dir="$PKG" \
-  -cp "$GLIBJ:$PKG/freej2me-rg35xx.jar" \
+  -cp "$GLIBJ:$BASEJAR" \
   org.recompile.rg35xx.RG35XXLauncher "$GAME" 240 320 "$DATA" "$DATA" >>"$OUT" 2>&1
 RC=$?
 echo "RUNTIME_EXIT_CODE=$RC" >>"$OUT"
@@ -172,15 +184,20 @@ cat > "$OUT/README-FIRST.txt" <<'EOF'
 AUDIO-01 GOW LIFECYCLE TRACE - DIAGNOSTIC ONLY
 ===============================================
 
+Dieu kien bat buoc tren SD:
+- /mnt/mmc/Roms/APPS/RG35XX-A8-COMP02-FILLTRIANGLE/freej2me-rg35xx.jar
+  SHA256=3c7b22c3227a65897137c210744be1bcc41f075fa0dfa580fdcee7e47734056b
+- /mnt/mmc/Roms/JAVA/God-of-War-Betrayal_J2ME_EN_v148.jar
+  SHA256=e256ca47cde2b27735a4f4d3d826003ac5bbc723f91629bd5d093d948c1f9a98
+
 1. Merge thu muc Roms vao root SD.
-2. Giu exact game:
-   /mnt/mmc/Roms/JAVA/God-of-War-Betrayal_J2ME_EN_v148.jar
-3. GarlicOS -> APPS -> AUDIO01-GOW-LIFECYCLE-TRACE-TEST
-4. Vao gameplay den sau diem audio bien mat, choi them mot luc roi thoat binh thuong.
-5. Gui thu muc evidence:
+2. GarlicOS -> APPS -> AUDIO01-GOW-LIFECYCLE-TRACE-TEST
+3. Vao gameplay den sau diem audio bien mat, choi them mot luc roi thoat binh thuong.
+4. Gui evidence:
    /mnt/mmc/A8-COMPAT-EVIDENCE/AUDIO01-GOW-LIFECYCLE-TRACE-<timestamp>/
 
-Diagnostic nay chi them trace vao libaudio.so. Khong phai ban fix.
+Diagnostic chi thay libaudio.so bang trace build; Java la EXACT COMP-02 JAR dang co tren SD.
+Khong phai ban fix.
 EOF
 
 cat > "$OUT/PACKAGE-IDENTITY.txt" <<EOF
@@ -188,12 +205,14 @@ PROJECT=RG35XX-AWEIGIT-R1
 STAGE=AUDIO01-GOW-LIFECYCLE-TRACE-DEVICE-PACKAGE
 BASE_COMMIT=e373f3b59423aa7aec5deee8563f0b5ff3a191cb
 FAILURE_OWNER=RG35XX_AUDIO_MEDIA
-PLATFORM_JAR_SHA256=3c7b22c3227a65897137c210744be1bcc41f075fa0dfa580fdcee7e47734056b
+JAVA_SOURCE=EXISTING_DEVICE_COMP02_EXACT
+REQUIRED_DEVICE_PLATFORM_JAR_SHA256=3c7b22c3227a65897137c210744be1bcc41f075fa0dfa580fdcee7e47734056b
 INPUT_NATIVE_SHA256=69a8aeb3940bfbc234f3a562a7ae4bcaea10b50f8a8f2c38ad229a5430930f6d
 VIDEO_NATIVE_SHA256=c6687c0a43b24b425af0727c928afb5414da811ecbcbbe3538928470abe8bd0d
 AUDIO_TRACE_SHA256=$TRACE_AUDIO_SHA
 PRIME_PCM_SHA256=8c30691e755abd6791ac75887b56e20f1a56266b2eb0286bfb4007b98f7d7a7e
 GOW_SHA256=e256ca47cde2b27735a4f4d3d826003ac5bbc723f91629bd5d093d948c1f9a98
+PLATFORM_JAR_BUNDLED=NO
 GAME_BUNDLED=NO
 DIAGNOSTIC_ONLY=YES
 DEVICE_PASS=NO
