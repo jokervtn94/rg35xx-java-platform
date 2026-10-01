@@ -21,11 +21,6 @@ if (-not (Test-Path -LiteralPath $root -PathType Container)) {
     throw "SD root not found: $root"
 }
 
-$evidenceDir = Join-Path $root 'A8-COMPAT-EVIDENCE'
-if (-not (Test-Path -LiteralPath $evidenceDir -PathType Container)) {
-    throw "No A8 compatibility evidence found: $evidenceDir"
-}
-
 if (-not (Test-Path -LiteralPath $OutputDir -PathType Container)) {
     New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
 }
@@ -40,20 +35,40 @@ if (Test-Path -LiteralPath $stage) {
 }
 New-Item -ItemType Directory -Path $stage -Force | Out-Null
 
-Copy-Item -LiteralPath $evidenceDir -Destination (Join-Path $stage 'A8-COMPAT-EVIDENCE') -Recurse -Force
+$evidenceDir = Join-Path $root 'A8-COMPAT-EVIDENCE'
+$candidateDir = Join-Path $root 'A8-COMPAT-CANDIDATES'
+$records = @()
+$copiedAnything = $false
+
+if (Test-Path -LiteralPath $evidenceDir -PathType Container) {
+    Copy-Item -LiteralPath $evidenceDir -Destination (Join-Path $stage 'A8-COMPAT-EVIDENCE') -Recurse -Force
+    $records = Get-ChildItem -LiteralPath $evidenceDir -Directory -ErrorAction SilentlyContinue
+    $copiedAnything = $true
+}
+
+if (Test-Path -LiteralPath $candidateDir -PathType Container) {
+    Copy-Item -LiteralPath $candidateDir -Destination (Join-Path $stage 'A8-COMPAT-CANDIDATES') -Recurse -Force
+    $copiedAnything = $true
+}
 
 $optionalFiles = @(
     'A8-COMPAT-HARNESS-INSTALL-RESULT.txt',
+    'A8-COMPAT-SD-DIAGNOSTIC.txt',
     'RG35XX-AWEIGIT-R1-RESULT.txt'
 )
 foreach ($name in $optionalFiles) {
     $source = Join-Path $root $name
     if (Test-Path -LiteralPath $source -PathType Leaf) {
         Copy-Item -LiteralPath $source -Destination (Join-Path $stage $name) -Force
+        $copiedAnything = $true
     }
 }
 
-$records = Get-ChildItem -LiteralPath $evidenceDir -Directory -ErrorAction SilentlyContinue
+if (-not $copiedAnything) {
+    Remove-Item -LiteralPath $stage -Recurse -Force
+    throw "No A8 compatibility evidence or diagnostic files found on SD: $root"
+}
+
 @(
     'PROJECT=RG35XX-AWEIGIT-R1',
     'BASELINE=A8',
@@ -68,6 +83,6 @@ if (Test-Path -LiteralPath $zipPath) {
 Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $zipPath -CompressionLevel Optimal
 Remove-Item -LiteralPath $stage -Recurse -Force
 
-Write-Host 'A8 compatibility evidence collected.'
+Write-Host 'A8 compatibility evidence/diagnostic collected.'
 Write-Host "Records : $($records.Count)"
 Write-Host "ZIP     : $zipPath"
