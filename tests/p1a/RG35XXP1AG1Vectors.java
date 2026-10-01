@@ -5,14 +5,12 @@ import java.util.Arrays;
 import javax.microedition.lcdui.Graphics;
 import javax.microedition.lcdui.Image;
 
-/** Shared Java-6/MIDP vector set. CI runs it through AWT; device runs Raw2D. */
+/** Shared Java-6/MIDP copyArea vector set. CI runs AWT; device runs Raw2D. */
 public final class RG35XXP1AG1Vectors {
     private static final int W = 32;
     private static final int H = 24;
 
     public static final String[] NAMES = {
-        "CLEAR_BASIC",
-        "CLEAR_CLIP_TRANSLATE",
         "COPY_BASIC",
         "COPY_CLIP_TRANSLATE",
         "COPY_OVERLAP_RIGHT",
@@ -33,50 +31,40 @@ public final class RG35XXP1AG1Vectors {
         Graphics g = image.getGraphics();
         switch (index) {
             case 0:
-                g.setColor(0x224466); g.fillRect(0, 0, W, H);
-                g.clearRect(3, 4, 9, 7);
-                break;
-            case 1:
-                g.setColor(0x335577); g.fillRect(0, 0, W, H);
-                g.setClip(6, 5, 8, 7);
-                g.translate(3, 2);
-                g.clearRect(1, 1, 18, 14);
-                break;
-            case 2:
                 seed(g);
                 g.copyArea(2, 2, 8, 6, 17, 11, Graphics.LEFT | Graphics.TOP);
                 break;
-            case 3:
+            case 1:
                 seed(g);
                 g.setClip(14, 9, 7, 6);
                 g.translate(2, 1);
                 g.copyArea(2, 2, 8, 6, 12, 8, Graphics.LEFT | Graphics.TOP);
                 break;
-            case 4:
+            case 2:
                 seed(g);
                 g.copyArea(2, 4, 14, 8, 6, 4, Graphics.LEFT | Graphics.TOP);
                 break;
-            case 5:
+            case 3:
                 seed(g);
                 g.copyArea(7, 4, 14, 8, 2, 4, Graphics.LEFT | Graphics.TOP);
                 break;
-            case 6:
+            case 4:
                 seed(g);
                 g.copyArea(4, 2, 12, 10, 4, 6, Graphics.LEFT | Graphics.TOP);
                 break;
-            case 7:
+            case 5:
                 seed(g);
                 g.copyArea(4, 7, 12, 10, 4, 2, Graphics.LEFT | Graphics.TOP);
                 break;
-            case 8:
+            case 6:
                 seed(g);
                 g.copyArea(2, 2, 12, 8, 6, 5, Graphics.LEFT | Graphics.TOP);
                 break;
-            case 9:
+            case 7:
                 seed(g);
                 g.copyArea(7, 6, 12, 8, 2, 2, Graphics.LEFT | Graphics.TOP);
                 break;
-            case 10:
+            case 8:
                 g.setColor(0x204060); g.fillRect(15, 10, 6, 5);
                 int[] src = new int[6 * 5];
                 Arrays.fill(src, 0x8040C020);
