@@ -4,6 +4,7 @@
 
 - Candidate: `A8-COMP-02`
 - Game: Asphalt 4 : Elite Racing
+- JAR: `Asphalt_4_-_Elite_Racing_240x320-1.0-646694-mobiles24.jar`
 - JAR SHA256: `b25c855e5b04364e1e5ec36f06f32750f73a9e4a6ef1545a9dbe2b973a6e284b`
 - Device: original RG35XX
 - Trace build: `A8-COMP02-NOTIFYDESTROYED-TRACE-R1`
