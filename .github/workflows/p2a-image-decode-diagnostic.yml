@@ -7,6 +7,7 @@ on:
     paths:
       - '.github/workflows/p2a-image-decode-diagnostic.yml'
       - 'tests/p2/RG35XXP2APngFormatDiagnostic.java'
+      - 'tests/p2/RG35XXP2APngSemanticsR2Diagnostic.java'
       - 'docs/P2-IMAGE-FONT-FRONTEND-CONTRACT-AUDIT-v1.md'
   workflow_dispatch:
 
@@ -38,7 +39,7 @@ jobs:
           git merge-base --is-ancestor "$PARENT" HEAD
           [ "$(git merge-base "$PARENT" HEAD)" = "$PARENT" ]
           changed="$(git diff --name-only "$PARENT"..HEAD | LC_ALL=C sort)"
-          expected=$'.github/workflows/p2a-image-decode-diagnostic.yml\ndocs/P2-IMAGE-FONT-FRONTEND-CONTRACT-AUDIT-v1.md\ntests/p2/RG35XXP2APngFormatDiagnostic.java'
+          expected=$'.github/workflows/p2a-image-decode-diagnostic.yml\ndocs/P2-IMAGE-FONT-FRONTEND-CONTRACT-AUDIT-v1.md\ntests/p2/RG35XXP2APngFormatDiagnostic.java\ntests/p2/RG35XXP2APngSemanticsR2Diagnostic.java'
           [ "$changed" = "$expected" ] || { echo "P2_AUDIT_SCOPE_FAIL=$changed" >&2; exit 1; }
           ! git diff --name-only "$PARENT"..HEAD | grep -E '^(adapter/|native/|upstream/|scripts/stage-|scripts/build-)'
           echo P2_AUDIT_RUNTIME_DELTA=NONE
@@ -74,7 +75,7 @@ jobs:
           grep -q '^A9_PARENT=NO$' out/p1a-complete-graphics-candidate/P1A-COMPLETE-GRAPHICS-IDENTITY.txt
           echo P2A_P1A_PARENT_REBUILD=PASS
 
-      - name: Compile Java 6 PNG diagnostic
+      - name: Compile Java 6 PNG diagnostics
         shell: bash
         run: |
           set -euo pipefail
@@ -82,12 +83,16 @@ jobs:
           "$JAVA_HOME/bin/javac" -encoding UTF-8 -source 1.6 -target 1.6 \
             -bootclasspath "$JAVA_HOME/jre/lib/rt.jar" \
             -classpath out/p1a-complete-graphics-candidate/freej2me-rg35xx.jar \
-            -d build/p2a-png-diagnostic tests/p2/RG35XXP2APngFormatDiagnostic.java
-          major=$(od -An -t u1 -j 7 -N 1 build/p2a-png-diagnostic/org/recompile/rg35xx/p2/RG35XXP2APngFormatDiagnostic.class | tr -d ' ')
-          [ "$major" = 50 ]
+            -d build/p2a-png-diagnostic \
+            tests/p2/RG35XXP2APngFormatDiagnostic.java \
+            tests/p2/RG35XXP2APngSemanticsR2Diagnostic.java
+          for cls in RG35XXP2APngFormatDiagnostic RG35XXP2APngSemanticsR2Diagnostic; do
+            major=$(od -An -t u1 -j 7 -N 1 "build/p2a-png-diagnostic/org/recompile/rg35xx/p2/${cls}.class" | tr -d ' ')
+            [ "$major" = 50 ]
+          done
           echo P2A_DIAGNOSTIC_JAVA6=PASS
 
-      - name: Run legal PNG ImageIO versus Raw2D differential
+      - name: Run legal PNG ImageIO versus Raw2D matrix
         shell: bash
         run: |
           set -euo pipefail
@@ -96,13 +101,33 @@ jobs:
             org.recompile.rg35xx.p2.RG35XXP2APngFormatDiagnostic | tee P2A-PNG-DIAGNOSTIC.txt
           grep -q '^P2A_PNG_LEGAL_CASE_COUNT=30$' P2A-PNG-DIAGNOSTIC.txt
           grep -q '^P2A_PNG_CANONICAL_PASS_COUNT=30$' P2A-PNG-DIAGNOSTIC.txt
-          grep -q '^P2A_PNG_DIAGNOSTIC=PASS_EVIDENCE_ONLY$' P2A-PNG-DIAGNOSTIC.txt
+          grep -q '^P2A_PNG_RAW_MATCH_COUNT=12$' P2A-PNG-DIAGNOSTIC.txt
+          grep -q '^P2A_PNG_RAW_MISMATCH_COUNT=4$' P2A-PNG-DIAGNOSTIC.txt
+          grep -q '^P2A_PNG_RAW_UNSUPPORTED_COUNT=14$' P2A-PNG-DIAGNOSTIC.txt
           grep -q '^P2A_RUNTIME_CHANGE=NO$' P2A-PNG-DIAGNOSTIC.txt
-          echo P2A_PNG_HOST_DIAGNOSTIC_GATE=PASS
+          echo P2A_PNG_R1_EVIDENCE_LOCK=PASS
+
+      - name: Run R2 grayscale and tRNS semantic decomposition
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$JAVA_HOME/bin/java" -Djava.awt.headless=true \
+            -cp out/p1a-complete-graphics-candidate/freej2me-rg35xx.jar:build/p2a-png-diagnostic \
+            org.recompile.rg35xx.p2.RG35XXP2APngSemanticsR2Diagnostic | tee P2A-PNG-R2-DIAGNOSTIC.txt
+          grep -q '^P2A_R2_CASE_COUNT=14$' P2A-PNG-R2-DIAGNOSTIC.txt
+          grep -q '^P2A_R2_TRNS=GRAY8_TRNS_I0 CANONICAL_ALPHA0=YES ' P2A-PNG-R2-DIAGNOSTIC.txt
+          grep -q '^P2A_R2_TRNS=GRAY8_TRNS_I1 CANONICAL_ALPHA0=YES ' P2A-PNG-R2-DIAGNOSTIC.txt
+          grep -q '^P2A_R2_TRNS=RGB8_TRNS_I0 CANONICAL_ALPHA0=YES ' P2A-PNG-R2-DIAGNOSTIC.txt
+          grep -q '^P2A_R2_TRNS=RGB8_TRNS_I1 CANONICAL_ALPHA0=YES ' P2A-PNG-R2-DIAGNOSTIC.txt
+          grep -q '^P2A_R2_DIAGNOSTIC=PASS_EVIDENCE_ONLY$' P2A-PNG-R2-DIAGNOSTIC.txt
+          grep -q '^P2A_R2_RUNTIME_CHANGE=NO$' P2A-PNG-R2-DIAGNOSTIC.txt
+          echo P2A_PNG_R2_HOST_DIAGNOSTIC_GATE=PASS
 
       - name: Upload P2A diagnostic evidence
         uses: actions/upload-artifact@v4
         with:
           name: RG35XX-P2A-PNG-DIAGNOSTIC-${{ github.sha }}
-          path: P2A-PNG-DIAGNOSTIC.txt
+          path: |
+            P2A-PNG-DIAGNOSTIC.txt
+            P2A-PNG-R2-DIAGNOSTIC.txt
           if-no-files-found: error
