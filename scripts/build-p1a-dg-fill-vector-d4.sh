@@ -180,7 +180,33 @@ run_gate(){
 run_gate RG35XXRawClipTranslateHostGate.java org.recompile.rg35xx.a6.RG35XXRawClipTranslateHostGate A6_CORPUS3_CLIPTRANSLATE_HOST_GATE=PASS A6-CLIPTRANSLATE-REGRESSION.txt
 run_gate RG35XXRawDrawRectHostGate.java org.recompile.rg35xx.a6.RG35XXRawDrawRectHostGate A6_R5P3I2_RAW_DRAWRECT_HOST_GATE=PASS A6-DRAWRECT-REGRESSION.txt
 run_gate RG35XXRawDrawLineHostGate.java org.recompile.rg35xx.a6.RG35XXRawDrawLineHostGate A6_R5_RAW_DRAWLINE_HOST_GATE=PASS A6-DRAWLINE-REGRESSION.txt
-run_gate RG35XXRawRectPolygonHostGate.java org.recompile.rg35xx.a6.RG35XXRawRectPolygonHostGate A6_R5P3_RAW_RECT_POLYGON_HOST_GATE=PASS A6-RECTPOLYGON-REGRESSION.txt
+
+# A6 rectangle-only polygon test is preserved verbatim. D4 intentionally expands only its
+# final generic non-rectangle sentinel. Reaching that exact final assertion proves all earlier
+# rectangle/alpha/translate/clip assertions in the legacy test still passed.
+A6POLY_SRC="RG35XXRawRectPolygonHostGate.java"
+A6POLY_CLS="org.recompile.rg35xx.a6.RG35XXRawRectPolygonHostGate"
+A6POLY_DIR="$BUILD/p1a-dg-d4-RG35XXRawRectPolygonHostGate"
+A6POLY_LOG="$OUT/A6-RECTPOLYGON-SCOPE-EXPANSION.txt"
+rm -rf "$A6POLY_DIR"; mkdir -p "$A6POLY_DIR"
+"$JAVA8/bin/javac" -encoding UTF-8 -source 1.6 -target 1.6 \
+  -bootclasspath "$JAVA8/jre/lib/rt.jar" -classpath "$CANDIDATE" -d "$A6POLY_DIR" "$ROOT/tests/a6/$A6POLY_SRC"
+set +e
+set +o pipefail
+"$JAVA8/bin/java" -cp "$CANDIDATE:$A6POLY_DIR" "$A6POLY_CLS" 2>&1 | tee "$A6POLY_LOG"
+A6POLY_RC=${PIPESTATUS[0]}
+set -o pipefail
+set -e
+[ "$A6POLY_RC" -ne 0 ] || fail "A6 rectangle-only legacy sentinel unexpectedly returned success"
+A6POLY_FAIL_COUNT="$(grep -c 'A6_R5P3_RAW_RECT_POLYGON_HOST_GATE_FAIL=' "$A6POLY_LOG" || true)"
+[ "$A6POLY_FAIL_COUNT" = "1" ] || fail "A6 rectangle polygon failure count $A6POLY_FAIL_COUNT"
+grep -q 'A6_R5P3_RAW_RECT_POLYGON_HOST_GATE_FAIL=nonrect-noop' "$A6POLY_LOG" || fail "A6 generic polygon scope expansion sentinel"
+if grep 'A6_R5P3_RAW_RECT_POLYGON_HOST_GATE_FAIL=' "$A6POLY_LOG" | grep -vq 'A6_R5P3_RAW_RECT_POLYGON_HOST_GATE_FAIL=nonrect-noop'; then
+  fail "A6 rectangle polygon protected assertion regression"
+fi
+echo P1A_DG_D4_A6_RECTPOLYGON_PROTECTED_PREFIX_GATE=PASS | tee "$OUT/A6-D4-RECTPOLYGON-SCOPE-GATE.txt"
+echo P1A_DG_D4_A6_GENERIC_FILLPOLYGON_SCOPE_EXPANSION_GATE=PASS | tee -a "$OUT/A6-D4-RECTPOLYGON-SCOPE-GATE.txt"
+
 run_gate RG35XXAdam7HostGate.java org.recompile.rg35xx.a6.RG35XXAdam7HostGate A6_ADAM7_HOST_GATE=PASS A6-ADAM7-REGRESSION.txt
 
 # Protected native adapters are inherited byte-for-byte from G2D parent.
@@ -227,6 +253,8 @@ G2B_21_GEOMETRY_REGRESSION=PASS
 G2B_DG_7ARG_SCOPE_EXPANSION=PASS
 G1_G2A_BEHAVIOR_REGRESSION=PASS
 G1_ALPHA_REGRESSION=PASS
+A6_RECTPOLYGON_PROTECTED_PREFIX_REGRESSION=PASS
+A6_GENERIC_FILLPOLYGON_SCOPE_EXPANSION=PASS
 A6_PROTECTED_REGRESSIONS=PASS
 CORE2D_CHANGE=NO
 DRAW_VECTOR_CHANGE=NO
