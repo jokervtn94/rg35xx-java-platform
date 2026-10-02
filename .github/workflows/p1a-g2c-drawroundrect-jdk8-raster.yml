@@ -8,9 +8,10 @@ on:
     paths:
       - '.github/workflows/p1a-g2c-drawroundrect-jdk8-raster.yml'
       - 'scripts/stage-p1a-g2c-drawroundrect-jdk8-raster.py'
-      - 'scripts/build-p1a-g2c-drawroundrect-jdk8-raster.sh'
+      - 'scripts/build-p1a-g2c-drawroundrect-jdk8-raster-v2.sh'
       - 'tests/p1a/RG35XXG2CDrawRoundRectDifferentialGate.java'
       - 'tests/p1a/RG35XXG2BFillTriangleDifferentialGate.java'
+      - 'tests/p1a/RG35XXG2BParentRegressionGate.java'
 
 permissions:
   contents: read
@@ -57,7 +58,7 @@ jobs:
         run: bash ./scripts/build-a5-core2d-java.sh
 
       - name: Build and strictly gate G2C drawRoundRect raster
-        run: bash ./scripts/build-p1a-g2c-drawroundrect-jdk8-raster.sh
+        run: bash ./scripts/build-p1a-g2c-drawroundrect-jdk8-raster-v2.sh
 
       - name: Verify G2C scope and module-host status
         run: |
@@ -73,6 +74,10 @@ jobs:
           grep -q '^G2C_STRICT_DIFFERENTIAL=PASS$' "$ID"
           grep -q '^G2C_CANONICAL_EQUIVALENT=YES$' "$ID"
           grep -q '^G2B_21_CASE_REGRESSION=PASS$' "$ID"
+          grep -q '^G1_G2A_BEHAVIOR_REGRESSION=PASS$' "$ID"
+          grep -q '^G1_ALPHA_REGRESSION=PASS$' "$ID"
+          grep -q '^A6_PROTECTED_REGRESSIONS=PASS$' "$ID"
+          grep -q '^STALE_G1_FUTURE_METHOD_SENTINELS=NOT_USED$' "$ID"
           grep -q '^GAME_SPECIFIC_CODE=NO$' "$ID"
           grep -q '^NO_A9_PARENT=YES$' "$ID"
           grep -q '^BUILD-PASS=YES$' "$ID"
