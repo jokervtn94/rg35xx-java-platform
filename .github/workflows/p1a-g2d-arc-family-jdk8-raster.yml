@@ -12,6 +12,7 @@ on:
       - 'scripts/stage-p1a-g2d6a3-processpath-drawstate.py'
       - 'scripts/stage-p1a-g2d6a5-native-processline-preclip.py'
       - 'scripts/build-p1a-g2d-arc-family-jdk8-raster.sh'
+      - 'scripts/build-p1a-g2d-arc-family-jdk8-raster-identityfix.sh'
       - 'tests/p1a/RG35XXG2DArcFamilyDifferentialGate.java'
       - 'tests/p1a/RG35XXG2BFillTriangleDifferentialGate.java'
 
@@ -59,18 +60,20 @@ jobs:
       - name: Apply accepted A5 Core2D overlay
         run: bash ./scripts/build-a5-core2d-java.sh
 
-      - name: Build and strictly gate G2D arc family
-        run: bash ./scripts/build-p1a-g2d-arc-family-jdk8-raster.sh
+      - name: Build and strictly gate G2D arc family with corrected identity
+        run: bash ./scripts/build-p1a-g2d-arc-family-jdk8-raster-identityfix.sh
 
       - name: Verify G2D scope and module-host status
         run: |
           set -euo pipefail
           ID=out/p1a-g2d-arc-family-jdk8-raster/P1A-G2D-IDENTITY.txt
+          FIX=out/p1a-g2d-arc-family-jdk8-raster/P1A-G2D-IDENTITY-CORRECTION.txt
           LOG=out/p1a-g2d-arc-family-jdk8-raster/P1A-G2D-ARC-FAMILY-DIFFERENTIAL.txt
           grep -q '^PARENT_G2C_SEMANTIC_SHA256=a177541d3d0f9a8ad5e322afae03994800f73d8b13b5b141f8343490aa3ae2dc$' "$ID"
           grep -q '^PARENT_G2C_PLATFORMGRAPHICS_CLASS_SHA256=0b0d5afad448c0e1323a9f1eb66c6a05b6cd13357697f929aa6985551c5e95cb$' "$ID"
           grep -q '^CHANGED_METHODS=Graphics.drawArc,Graphics.fillArc$' "$ID"
           grep -q '^CHANGED_JAR_ENTRIES=org/recompile/mobile/PlatformGraphics.class$' "$ID"
+          grep -q '^FILL_RASTER=OPENJDK8_FILLPATH_PROCESSPATH_PIE_FIXEDPOINT_NONZERO_ACTIVE_EDGE_SCAN$' "$ID"
           grep -q '^CORE2D_CHANGE=NO$' "$ID"
           grep -q '^G2D_FIXED_CASES=37$' "$ID"
           grep -q '^G2D_DETERMINISTIC_FUZZ_CASES=320$' "$ID"
@@ -84,11 +87,15 @@ jobs:
           grep -q '^HOST-DIFFERENTIAL-PASS=YES$' "$ID"
           grep -q '^DEVICE-PASS=NO$' "$ID"
           grep -q '^DEVICE-TEST-PENDING=NO_MODULE_INTEGRATION_PENDING$' "$ID"
+          grep -q '^P1A_G2D_IDENTITY_CORRECTION=PASS$' "$FIX"
+          grep -q '^RUNTIME_LOGIC_CHANGE=NO$' "$FIX"
+          grep -q '^RUNTIME_JAR_SHA_UNCHANGED=YES$' "$FIX"
           grep -q '^P1A_G2D_FIXED_CASE_COUNT=37$' "$LOG"
           grep -q '^P1A_G2D_FUZZ_CASE_COUNT=320$' "$LOG"
           grep -q '^P1A_G2D_STRICT_FAILURE_COUNT=0$' "$LOG"
           grep -q '^P1A_G2D_ARC_FAMILY_DIFFERENTIAL_GATE=PASS$' "$LOG"
           echo P1A_G2D_CI_SCOPE_LOCK=PASS
+          echo P1A_G2D_IDENTITY_METADATA_LOCK=PASS
 
       - name: Upload G2D host candidate
         uses: actions/upload-artifact@v4
