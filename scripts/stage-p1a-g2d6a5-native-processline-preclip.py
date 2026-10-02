@@ -77,10 +77,10 @@ bounds_anchor = '''\t\tint xMax = Math.min(pw, clipX + clipWidth);
 \t\tint yMax = Math.min(ph, clipY + clipHeight);
 
 '''
-if s.count(bounds_anchor) < 2:
-    raise SystemExit("P1A_G2D6A5_STAGE_FAIL bounds anchor unexpectedly scarce=%d" % s.count(bounds_anchor))
+if s.count(bounds_anchor) != 1:
+    raise SystemExit("P1A_G2D6A5_STAGE_FAIL bounds anchor count=%d expected=1" % s.count(bounds_anchor))
 
-# Replace only the first bounds block, which belongs to rg35xxArcProcessLine.
+# Replace the unique bounds block, which belongs to rg35xxArcProcessLine.
 preclip = bounds_anchor + '''\t\tif(checkBounds)
 \t\t{
 \t\t\tfinal float EPSF = 1.0f / 1024.0f;
