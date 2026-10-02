@@ -1,0 +1,55 @@
+name: P1A G2D6A4B FUZZ68 AWT Trace
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - p1a-g2d-arc-family-jdk8-raster
+    paths:
+      - '.github/workflows/p1a-g2d6a4b-fuzz68-awt-trace.yml'
+      - 'tests/p1a/RG35XXG2D6A4BFuzz68AWTTrace.java'
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz68-awt-trace:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pinned host family JDK 8
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Compile diagnostic-only probe
+        run: |
+          set -euo pipefail
+          rm -rf out/p1a-g2d6a4b
+          mkdir -p out/p1a-g2d6a4b/classes
+          javac -encoding UTF-8 -source 1.6 -target 1.6 \
+            -d out/p1a-g2d6a4b/classes \
+            tests/p1a/RG35XXG2D6A4BFuzz68AWTTrace.java
+
+      - name: Run FUZZ_68 with Java2D primitive trace
+        run: |
+          set -euo pipefail
+          java -Djava.awt.headless=true -Dsun.java2d.trace=log \
+            -cp out/p1a-g2d6a4b/classes \
+            org.recompile.rg35xx.p1a.RG35XXG2D6A4BFuzz68AWTTrace \
+            2>&1 | tee out/p1a-g2d6a4b/FUZZ68-AWT-TRACE.txt
+          grep -q '^G2D6A4B_CASE=FUZZ_68$' out/p1a-g2d6a4b/FUZZ68-AWT-TRACE.txt
+          grep -q '^G2D6A4B_PIXEL_31_39=ff3366cc$' out/p1a-g2d6a4b/FUZZ68-AWT-TRACE.txt
+          grep -q '^G2D6A4B_AWT_TRACE_PROBE=PASS$' out/p1a-g2d6a4b/FUZZ68-AWT-TRACE.txt
+          echo G2D6A4B_TRACE_CAPTURE=PASS
+
+      - name: Upload trace evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: RG35XX-P1A-G2D6A4B-FUZZ68-AWT-TRACE-${{ github.sha }}
+          path: out/p1a-g2d6a4b/FUZZ68-AWT-TRACE.txt
+          if-no-files-found: error
