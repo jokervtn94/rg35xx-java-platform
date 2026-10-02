@@ -1,0 +1,57 @@
+name: P1A G2D6B1 FUZZ7 FillArc AWT Trace
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - p1a-g2d-arc-family-jdk8-raster
+    paths:
+      - '.github/workflows/p1a-g2d6b1-fuzz7-fillarc-awt-trace.yml'
+      - 'tests/p1a/RG35XXG2D6B1Fuzz7AWTTrace.java'
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz7-fillarc-awt-trace:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pinned host family JDK 8
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Compile diagnostic-only probe
+        run: |
+          set -euo pipefail
+          rm -rf out/p1a-g2d6b1
+          mkdir -p out/p1a-g2d6b1/classes
+          javac -encoding UTF-8 -source 1.6 -target 1.6 \
+            -d out/p1a-g2d6b1/classes \
+            tests/p1a/RG35XXG2D6B1Fuzz7AWTTrace.java
+
+      - name: Run FUZZ_7 fillArc with Java2D primitive trace
+        run: |
+          set -euo pipefail
+          java -Djava.awt.headless=true -Dsun.java2d.trace=log \
+            -cp out/p1a-g2d6b1/classes \
+            org.recompile.rg35xx.p1a.RG35XXG2D6B1Fuzz7AWTTrace \
+            2>&1 | tee out/p1a-g2d6b1/FUZZ7-FILLARC-AWT-TRACE.txt
+          grep -q '^G2D6B1_CASE=FUZZ_7$' out/p1a-g2d6b1/FUZZ7-FILLARC-AWT-TRACE.txt
+          grep -q '^G2D6B1_COLOR_COUNT=92$' out/p1a-g2d6b1/FUZZ7-FILLARC-AWT-TRACE.txt
+          grep -q '^G2D6B1_CHECKSUM=d5c73eed02b277df$' out/p1a-g2d6b1/FUZZ7-FILLARC-AWT-TRACE.txt
+          grep -q '^G2D6B1_PIXEL_21_5=ffffffff$' out/p1a-g2d6b1/FUZZ7-FILLARC-AWT-TRACE.txt
+          grep -q '^G2D6B1_AWT_TRACE_PROBE=PASS$' out/p1a-g2d6b1/FUZZ7-FILLARC-AWT-TRACE.txt
+          echo G2D6B1_TRACE_CAPTURE=PASS
+
+      - name: Upload trace evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: RG35XX-P1A-G2D6B1-FUZZ7-FILLARC-AWT-TRACE-${{ github.sha }}
+          path: out/p1a-g2d6b1/FUZZ7-FILLARC-AWT-TRACE.txt
+          if-no-files-found: error
