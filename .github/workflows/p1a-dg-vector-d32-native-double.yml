@@ -1,0 +1,79 @@
+name: P1A DG Vector D3.2 Native Double Full Matrix
+
+on:
+  push:
+    branches:
+      - p1a-dg-vector-diagnostic
+    paths:
+      - 'tests/p1a/RG35XXDGVectorD3GenericPolygonSSIGate.java'
+      - 'scripts/run-p1a-dg-vector-d32-native-double.py'
+      - '.github/workflows/p1a-dg-vector-d32-native-double.yml'
+  workflow_dispatch:
+
+jobs:
+  dg-vector-d32-native-double:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pinned host family JDK 8
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+          check-latest: false
+
+      - name: Generate D3.2 from exact D3 matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf out/p1a-dg-vector-d32
+          mkdir -p out/p1a-dg-vector-d32
+          python3 scripts/run-p1a-dg-vector-d32-native-double.py \
+            | tee out/p1a-dg-vector-d32/D32-GENERATOR.txt
+          grep -q '^DGVD32_GENERATOR=PASS$' out/p1a-dg-vector-d32/D32-GENERATOR.txt
+          grep -q '^DGVD32_SOURCE_MATRIX=D3_EXACT_17_FIXED_PLUS_320_FUZZ$' out/p1a-dg-vector-d32/D32-GENERATOR.txt
+          grep -q '^DGVD32_SEMANTIC_DELTA=ONLY_SLOPE_FLOOR_SUBTRACTION_PRECISION$' out/p1a-dg-vector-d32/D32-GENERATOR.txt
+          grep -q '^DGVD32_OPENJDK_C_SUBTRACTION=DOUBLE$' out/p1a-dg-vector-d32/D32-GENERATOR.txt
+          grep -q '^DGVD32_RUNTIME_CHANGE=NO$' out/p1a-dg-vector-d32/D32-GENERATOR.txt
+
+      - name: Compile diagnostic-only D3.2 gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out/p1a-dg-vector-d32/classes
+          javac -encoding UTF-8 -source 1.6 -target 1.6 \
+            -d out/p1a-dg-vector-d32/classes \
+            out/p1a-dg-vector-d32/generated/org/recompile/rg35xx/p1a/RG35XXDGVectorD32GenericPolygonNativeDoubleGate.java
+          echo DGVD32_JAVA6_GATE=PASS
+
+      - name: Run exact 337-case native-double differential
+        shell: bash
+        run: |
+          set -euo pipefail
+          java -Djava.awt.headless=true \
+            -cp out/p1a-dg-vector-d32/classes \
+            org.recompile.rg35xx.p1a.RG35XXDGVectorD32GenericPolygonNativeDoubleGate \
+            | tee out/p1a-dg-vector-d32/D32-NATIVE-DOUBLE-FULL-MATRIX.txt
+
+          grep -q '^DGVD32_FIXED_COUNT=17$' out/p1a-dg-vector-d32/D32-NATIVE-DOUBLE-FULL-MATRIX.txt
+          grep -q '^DGVD32_FUZZ_COUNT=320$' out/p1a-dg-vector-d32/D32-NATIVE-DOUBLE-FULL-MATRIX.txt
+          grep -q '^DGVD32_RANDOM_SEED=35d3001$' out/p1a-dg-vector-d32/D32-NATIVE-DOUBLE-FULL-MATRIX.txt
+          grep -q '^DGVD32_STRICT_FAILURE_COUNT=0$' out/p1a-dg-vector-d32/D32-NATIVE-DOUBLE-FULL-MATRIX.txt
+          grep -q '^DGVD32_GENERIC_POLYGON_WINDING=EVEN_ODD$' out/p1a-dg-vector-d32/D32-NATIVE-DOUBLE-FULL-MATRIX.txt
+          grep -q '^DGVD32_OWNER=OPENJDK8_SHAPESPANITERATOR_APPENDPOLY$' out/p1a-dg-vector-d32/D32-NATIVE-DOUBLE-FULL-MATRIX.txt
+          grep -q '^DGVD32_G2B_GENERALIZATION=3_POINTS_TO_N_POINTS$' out/p1a-dg-vector-d32/D32-NATIVE-DOUBLE-FULL-MATRIX.txt
+          grep -q '^DGVD32_RUNTIME_CHANGE=NO$' out/p1a-dg-vector-d32/D32-NATIVE-DOUBLE-FULL-MATRIX.txt
+          grep -q '^DGVD32_GENERIC_POLYGON_SSI_DIFFERENTIAL=PASS$' out/p1a-dg-vector-d32/D32-NATIVE-DOUBLE-FULL-MATRIX.txt
+          echo DGVD32_WORKFLOW_GATE=PASS
+
+      - name: Upload D3.2 diagnostic evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: RG35XX-P1A-DG-VECTOR-D32-NATIVE-DOUBLE-${{ github.sha }}
+          path: |
+            out/p1a-dg-vector-d32/D32-GENERATOR.txt
+            out/p1a-dg-vector-d32/D32-NATIVE-DOUBLE-FULL-MATRIX.txt
+            out/p1a-dg-vector-d32/generated/org/recompile/rg35xx/p1a/RG35XXDGVectorD32GenericPolygonNativeDoubleGate.java
+          if-no-files-found: error
