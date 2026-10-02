@@ -10,6 +10,7 @@ $ExpectedPlatform = 'ca61589b71da1413f06ab7f898d490274506638d4d2db3be47a4137970a
 $ExpectedExerciser = '126d586ccaeede8bc8adddf5fa65ee9b5b037ca8468c6dce5aa513bb6bd3fefc'
 $ExpectedInput = '69a8aeb3940bfbc234f3a562a7ae4bcaea10b50f8a8f2c38ad229a5430930f6d'
 $ExpectedVideo = 'c6687c0a43b24b425af0727c928afb5414da811ecbcbbe3538928470abe8bd0d'
+$ExpectedAudio = '4522157846c33c150a85c50b4bed6f68351f1c62d54b8cd7805cbb97c5727644'
 
 function Get-Sha256([string]$Path) {
     return (Get-FileHash -Algorithm SHA256 -LiteralPath $Path).Hash.ToLowerInvariant()
@@ -31,8 +32,8 @@ if (-not (Test-Path -LiteralPath $Jamvm -PathType Leaf)) { throw "Protected JamV
 if (-not (Test-Path -LiteralPath $Glibj -PathType Leaf)) { throw "Protected glibj.zip missing: $Glibj" }
 $JamvmHash = Get-Sha256 $Jamvm
 $GlibjHash = Get-Sha256 $Glibj
-if ($JamvmHash -ne $ExpectedJamvm) { throw "JamVM hash mismatch. Nothing installed." }
-if ($GlibjHash -ne $ExpectedGlibj) { throw "glibj.zip hash mismatch. Nothing installed." }
+if ($JamvmHash -ne $ExpectedJamvm) { throw 'JamVM hash mismatch. Nothing installed.' }
+if ($GlibjHash -ne $ExpectedGlibj) { throw 'glibj.zip hash mismatch. Nothing installed.' }
 
 $SourceRoot = Join-Path $PSScriptRoot 'SD'
 $SourceLauncher = Join-Path $SourceRoot 'Roms\APPS\RG35XX-P1A-GRAPHICS.sh'
@@ -45,6 +46,7 @@ $Critical = @{
     'RG35XX-Platform-Exerciser-P1A.jar' = $ExpectedExerciser
     'librg35xx_input.so' = $ExpectedInput
     'librg35xx_video.so' = $ExpectedVideo
+    'libaudio.so' = $ExpectedAudio
 }
 foreach ($Name in $Critical.Keys) {
     $Path = Join-Path $SourcePayload $Name
@@ -92,6 +94,7 @@ $Result = Join-Path $SdRoot 'RG35XX-P1A-GRAPHICS-INSTALL-RESULT.txt'
     "EXERCISER_SHA256=$ExpectedExerciser",
     "INPUT_NATIVE_SHA256=$ExpectedInput",
     "VIDEO_NATIVE_SHA256=$ExpectedVideo",
+    "AUDIO_NATIVE_SHA256=$ExpectedAudio",
     "LAUNCHER=$DestLauncher",
     "PAYLOAD=$DestPayload",
     "BACKUP_CREATED=$NeedBackup",
@@ -102,6 +105,6 @@ $Result = Join-Path $SdRoot 'RG35XX-P1A-GRAPHICS-INSTALL-RESULT.txt'
 ) | Set-Content -LiteralPath $Result -Encoding ASCII
 
 Write-Host 'P1A graphics physical package install PASS.'
-Write-Host "Launch from APPS: RG35XX-P1A-GRAPHICS"
+Write-Host 'Launch from APPS: RG35XX-P1A-GRAPHICS'
 Write-Host "Install result: $Result"
 if ($NeedBackup) { Write-Host "Backup: $BackupRoot" }
