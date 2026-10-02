@@ -37,7 +37,6 @@ for sig, label in [
     if s.count(sig) != 1:
         raise SystemExit("P1A_COMPLETE_G4G5_STAGE_FAIL %s count=%d" % (label, s.count(sig)))
 
-# Lock exact pinned Miyoo semantics before adding Raw2D-only branches.
 p0 = s.index(sig_draw_image)
 p1 = s.index(sig_draw_px_b, p0)
 p2 = s.index(sig_draw_px_i, p1)
@@ -76,6 +75,12 @@ for name, token in checks:
     if token not in blocks[name]:
         raise SystemExit("P1A_COMPLETE_G4G5_STAGE_FAIL canonical token %s" % token)
 
+# G1 already reconstructed and host-accepted the exact OpenJDK8 8-bit SrcOver
+# arithmetic in this same owner class. Reuse it instead of Core2D.blit, whose
+# generic compositor is not bit-exact for semi-transparent DirectGraphics IO.
+if "private static int rg35xxCopyAreaSourceOver(int s, int d)" not in s:
+    raise SystemExit("P1A_COMPLETE_G4G5_STAGE_FAIL G1 exact SrcOver helper missing")
+
 helper = '''\tprivate static int rg35xxDGManipulationToTransform(int manipulation)
 \t{
 \t\tfinal int HV = DirectGraphics.FLIP_HORIZONTAL | DirectGraphics.FLIP_VERTICAL;
@@ -112,11 +117,55 @@ helper = '''\tprivate static int rg35xxDGManipulationToTransform(int manipulatio
 \t\treturn packed;
 \t}
 
+\tprivate void rg35xxDGBlitExact(int[] srcPixels, int width, int height, int transform, int x, int y)
+\t{
+\t\tif(width <= 0 || height <= 0) return;
+\t\tint[] dst = platformImage.getRG35XXPixels();
+\t\tint[] src = srcPixels;
+\t\tif(src == dst)
+\t\t{
+\t\t\tsrc = new int[srcPixels.length];
+\t\t\tSystem.arraycopy(srcPixels, 0, src, 0, srcPixels.length);
+\t\t}
+\t\tint dstWidth = platformImage.getRG35XXWidth();
+\t\tint dstHeight = platformImage.getRG35XXHeight();
+\t\tint dstX = x + translateX;
+\t\tint dstY = y + translateY;
+\t\tint clipLeft = Math.max(0, clipX);
+\t\tint clipTop = Math.max(0, clipY);
+\t\tint clipRight = Math.min(dstWidth, clipX + clipWidth);
+\t\tint clipBottom = Math.min(dstHeight, clipY + clipHeight);
+\t\tfor(int sy = 0; sy < height; sy++)
+\t\t{
+\t\t\tfor(int sx = 0; sx < width; sx++)
+\t\t\t{
+\t\t\t\tint tx;
+\t\t\t\tint ty;
+\t\t\t\tswitch(transform)
+\t\t\t\t{
+\t\t\t\t\tcase Sprite.TRANS_NONE: tx = sx; ty = sy; break;
+\t\t\t\t\tcase Sprite.TRANS_MIRROR_ROT180: tx = sx; ty = height - 1 - sy; break;
+\t\t\t\t\tcase Sprite.TRANS_MIRROR: tx = width - 1 - sx; ty = sy; break;
+\t\t\t\t\tcase Sprite.TRANS_ROT180: tx = width - 1 - sx; ty = height - 1 - sy; break;
+\t\t\t\t\tcase Sprite.TRANS_MIRROR_ROT270: tx = sy; ty = sx; break;
+\t\t\t\t\tcase Sprite.TRANS_ROT90: tx = height - 1 - sy; ty = sx; break;
+\t\t\t\t\tcase Sprite.TRANS_ROT270: tx = sy; ty = width - 1 - sx; break;
+\t\t\t\t\tcase Sprite.TRANS_MIRROR_ROT90: tx = height - 1 - sy; ty = width - 1 - sx; break;
+\t\t\t\t\tdefault: tx = sx; ty = sy; break;
+\t\t\t\t}
+\t\t\t\tint dx = dstX + tx;
+\t\t\t\tint dy = dstY + ty;
+\t\t\t\tif(dx < clipLeft || dy < clipTop || dx >= clipRight || dy >= clipBottom) continue;
+\t\t\t\tint di = dy * dstWidth + dx;
+\t\t\t\tdst[di] = rg35xxCopyAreaSourceOver(src[sy * width + sx], dst[di]);
+\t\t\t}
+\t\t}
+\t}
+
 \tprivate void rg35xxDGBlitPacked(int[] packed, int width, int height, int manipulation, int x, int y)
 \t{
-\t\tPlatformImage temp = new PlatformImage(packed, width, height, true);
 \t\tint transform = rg35xxDGManipulationToTransform(manipulation);
-\t\trg35xxBlit(temp, 0, 0, width, height, transform, x, y);
+\t\trg35xxDGBlitExact(packed, width, height, transform, x, y);
 \t}
 
 '''
@@ -130,7 +179,7 @@ raw_draw_image = '''\t\tif(platformImage != null && platformImage.isRG35XXRaw() 
 \t\t\tint dh = rg35xxDGTransformSwaps(transform) ? sw : sh;
 \t\t\tx = AnchorX(x, dw, anchor);
 \t\t\ty = AnchorY(y, dh, anchor);
-\t\t\trg35xxBlit(img, 0, 0, sw, sh, transform, x, y);
+\t\t\trg35xxDGBlitExact(img.platformImage.getRG35XXPixels(), sw, sh, transform, x, y);
 \t\t\treturn;
 \t\t}
 '''
@@ -232,7 +281,6 @@ raw_get_short = '''\t\tif(platformImage != null && platformImage.isRG35XXRaw())
 \t\t}
 '''
 
-# Insert helper before Nokia drawImage; insert Raw2D branches immediately after method braces.
 s = s[:p0] + helper + s[p0:]
 
 def inject_body(text, sig, code, label):
@@ -250,17 +298,17 @@ s = inject_body(s, sig_draw_px_s, raw_draw_short, "drawPixels-short")
 s = inject_body(s, sig_get_px_i, raw_get_int, "getPixels-int")
 s = inject_body(s, sig_get_px_s, raw_get_short, "getPixels-short")
 
-# Byte getPixels must remain exactly the canonical stub block.
 ng0 = s.index(sig_get_px_b)
 ng1 = s.index(sig_get_px_i, ng0)
 if s[ng0:ng1] != blocks["getByte"]:
     raise SystemExit("P1A_COMPLETE_G4G5_STAGE_FAIL byte getPixels stub drift")
 
 required = [
-    "private static int rg35xxDGManipulationToTransform(int manipulation)",
+    "private void rg35xxDGBlitExact(int[] srcPixels, int width, int height, int transform, int x, int y)",
+    "dst[di] = rg35xxCopyAreaSourceOver(src[sy * width + sx], dst[di]);",
     "case DirectGraphics.ROTATE_90: return Sprite.TRANS_ROT270;",
-    "case H90: return Sprite.TRANS_MIRROR_ROT270;",
-    "rg35xxBlit(img, 0, 0, sw, sh, transform, x, y);",
+    "case Sprite.TRANS_ROT270: tx = sy; ty = width - 1 - sx; break;",
+    "rg35xxDGBlitExact(img.platformImage.getRG35XXPixels(), sw, sh, transform, x, y);",
     "int rgOds = offset / scanlength;",
     "rgc = ((pixels[rgTmp + xj] >> rgBit) & 1);",
     "for(int rgj = 7; rgj >= 0; rgj--)",
@@ -272,7 +320,6 @@ for token in required:
     if token not in s:
         raise SystemExit("P1A_COMPLETE_G4G5_STAGE_FAIL missing token %s" % token)
 
-# Pinned fallbacks remain present and no game-specific delta is allowed.
 for name, token in checks:
     if token not in s:
         raise SystemExit("P1A_COMPLETE_G4G5_STAGE_FAIL fallback lost %s" % token)
@@ -285,7 +332,7 @@ print("P1A_COMPLETE_G4G5_OWNER=RG35XX_GRAPHICS_BOUNDARY")
 print("P1A_COMPLETE_G4_CHANGED_METHODS=DirectGraphics.drawImage_manipulation,drawPixels_byte,drawPixels_int,drawPixels_short")
 print("P1A_COMPLETE_G5_CHANGED_METHODS=DirectGraphics.getPixels_int,getPixels_short")
 print("P1A_COMPLETE_G5_GETPIXELS_BYTE=CANONICAL_STUB_UNCHANGED")
-print("P1A_COMPLETE_G4_BACKEND=EXISTING_A5_RAW_PLATFORMIMAGE_PLUS_RG35XXBLIT")
+print("P1A_COMPLETE_G4_BACKEND=RAW_TRANSFORM_PLUS_G1_EXACT_8BIT_SRCOVER")
 print("P1A_COMPLETE_G5_BACKEND=RAW_PLATFORMIMAGE_FRAMEBUFFER_READ")
 print("P1A_COMPLETE_CORE2D_CHANGE=NO")
 print("P1A_COMPLETE_NATIVE_CHANGE=NO")
