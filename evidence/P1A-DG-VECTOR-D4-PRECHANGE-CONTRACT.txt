@@ -1,0 +1,111 @@
+P1A-DG-VECTOR-D4-PRECHANGE-CONTRACT
+DATE=2026-10-02
+STATUS=LOCKED_PRECHANGE_CONTRACT
+RUNTIME_CHANGE=NO
+
+PORT_UNIT=DirectGraphics fill vector family: fillTriangle(int,int,int,int,int,int,int argbColor) + fillPolygon(int[],int,int[],int,int,int argbColor)
+CURRENT_PHASE=P1
+CURRENT_MODULE=Graphics / DirectGraphics vector fill family
+
+MIYOO_SOURCE=aweigit/freej2me-miyoomini@ca11dfe8ea1cc273d92460f9a83bbf192023fa63
+MIYOO_CURRENT_BEHAVIOR=AWT wrapper: setAlphaRGB(argbColor) -> gc.fillPolygon(...) -> restore prior RGB color
+FREEJ2ME_REFERENCE=hex007/freej2me@fae9304b85ac1c61d0117f6c8efe528612388278
+JDK_OPENJDK_REFERENCE_IF_REQUIRED=openjdk/jdk8u@64050651646459b18fa06ac90660e93999039c7e; LoopPipe.fillPolygon + ShapeSpanIterator.appendPoly/appendSegment + SrcOver MaskBlit evidence
+RG35XX_MEASURED_LIMITATION=Raw2D PlatformGraphics has gc=null; current DirectGraphics fill vector methods therefore cannot use Miyoo AWT gc.fillPolygon path on RG35XX raw backing
+EXACT_FAILURE_OR_MISSING_CONTRACT=DirectGraphics 7-arg fillTriangle and generic fillPolygon have no RG35XX Raw2D boundary implementation; fillTriangle raw path remains intentional RAW_EXCEPTION in existing G2D regression evidence
+FAILURE_OWNER=PlatformGraphics RG35XX boundary only
+WHY_MIYOO_AS_IS_CANNOT_WORK=The pinned Miyoo implementation delegates these methods to java.awt.Graphics gc.fillPolygon, but RG35XX Raw2D deliberately has no AWT Graphics context
+
+EVIDENCE_D1_RUN=36981262161
+EVIDENCE_D2_RUN=36982104908
+EVIDENCE_D3_RUN=36982837446
+EVIDENCE_D31_RUN=36984537479
+EVIDENCE_D32_RUN=36985059127
+
+D2_FILL_ALPHA_MODEL=opaque polygon coverage + exact 8-bit SrcOver; alpha-independent coverage for tested matrix
+D3_POLYGON_WINDING=EVEN_ODD
+D3_RASTER_OWNER=OPENJDK8_SHAPESPANITERATOR_APPENDPOLY
+D31_ROOT_CAUSE=SLOPE_FLOOR_SUBTRACTION_PRECISION
+D32_GENERIC_POLYGON_DIFFERENTIAL=17 fixed + 320 fuzz = 337/337 bit-exact, strict failures=0
+
+EXACT_PARENT_IDENTITY=c1f33f6f72d8560b32ef7d98804dfb20fd325dad
+PARENT_ROLE=G2D_HOST_LOCKED_RUNTIME_PARENT
+DIAGNOSTIC_EVIDENCE_HEAD=a83a2c01eec4d5d6dbfdf13c32de0d0627a0e41a
+DIAGNOSTIC_HEAD_IS_RUNTIME_PARENT=NO
+A9_PARENT=NO
+
+MINIMUM_REQUIRED_DELTA=
+1) Add Raw2D branch only for DirectGraphics fillTriangle 7-arg and fillPolygon.
+2) Reuse the proven ShapeSpanIterator-family pixel-center/even-odd raster owner; do not create a third unrelated polygon engine.
+3) For fillTriangle 7-arg, reuse the accepted triangle coverage family with exact DirectGraphics ARGB SrcOver semantics.
+4) For generic fillPolygon, generalize the same SSI owner to N points using native-double slope-floor subtraction semantics proven by D3.1/D3.2.
+5) Preserve Miyoo AWT behavior unchanged when platformImage is not RG35XX raw.
+6) Preserve DirectGraphics color state: apply argbColor for the operation and restore prior normal RGB state exactly as Miyoo does.
+7) No behavior changes to drawTriangle, drawPolygon, drawArc, fillArc, Core2D, image/pixel APIs, or unrelated Graphics methods.
+
+FILES_ALLOWED_TO_CHANGE=
+- NEW scripts/stage-p1a-dg-fill-vector-*.py only
+- NEW build/stage-chain wrapper needed to apply the D4 stage after locked G2D build
+- NEW tests/p1a/RG35XXDGVectorD4*.java differential/regression harnesses
+- NEW .github/workflows/p1a-dg-vector-d4-*.yml
+- Generated/staged org/recompile/mobile/PlatformGraphics.java only through the new D4 stage during CI build
+
+FILES_FORBIDDEN_TO_CHANGE=
+- Existing locked G1/G2A/G2B/G2C/G2D stage scripts except read-only reuse
+- org/recompile/mobile/RG35XXCore2D.java
+- DirectGraphics.drawTriangle
+- DirectGraphics.drawPolygon
+- DirectGraphics drawPixels/getPixels/image manipulation family
+- Graphics.drawArc / Graphics.fillArc and all G2D helpers
+- JamVM
+- glibj
+- native input/video/audio libraries
+- any game-specific source or condition
+
+SEMANTIC_LOCK_FILLTRIANGLE_7ARG=
+GEOMETRY_OWNER=accepted G2B ShapeSpanIterator triangle raster family
+COLOR_OWNER=DirectGraphics argbColor
+COMPOSITE=exact 8-bit SrcOver
+STATE_RESTORE=restore prior normal RGB color state
+WINDING=EVEN_ODD equivalent for triangle
+
+SEMANTIC_LOCK_FILLPOLYGON=
+RASTER_OWNER=OPENJDK8_SHAPESPANITERATOR_APPENDPOLY
+WINDING=EVEN_ODD
+PIXEL_CENTER_MODEL=ceil(coord - 0.5) edge semantics with +0.25 normalization family already proven in G2B
+EDGE_FRACTION_MODEL=FRACTTOJINT using double-precision slope-floor subtraction before integer conversion
+COMPOSITE=exact 8-bit SrcOver
+STATE_RESTORE=restore prior normal RGB color state
+
+PARENT_REGRESSION_GATES=
+- G1 clearRect/copyArea behavior regression PASS
+- G1 alpha regression PASS
+- G2A fillRoundRect regression PASS
+- G2B 21-case fillTriangle regression PASS
+- G2C 19-case drawRoundRect regression PASS
+- G2D arc family 37 fixed + 320 fuzz strict differential PASS
+- A6 protected clip/translate/raw regressions PASS
+- Existing DirectGraphics fillTriangle 7-arg RAW_EXCEPTION expectation must be replaced only by the new D4 canonical differential gate; no silent deletion of evidence
+
+HOST_DIFFERENTIAL_GATE=
+- fillTriangle 7-arg: deterministic fixed + fuzz full-frame comparison against pinned JDK8 AWT with opaque + semi-transparent ARGB, clip, translate, degenerate/offscreen cases
+- fillPolygon: D3.2 337-case raster corpus plus ARGB SrcOver coverage/composite verification and additional state-restore checks
+- strict failure count must be 0
+- Java 6 source/target gate PASS
+- changed JAR entries limited to org/recompile/mobile/PlatformGraphics.class
+
+MODULE_INTEGRATION_GATE=
+- Build one D4 candidate on the G2D host-locked parent
+- Run all parent Graphics regressions plus D4 fill-vector differential in one workflow
+- Do not promote to P1A-COMPLETE-GRAPHICS yet; drawTriangle/drawPolygon and remaining declared matrix still require closure
+
+PHYSICAL_GATE=NO_STANDALONE_METHOD_TEST; defer to graphics module exerciser after full P1A graphics closure
+GENERIC_PLATFORM_IMPACT=Adds canonical RG35XX Raw2D support for DirectGraphics polygon fill semantics without game-specific behavior
+GAME_SPECIFIC_CODE=NO
+SPECULATIVE_OPTIMIZATION=NO
+
+IMPLEMENTATION_BRANCH_REQUIRED=p1a-dg-fill-vector-candidate
+IMPLEMENTATION_BRANCH_PARENT=c1f33f6f72d8560b32ef7d98804dfb20fd325dad
+IMPLEMENTATION_MUST_NOT_PARENT_FROM=p1a-dg-vector-diagnostic
+
+PRECHANGE_CONTRACT_LOCK=PASS
