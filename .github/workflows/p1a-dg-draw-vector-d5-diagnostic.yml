@@ -1,0 +1,105 @@
+name: P1A DG Draw Vector D5 Diagnostic
+
+on:
+  push:
+    branches:
+      - p1a-dg-draw-vector-diagnostic
+    paths:
+      - 'tests/p1a/RG35XXDGDrawVectorD5Diagnostic.java'
+      - '.github/workflows/p1a-dg-draw-vector-d5-diagnostic.yml'
+  workflow_dispatch:
+
+jobs:
+  p1a-dg-draw-vector-d5:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout diagnostic branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 8
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Verify D4 host-pass ancestry only
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor 2c2b1f2b0ca99d42ef9965a24f1eb7678eca428a HEAD
+          echo P1A_DG_D5_D4_HOST_PARENT_ANCESTRY=PASS
+          echo P1A_DG_D5_RUNTIME_CHANGE=NO
+
+      - name: Compile Java6 diagnostic
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p build/p1a-dg-d5
+          javac -encoding UTF-8 -source 1.6 -target 1.6 \
+            -d build/p1a-dg-d5 \
+            tests/p1a/RG35XXDGDrawVectorD5Diagnostic.java
+          echo P1A_DG_D5_JAVA6_GATE=PASS
+
+      - name: Run deterministic draw-family matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          java -Djava.awt.headless=true -cp build/p1a-dg-d5 \
+            org.recompile.rg35xx.p1a.RG35XXDGDrawVectorD5Diagnostic \
+            | tee build/p1a-dg-d5/D5-MATRIX.txt
+          LOG=build/p1a-dg-d5/D5-MATRIX.txt
+          grep -q '^P1A_DG_D5_FIXED_CASE_COUNT=20$' "$LOG"
+          grep -q '^P1A_DG_D5_FUZZ_CASE_COUNT=160$' "$LOG"
+          grep -q '^P1A_DG_D5_ALPHA_LEVEL_COUNT=3$' "$LOG"
+          grep -q '^P1A_DG_D5_RANDOM_SEED=35d5001$' "$LOG"
+          grep -q '^P1A_DG_D5_ALPHA_SOURCE_EQUIVALENT_PATH_FAILURE_COUNT=0$' "$LOG"
+          grep -q '^P1A_DG_D5_OPAQUE_OWNER=OPENJDK8_DRAWPOLYGONS_GENERALRENDERER_DODRAWPOLY$' "$LOG"
+          grep -q '^P1A_DG_D5_ALPHA_OWNER=PIXELTOSHAPECONVERTER_SPANSHAPERENDERER_GETSTROKESPANS$' "$LOG"
+          grep -q '^P1A_DG_D5_ALPHA_COMPOSITE=SRCOVER_MASKBLIT$' "$LOG"
+          grep -q '^P1A_DG_D5_RUNTIME_CHANGE=NO$' "$LOG"
+          grep -q '^P1A_DG_D5_DIAGNOSTIC_GATE=PASS$' "$LOG"
+
+      - name: Capture Java2D primitive traces
+        shell: bash
+        run: |
+          set -euo pipefail
+          for spec in 'triangle opaque' 'polygon opaque' 'triangle alpha' 'polygon alpha'; do
+            set -- $spec
+            shape="$1"
+            mode="$2"
+            java -Djava.awt.headless=true -Dsun.java2d.trace=log -cp build/p1a-dg-d5 \
+              org.recompile.rg35xx.p1a.RG35XXDGDrawVectorD5Diagnostic \
+              trace "$shape" "$mode" \
+              2>&1 | tee "build/p1a-dg-d5/trace-${shape}-${mode}.txt"
+            grep -q '^P1A_DG_D5_TRACE_PROBE=PASS$' "build/p1a-dg-d5/trace-${shape}-${mode}.txt"
+          done
+
+          grep -q 'DrawPolygons::DrawPolygons' build/p1a-dg-d5/trace-triangle-opaque.txt
+          grep -q 'DrawPolygons::DrawPolygons' build/p1a-dg-d5/trace-polygon-opaque.txt
+
+          grep -q 'Blit.*GeneralMaskBlit.*Blit' build/p1a-dg-d5/trace-triangle-alpha.txt
+          grep -q 'MaskBlit::MaskBlit' build/p1a-dg-d5/trace-triangle-alpha.txt
+          grep -q 'Blit.*GeneralMaskBlit.*Blit' build/p1a-dg-d5/trace-polygon-alpha.txt
+          grep -q 'MaskBlit::MaskBlit' build/p1a-dg-d5/trace-polygon-alpha.txt
+
+          if grep -q 'DrawPolygons::DrawPolygons' build/p1a-dg-d5/trace-triangle-alpha.txt; then
+            echo P1A_DG_D5_FAIL=alpha_triangle_unexpected_DrawPolygons >&2
+            exit 1
+          fi
+          if grep -q 'DrawPolygons::DrawPolygons' build/p1a-dg-d5/trace-polygon-alpha.txt; then
+            echo P1A_DG_D5_FAIL=alpha_polygon_unexpected_DrawPolygons >&2
+            exit 1
+          fi
+
+          echo P1A_DG_D5_OPAQUE_TRACE_OWNER=DrawPolygons
+          echo P1A_DG_D5_ALPHA_TRACE_OWNER=PixelToShape_SpanStroke_MaskBlit
+          echo P1A_DG_D5_TRACE_GATE=PASS
+
+      - name: Upload D5 diagnostic evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: RG35XX-P1A-DG-DRAW-VECTOR-D5-${{ github.sha }}
+          path: build/p1a-dg-d5/
+          if-no-files-found: error
