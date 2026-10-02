@@ -8,6 +8,7 @@ on:
       - '.github/workflows/p2a-image-decode-diagnostic.yml'
       - 'tests/p2/RG35XXP2APngFormatDiagnostic.java'
       - 'tests/p2/RG35XXP2APngSemanticsR2Diagnostic.java'
+      - 'tests/p2/RG35XXP2AGrayTransferR3Diagnostic.java'
       - 'docs/P2-IMAGE-FONT-FRONTEND-CONTRACT-AUDIT-v1.md'
   workflow_dispatch:
 
@@ -39,7 +40,7 @@ jobs:
           git merge-base --is-ancestor "$PARENT" HEAD
           [ "$(git merge-base "$PARENT" HEAD)" = "$PARENT" ]
           changed="$(git diff --name-only "$PARENT"..HEAD | LC_ALL=C sort)"
-          expected=$'.github/workflows/p2a-image-decode-diagnostic.yml\ndocs/P2-IMAGE-FONT-FRONTEND-CONTRACT-AUDIT-v1.md\ntests/p2/RG35XXP2APngFormatDiagnostic.java\ntests/p2/RG35XXP2APngSemanticsR2Diagnostic.java'
+          expected=$'.github/workflows/p2a-image-decode-diagnostic.yml\ndocs/P2-IMAGE-FONT-FRONTEND-CONTRACT-AUDIT-v1.md\ntests/p2/RG35XXP2AGrayTransferR3Diagnostic.java\ntests/p2/RG35XXP2APngFormatDiagnostic.java\ntests/p2/RG35XXP2APngSemanticsR2Diagnostic.java'
           [ "$changed" = "$expected" ] || { echo "P2_AUDIT_SCOPE_FAIL=$changed" >&2; exit 1; }
           ! git diff --name-only "$PARENT"..HEAD | grep -E '^(adapter/|native/|upstream/|scripts/stage-|scripts/build-)'
           echo P2_AUDIT_RUNTIME_DELTA=NONE
@@ -85,8 +86,9 @@ jobs:
             -classpath out/p1a-complete-graphics-candidate/freej2me-rg35xx.jar \
             -d build/p2a-png-diagnostic \
             tests/p2/RG35XXP2APngFormatDiagnostic.java \
-            tests/p2/RG35XXP2APngSemanticsR2Diagnostic.java
-          for cls in RG35XXP2APngFormatDiagnostic RG35XXP2APngSemanticsR2Diagnostic; do
+            tests/p2/RG35XXP2APngSemanticsR2Diagnostic.java \
+            tests/p2/RG35XXP2AGrayTransferR3Diagnostic.java
+          for cls in RG35XXP2APngFormatDiagnostic RG35XXP2APngSemanticsR2Diagnostic RG35XXP2AGrayTransferR3Diagnostic; do
             major=$(od -An -t u1 -j 7 -N 1 "build/p2a-png-diagnostic/org/recompile/rg35xx/p2/${cls}.class" | tr -d ' ')
             [ "$major" = 50 ]
           done
@@ -125,6 +127,22 @@ jobs:
           grep -q '^P2A_R2_RUNTIME_CHANGE=NO$' P2A-PNG-R2-DIAGNOSTIC.txt
           echo P2A_PNG_R2_HOST_DIAGNOSTIC_GATE=PASS
 
+      - name: Run R3 exhaustive JDK8 grayscale transfer proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$JAVA_HOME/bin/java" -Djava.awt.headless=true \
+            -cp build/p2a-png-diagnostic \
+            org.recompile.rg35xx.p2.RG35XXP2AGrayTransferR3Diagnostic | tee P2A-PNG-R3-DIAGNOSTIC.txt
+          grep -q '^P2A_R3_GRAY8_SAMPLE_COUNT=256$' P2A-PNG-R3-DIAGNOSTIC.txt
+          grep -q '^P2A_R3_GRAY8_FORMULA_MISMATCH=0$' P2A-PNG-R3-DIAGNOSTIC.txt
+          grep -q '^P2A_R3_GRAY16_SAMPLE_COUNT=65536$' P2A-PNG-R3-DIAGNOSTIC.txt
+          grep -q '^P2A_R3_GRAY16_FORMULA_MISMATCH=0$' P2A-PNG-R3-DIAGNOSTIC.txt
+          grep -q '^P2A_R3_GRAY_TRANSFER_MODEL=LINEAR_GRAY_TO_SRGB_IEC61966_2_1$' P2A-PNG-R3-DIAGNOSTIC.txt
+          grep -q '^P2A_R3_DIAGNOSTIC=PASS_EVIDENCE_ONLY$' P2A-PNG-R3-DIAGNOSTIC.txt
+          grep -q '^P2A_R3_RUNTIME_CHANGE=NO$' P2A-PNG-R3-DIAGNOSTIC.txt
+          echo P2A_PNG_R3_GRAY_TRANSFER_GATE=PASS
+
       - name: Upload P2A diagnostic evidence
         uses: actions/upload-artifact@v4
         with:
@@ -132,4 +150,5 @@ jobs:
           path: |
             P2A-PNG-DIAGNOSTIC.txt
             P2A-PNG-R2-DIAGNOSTIC.txt
+            P2A-PNG-R3-DIAGNOSTIC.txt
           if-no-files-found: error
