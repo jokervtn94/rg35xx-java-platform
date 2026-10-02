@@ -18,13 +18,15 @@ new_fill_poly = '''\tprivate static int rg35xxDGSSIOutcode(float x, float y, int
 new_fill_tri7 = '''\tpublic void fillTriangle(int x1, int y1, int x2, int y2, int x3, int y3, int argbColor)\n\t{\n\t\t//System.out.println("fillTriangle"); // Found In Use\n\t\tint temp = color;\n\t\tif(platformImage != null && platformImage.isRG35XXRaw())\n\t\t{\n\t\t\trg35xxDGFillPolygonSSI(new int[]{x1,x2,x3}, new int[]{y1,y2,y3}, 3, argbColor);\n\t\t\treturn;\n\t\t}\n\t\tsetAlphaRGB(argbColor);\n\t\tgc.fillPolygon(new int[]{x1,x2,x3}, new int[]{y1,y2,y3}, 3);\n\t\tsetColor(temp);\n\t}\n'''
 
 fill_poly_sig = "\tpublic void fillPolygon(int[] xPoints, int xOffset, int[] yPoints, int yOffset, int nPoints, int argbColor)\n"
+g2b_helper_sig = "\tprivate static int rg35xxSSIOutcode(float x, float y, int lox, int loy, int hix, int hiy)\n"
 fill_tri6_sig = "\tpublic void fillTriangle(int x1, int y1, int x2, int y2, int x3, int y3)\n"
 fill_tri7_sig = "\tpublic void fillTriangle(int x1, int y1, int x2, int y2, int x3, int y3, int argbColor)\n"
 get_pixels_byte_sig = "\tpublic void getPixels(byte[] pixels, byte[] transparencyMask, int offset, int scanlength, int x, int y, int width, int height, int format)\n"
 
 for sig, label in [
     (fill_poly_sig, "fillPolygon signature"),
-    (fill_tri6_sig, "fillTriangle6 boundary"),
+    (g2b_helper_sig, "G2B helper boundary"),
+    (fill_tri6_sig, "fillTriangle6 signature"),
     (fill_tri7_sig, "fillTriangle7 signature"),
     (get_pixels_byte_sig, "getPixels byte boundary"),
 ]:
@@ -32,11 +34,14 @@ for sig, label in [
         raise SystemExit("P1A_DG_D4_STAGE_FAIL %s count=%d" % (label, s.count(sig)))
 
 poly_start = s.index(fill_poly_sig)
-poly_end = s.index(fill_tri6_sig, poly_start)
+poly_end = s.index(g2b_helper_sig, poly_start)
 if poly_end <= poly_start:
-    raise SystemExit("P1A_DG_D4_STAGE_FAIL fillPolygon boundary order")
+    raise SystemExit("P1A_DG_D4_STAGE_FAIL fillPolygon/G2B-helper boundary order")
+tri6_pos = s.index(fill_tri6_sig, poly_end)
+if tri6_pos <= poly_end:
+    raise SystemExit("P1A_DG_D4_STAGE_FAIL G2B-helper/fillTriangle6 boundary order")
 
-tri7_start = s.index(fill_tri7_sig, poly_end)
+tri7_start = s.index(fill_tri7_sig, tri6_pos)
 tri7_end = s.index(get_pixels_byte_sig, tri7_start)
 if tri7_end <= tri7_start:
     raise SystemExit("P1A_DG_D4_STAGE_FAIL fillTriangle7 boundary order")
@@ -53,6 +58,12 @@ for required in [
     if required not in s:
         raise SystemExit("P1A_DG_D4_STAGE_FAIL parent marker missing: %s" % required)
 
+g2b_preserve = [
+    "private static int rg35xxSSIOutcode(float x, float y, int lox, int loy, int hix, int hiy)",
+    "private static int rg35xxSSIAppendSegment(float x0, float y0, float x1, float y1,",
+    "private void rg35xxFillTriangleJdk8SSI(int x1, int y1, int x2, int y2, int x3, int y3)",
+]
+
 s = s[:poly_start] + new_fill_poly + s[poly_end:]
 tri7_start = s.index(fill_tri7_sig)
 tri7_end = s.index(get_pixels_byte_sig, tri7_start)
@@ -67,6 +78,10 @@ for token in [
 ]:
     if token not in s:
         raise SystemExit("P1A_DG_D4_STAGE_FAIL semantic token missing: %s" % token)
+
+for token in g2b_preserve:
+    if s.count(token) != parent.count(token):
+        raise SystemExit("P1A_DG_D4_STAGE_FAIL G2B helper drift: %s" % token)
 
 # Fail closed on forbidden scope expansion.
 for signature in [
