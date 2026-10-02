@@ -1,0 +1,64 @@
+name: P1A DG Vector D3 Generic Polygon SSI
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - p1a-dg-vector-diagnostic
+    paths:
+      - '.github/workflows/p1a-dg-vector-d3-generic-polygon-ssi.yml'
+      - 'tests/p1a/RG35XXDGVectorD3GenericPolygonSSIGate.java'
+
+permissions:
+  contents: read
+
+jobs:
+  dg-vector-d3-generic-polygon-ssi:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pinned host family JDK 8
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Compile diagnostic-only D3 gate
+        run: |
+          set -euo pipefail
+          rm -rf out/p1a-dg-vector-d3
+          mkdir -p out/p1a-dg-vector-d3/classes
+          javac -encoding UTF-8 -source 1.6 -target 1.6 \
+            -d out/p1a-dg-vector-d3/classes \
+            tests/p1a/RG35XXDGVectorD3GenericPolygonSSIGate.java
+          echo DGVD3_JAVA6_GATE=PASS
+
+      - name: Run generic polygon SSI differential
+        run: |
+          set -euo pipefail
+          java -Djava.awt.headless=true \
+            -cp out/p1a-dg-vector-d3/classes \
+            org.recompile.rg35xx.p1a.RG35XXDGVectorD3GenericPolygonSSIGate \
+            | tee out/p1a-dg-vector-d3/D3-GENERIC-POLYGON-SSI.txt
+
+          grep -q '^DGVD3_PIXEL_CENTER_SELF_CHECK=PASS$' out/p1a-dg-vector-d3/D3-GENERIC-POLYGON-SSI.txt
+          grep -q '^DGVD3_FIXED_COUNT=17$' out/p1a-dg-vector-d3/D3-GENERIC-POLYGON-SSI.txt
+          grep -q '^DGVD3_FUZZ_COUNT=320$' out/p1a-dg-vector-d3/D3-GENERIC-POLYGON-SSI.txt
+          grep -q '^DGVD3_RANDOM_SEED=35d3001$' out/p1a-dg-vector-d3/D3-GENERIC-POLYGON-SSI.txt
+          grep -q '^DGVD3_STRICT_FAILURE_COUNT=0$' out/p1a-dg-vector-d3/D3-GENERIC-POLYGON-SSI.txt
+          grep -q '^DGVD3_GENERIC_POLYGON_WINDING=EVEN_ODD$' out/p1a-dg-vector-d3/D3-GENERIC-POLYGON-SSI.txt
+          grep -q '^DGVD3_OWNER=OPENJDK8_SHAPESPANITERATOR_APPENDPOLY$' out/p1a-dg-vector-d3/D3-GENERIC-POLYGON-SSI.txt
+          grep -q '^DGVD3_G2B_GENERALIZATION=3_POINTS_TO_N_POINTS$' out/p1a-dg-vector-d3/D3-GENERIC-POLYGON-SSI.txt
+          grep -q '^DGVD3_RUNTIME_CHANGE=NO$' out/p1a-dg-vector-d3/D3-GENERIC-POLYGON-SSI.txt
+          grep -q '^DGVD3_GENERIC_POLYGON_SSI_DIFFERENTIAL=PASS$' out/p1a-dg-vector-d3/D3-GENERIC-POLYGON-SSI.txt
+          echo DGVD3_WORKFLOW_GATE=PASS
+
+      - name: Upload D3 diagnostic evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: RG35XX-P1A-DG-VECTOR-D3-SSI-${{ github.sha }}
+          path: out/p1a-dg-vector-d3/D3-GENERIC-POLYGON-SSI.txt
+          if-no-files-found: error
