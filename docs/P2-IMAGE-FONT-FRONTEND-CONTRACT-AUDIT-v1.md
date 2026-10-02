@@ -1,6 +1,6 @@
 # P2 Image / Font / Frontend Contract Audit v1
 
-Status: AUDIT / DIAGNOSTIC ONLY
+Status: P2A CONTRACT LOCKED / P2B-P2C DIAGNOSTIC ONLY
 
 Exact runtime parent: `7c0ae595fa05dd3c23157c241cc641e8d43411d5`
 Pinned Miyoo authority: `aweigit/freej2me-miyoomini@ca11dfe8ea1cc273d92460f9a83bbf192023fa63`
@@ -20,31 +20,118 @@ Host diagnostics may be granular; physical acceptance remains module-level.
 ```text
 PORT_UNIT=P2A_IMAGE_DECODE_TRANSFORM
 MIYOO_SOURCE=PlatformImage + ImageIO + PlatformGraphics image/drawRegion/Sprite transforms
-MIYOO_CURRENT_BEHAVIOR=encoded bytes/resources/streams delegate to ImageIO; transforms follow canonical Sprite semantics
+MIYOO_CURRENT_BEHAVIOR=ENCODED_BYTES/RESOURCES/STREAMS_DELEGATE_TO_JDK8_IMAGEIO; TRANSFORMS_FOLLOW_CANONICAL_SPRITE_SEMANTICS
 FREEJ2ME_REFERENCE=PINNED_MIYOO_SOURCE_IS_AUTHORITY
-JDK_OPENJDK_REFERENCE_IF_REQUIRED=YES_IMAGEIO_PNG_BACKEND_DIAGNOSTIC_REQUIRED
-RG35XX_MEASURED_LIMITATION=RAW_PNG_DECODER_SAMPLE_DEPTH_LIMITED; ACCEPTED_ADAM7_SUPPORT_IS_8BIT_OR_INDEXED_1_2_4
-EXACT_FAILURE_OR_MISSING_CONTRACT=FULL_DECLARED_IMAGE_FORMAT/SAMPLE_DEPTH_MATRIX_NOT_PROVEN
+JDK_OPENJDK_REFERENCE_IF_REQUIRED=YES_PINNED_JDK8_IMAGEIO_PIXEL_OUTPUT_LOCKED_BY_R1_R4
+RG35XX_MEASURED_LIMITATION=RAW_PNG_BACKING_COVERS_ONLY_8BIT_NONINDEXED_PLUS_INDEXED_1_2_4; GRAY8_OUTPUT_DOES_NOT_MATCH_JDK8_GETRGB; ACCEPTED_ADAM7_HAS_SAME_DEPTH_LIMIT
+EXACT_FAILURE_OR_MISSING_CONTRACT=RG35XX_RAW_PNG_BACKING_DOES_NOT_COVER_ALL_MIDP_REQUIRED_LEGAL_SAMPLE_DEPTHS_AND_JDK8_PIXEL_CONVERSION
 FAILURE_OWNER=RG35XX_IMAGE_DECODE_BOUNDARY
-WHY_MIYOO_AS_IS_CANNOT_WORK=RAW2D_CANNOT_DEPEND_ON_DESKTOP_IMAGEIO_AT_RUNTIME
-MINIMUM_REQUIRED_DELTA=UNRESOLVED_PENDING_STRICT_HOST_DIFFERENTIAL
-FILES_ALLOWED_TO_CHANGE=DIAGNOSTICS_ONLY_UNTIL_CONTRACT_RESOLVED; THEN_P2A_OWNER_ONLY
-FILES_FORBIDDEN_TO_CHANGE=INPUT,VIDEO_NATIVE,AUDIO,LIFECYCLE,RMS,JAMVM,GLIBJ,GAME_SPECIFIC_RUNTIME
-PARENT_REGRESSION_GATES=P1A_COMPLETE_GRAPHICS+PNG_ALPHA_DRAWREGION+PROTECTED_HASHES
-HOST_DIFFERENTIAL_GATE=REQUIRED
+WHY_MIYOO_AS_IS_CANNOT_WORK=ORIGINAL_RG35XX_RAW2D_RUNTIME_CANNOT_DEPEND_ON_DESKTOP_IMAGEIO
+MINIMUM_REQUIRED_DELTA=OWNER_ONLY_EXTEND_RG35XXCORE2D_PNG_SAMPLE_UNPACK_ROW_ACCOUNTING_SCALING_AND_GRAY_CONVERSION_TO_MATCH_PINNED_JDK8; RETAIN_PINNED_MIYOO_NONINDEXED_TRNS_LIMITATION; NO_FONT_INPUT_VIDEO_AUDIO_LIFECYCLE_RMS_CHANGE
+FILES_ALLOWED_TO_CHANGE=P2A_OWNER_RG35XXCORE2D_MATERIALIZATION_OR_STAGE+P2A_BUILD_TEST_WORKFLOW_DOC_ONLY
+FILES_FORBIDDEN_TO_CHANGE=PLATFORMGRAPHICS_SEMANTICS,INPUT,VIDEO_NATIVE,AUDIO,LIFECYCLE,RMS,JAMVM,GLIBJ,FONT,FRONTEND,GAME_SPECIFIC_RUNTIME
+PARENT_REGRESSION_GATES=P1A_COMPLETE_GRAPHICS+ACCEPTED_ADAM7+PROTECTED_NATIVE_HASHES
+HOST_DIFFERENTIAL_GATE=FULL_30_CASE_LEGAL_PNG_MATRIX_PIXEL_EXACT_AGAINST_PINNED_JDK8_IMAGEIO
 MODULE_INTEGRATION_GATE=REQUIRED
-PHYSICAL_GATE=IMAGE_DECODE_MODULE_IF_RUNTIME_DELTA_EXISTS
+PHYSICAL_GATE=ONE_IMAGE_DECODE_MODULE_AFTER_HOST_INTEGRATION_PASS
 GAME_SPECIFIC_CODE=NO
 SPECULATIVE_OPTIMIZATION=NO
 ```
 
-Current evidence:
-- existing raw PNG code handles color types 0/2/3/4/6, filters 0..4 and palette/tRNS paths;
-- accepted Adam7 overlay still rejects sample depths other than 8 except indexed type 3 at 1/2/4 bits;
-- next action is a legal PNG corpus comparing pinned Miyoo/ImageIO output pixel-for-pixel with materialized RG35XX Raw2D;
-- JPEG/other ImageIO formats are not silently promoted to required P2A scope before the declared-format contract is resolved.
+### Declared baseline format
 
-`P2A_RUNTIME_PATCH=FORBIDDEN_PENDING_DIFFERENTIAL`
+P2A baseline declares **PNG** as the required encoded image format. The pinned Miyoo implementation delegates encoded image bytes to `ImageIO` and therefore can incidentally accept additional formats such as JPEG, but those desktop ImageIO extensions are not silently promoted into required RG35XX baseline blockers.
+
+The required PNG matrix is the MIDP 2 PNG baseline: legal color types and legal bit depths, filters 0..4, non-interlaced and Adam7, palette where applicable, and required critical chunks. The RG35XX port still follows pinned Miyoo/JDK8 observable pixel behavior where that canonical path has a limitation.
+
+### R1 — legal PNG matrix
+
+The host diagnostic generated 30 legal cases: every legal PNG color-type / bit-depth combination under interlace 0 and Adam7 interlace 1.
+
+```text
+P2A_PNG_LEGAL_CASE_COUNT=30
+P2A_PNG_CANONICAL_PASS_COUNT=30
+P2A_PNG_RAW_MATCH_COUNT=12
+P2A_PNG_RAW_MISMATCH_COUNT=4
+P2A_PNG_RAW_UNSUPPORTED_COUNT=14
+P2A_RUNTIME_CHANGE=NO
+```
+
+Classification:
+- 12 existing Raw2D cases are already pixel-exact against pinned JDK8 ImageIO;
+- 4 mismatches are grayscale 8-bit and grayscale+alpha 8-bit under both interlace modes;
+- 14 unsupported cases are legal sample-depth paths: grayscale 1/2/4/16, RGB16, gray+alpha16 and RGBA16 across interlace 0/1.
+
+### R2 — grayscale / tRNS semantic decomposition
+
+Pinned JDK8 `ImageIO.read(...).getRGB()` converts 8-bit grayscale through the JDK `CS_GRAY` linear-gray -> sRGB path; direct byte replication is therefore not canonical-equivalent.
+
+The same diagnostic established that pinned Miyoo/JDK8 does **not** materialize alpha for grayscale/RGB `tRNS` in the tested PlatformImage/ImageIO path, while indexed-palette `tRNS` remains effective. This is retained as a source-of-truth limitation rather than silently changing RG35XX semantics beyond Miyoo.
+
+```text
+P2A_R2_JDK8_TRNS_GRAY_RGB_EFFECTIVE_ALPHA=NO
+P2A_R2_GRAYSCALE_COLORSPACE=CS_GRAY_TO_SRGB_GETRGB
+NONINDEXED_TRNS_CLASSIFICATION=CANONICAL_LIMITATION
+```
+
+### R3 — exact JDK8 gray8/gray16 transfer
+
+The JDK8 diagnostic exhaustively checked all 256 grayscale-8 samples and all 65,536 grayscale-16 samples through actual PNG `ImageIO.read().getRGB()` output.
+
+```text
+P2A_R3_GRAY8_SAMPLE_COUNT=256
+P2A_R3_GRAY8_FORMULA_MISMATCH=0
+P2A_R3_GRAY16_SAMPLE_COUNT=65536
+P2A_R3_GRAY16_FORMULA_MISMATCH=0
+P2A_R3_GRAY_TRANSFER_MODEL=LINEAR_GRAY_TO_SRGB_IEC61966_2_1
+```
+
+Locked conversion model:
+- normalize gray sample to linear [0,1];
+- if `linear <= 0.0031308`, `srgb = 12.92 * linear`;
+- otherwise `srgb = 1.055 * linear^(1/2.4) - 0.055`;
+- output channel is rounded to 8-bit.
+
+### R4 — low-bit grayscale and 16-bit component scaling
+
+The JDK8 diagnostic locked the remaining sample conversion paths:
+
+```text
+P2A_R4_GRAY1_SAMPLE_COUNT=2
+P2A_R4_GRAY1_MODEL_MISMATCH=0
+P2A_R4_GRAY2_SAMPLE_COUNT=4
+P2A_R4_GRAY2_MODEL_MISMATCH=0
+P2A_R4_GRAY4_SAMPLE_COUNT=16
+P2A_R4_GRAY4_MODEL_MISMATCH=0
+P2A_R4_RGB16_SAMPLE_COUNT=65536
+P2A_R4_RGB16_ROUND_SCALE_MISMATCH=0
+P2A_R4_RGBA16_ALPHA_SAMPLE_COUNT=65536
+P2A_R4_RGBA16_ALPHA_ROUND_SCALE_MISMATCH=0
+P2A_R4_LOWBIT_GRAY_MODEL=DIRECT_ROUND_SAMPLE_TIMES_255_OVER_MAX
+P2A_R4_16BIT_RGB_ALPHA_MODEL=ROUND_SAMPLE_TIMES_255_OVER_65535
+```
+
+Therefore:
+- grayscale 1/2/4-bit is direct rounded expansion to 0..255 and must **not** use the gray8/16 linear-gray transfer;
+- 16-bit RGB components and 16-bit alpha use rounded scaling `sample * 255 / 65535`, not high-byte truncation;
+- gray8/16 continues to use the R3 linear-gray -> sRGB transfer.
+
+### P2A implementation authorization
+
+All pre-change fields are now resolved for P2A.
+
+```text
+P2A_AUDIT_R1=PASS_EVIDENCE_ONLY
+P2A_AUDIT_R2=PASS_EVIDENCE_ONLY
+P2A_AUDIT_R3=PASS_EVIDENCE_ONLY
+P2A_AUDIT_R4=PASS_EVIDENCE_ONLY
+P2A_AUDIT_RUNTIME_DELTA=NONE
+P2A_RUNTIME_PATCH=AUTHORIZED_ON_SEPARATE_OWNER_SCOPED_BRANCH_FROM_EXACT_PARENT
+P2A_RUNTIME_PARENT=7c0ae595fa05dd3c23157c241cc641e8d43411d5
+P2A_AUDIT_BRANCH_PARENT_FOR_RUNTIME=NO
+```
+
+Candidate implementation must generalize PNG row accounting and filter byte-width correctly for packed and 16-bit pixels, while preserving accepted palette, indexed `tRNS`, Adam7, transform, blit and source-over behavior. No neighboring subsystem may be modified.
 
 ## P2B — Font / Text
 
@@ -115,9 +202,12 @@ Current evidence:
 
 ```text
 P1A_GRAPHICS_PHYSICAL_ACCEPTANCE=PASS
-P2_RUNTIME_PATCH=FORBIDDEN_AT_AUDIT_START
-P2A_NEXT_ACTION=BUILD_HOST_PNG_FORMAT_SAMPLE_DEPTH_DIFFERENTIAL
+P2A_CONTRACT_LOCKED=YES
+P2A_RUNTIME_PATCH_AUTHORIZED=YES_SEPARATE_BRANCH_FROM_EXACT_PARENT
+P2A_NEXT_ACTION=BUILD_OWNER_SCOPED_PNG_SAMPLE_DEPTH_CANDIDATE_AND_FULL_30_CASE_DIFFERENTIAL
+P2B_RUNTIME_PATCH=FORBIDDEN
 P2B_NEXT_ACTION=RESOLVE_FONT_ASSET_PROVENANCE_AND_CANONICAL_METRIC_RASTER_REFERENCE
+P2C_RUNTIME_PATCH=FORBIDDEN
 P2C_NEXT_ACTION=DESIGN_ORIGINAL_RG35XX_INPUT_EVENT_PROBE_AND_GENERIC_FRONTEND_POLICY
 PHYSICAL_TEST_REQUEST_NOW=NO
 TIER0_GAME_TEST_NOW=NO
