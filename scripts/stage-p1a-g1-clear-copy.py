@@ -97,32 +97,51 @@ replace_once(
     "\t\tBufferedImage sub = canvas.getSubimage(subx, suby, subw, subh);\n\n"
     "\t\tgc.drawImage(sub, x, y, null);\n"
     "\t}\n\n"
+    "\tprivate static int rg35xxCopyAreaMul8(int a, int b)\n"
+    "\t{\n"
+    "\t\treturn (a * b + 127) / 255;\n"
+    "\t}\n\n"
+    "\tprivate static int rg35xxCopyAreaDiv8(int a, int b)\n"
+    "\t{\n"
+    "\t\tif (b <= 0) { return 0; }\n"
+    "\t\tif (a >= b) { return 255; }\n"
+    "\t\tlong inc = (((255L << 24) + (b / 2)) / b);\n"
+    "\t\treturn (int)(((1L << 23) + ((long)a * inc)) >> 24);\n"
+    "\t}\n\n"
     "\tprivate static int rg35xxCopyAreaSourceOver(int s, int d)\n"
     "\t{\n"
     "\t\tint sa = (s >>> 24) & 0xFF;\n"
     "\t\tif (sa == 0) { return d; }\n"
     "\t\tif (sa == 255) { return s; }\n"
     "\t\tint da = (d >>> 24) & 0xFF;\n"
-    "\t\tint inv = 255 - sa;\n"
-    "\t\tint outA255 = sa * 255 + da * inv;\n"
-    "\t\tif (outA255 == 0) { return 0; }\n"
-    "\t\tint oa = (outA255 + 127) / 255;\n"
     "\t\tint sr = (s >>> 16) & 0xFF;\n"
     "\t\tint sg = (s >>> 8) & 0xFF;\n"
     "\t\tint sb = s & 0xFF;\n"
     "\t\tint dr = (d >>> 16) & 0xFF;\n"
     "\t\tint dg = (d >>> 8) & 0xFF;\n"
     "\t\tint db = d & 0xFF;\n"
-    "\t\tint r = (sr * sa * 255 + dr * da * inv + outA255 / 2) / outA255;\n"
-    "\t\tint g = (sg * sa * 255 + dg * da * inv + outA255 / 2) / outA255;\n"
-    "\t\tint b = (sb * sa * 255 + db * da * inv + outA255 / 2) / outA255;\n"
-    "\t\treturn (oa << 24) | (r << 16) | (g << 8) | b;\n"
+    "\t\tint r = rg35xxCopyAreaMul8(sa, sr);\n"
+    "\t\tint g = rg35xxCopyAreaMul8(sa, sg);\n"
+    "\t\tint b = rg35xxCopyAreaMul8(sa, sb);\n"
+    "\t\tint dstA = rg35xxCopyAreaMul8(255 - sa, da);\n"
+    "\t\tint outA = sa + dstA;\n"
+    "\t\tr += rg35xxCopyAreaMul8(dstA, dr);\n"
+    "\t\tg += rg35xxCopyAreaMul8(dstA, dg);\n"
+    "\t\tb += rg35xxCopyAreaMul8(dstA, db);\n"
+    "\t\tif (outA > 0 && outA < 255)\n"
+    "\t\t{\n"
+    "\t\t\tr = rg35xxCopyAreaDiv8(r, outA);\n"
+    "\t\t\tg = rg35xxCopyAreaDiv8(g, outA);\n"
+    "\t\t\tb = rg35xxCopyAreaDiv8(b, outA);\n"
+    "\t\t}\n"
+    "\t\treturn (outA << 24) | (r << 16) | (g << 8) | b;\n"
     "\t}\n",
-    "PlatformGraphics.copyArea_RAW2D_LIVE_RASTER_ORDER",
+    "PlatformGraphics.copyArea_RAW2D_LIVE_RASTER_JDK8_MUL8_DIV8",
 )
 
-# Fail closed on the accepted coordinate contract and the JDK8-observed live
-# self-copy traversal. Do not route copyArea through protected Core2D.blit.
+# Fail closed on the accepted coordinate contract, JDK8-observed live-raster
+# traversal, and exact OpenJDK 8-bit compositing arithmetic. Do not route
+# copyArea through protected Core2D.blit.
 for token in [
     "int px = x + translateX;",
     "int py = y + translateY;",
@@ -132,6 +151,10 @@ for token in [
     "for (int row = 0; row < subh; row++)",
     "for (int col = 0; col < subw; col++)",
     "pixels[di] = rg35xxCopyAreaSourceOver(pixels[si], pixels[di]);",
+    "private static int rg35xxCopyAreaMul8(int a, int b)",
+    "return (a * b + 127) / 255;",
+    "private static int rg35xxCopyAreaDiv8(int a, int b)",
+    "long inc = (((255L << 24) + (b / 2)) / b);",
     "private static int rg35xxCopyAreaSourceOver(int s, int d)",
 ]:
     if token not in text:
@@ -154,6 +177,7 @@ print("P1A_G1_OWNER=RG35XX_GRAPHICS_BOUNDARY")
 print("P1A_G1_CHANGED_SOURCE=org/recompile/mobile/PlatformGraphics.java")
 print("P1A_G1_METHODS=clearRect,copyArea")
 print("P1A_G1_COPYAREA_SEMANTICS=JDK8_LIVE_RASTER_TOP_TO_BOTTOM_LEFT_TO_RIGHT")
+print("P1A_G1_COPYAREA_ALPHA=JDK8_MUL8_DIV8_SRCOVER")
 print("P1A_G1_CORE2D_CHANGE=NO")
 print("P1A_G1_GAME_SPECIFIC_MARKER_DELTA=NO")
 print("P1A_G1_STAGE=PASS")
