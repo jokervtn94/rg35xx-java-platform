@@ -10,6 +10,7 @@ on:
       - 'scripts/stage-p1a-g2d-arc-family-jdk8-raster.py'
       - 'scripts/stage-p1a-g2d6a-generalrenderer-lineclip.py'
       - 'scripts/stage-p1a-g2d6a3-processpath-drawstate.py'
+      - 'scripts/stage-p1a-g2d6a5-native-processline-preclip.py'
       - 'scripts/build-p1a-g2d-arc-family-jdk8-raster.sh'
       - 'tests/p1a/RG35XXG2DArcFamilyDifferentialGate.java'
       - 'tests/p1a/RG35XXG2BFillTriangleDifferentialGate.java'
