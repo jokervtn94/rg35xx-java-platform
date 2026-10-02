@@ -1,0 +1,65 @@
+name: P1A DG Draw Vector D6
+
+on:
+  push:
+    branches:
+      - p1a-dg-draw-vector-candidate
+    paths:
+      - 'scripts/stage-p1a-dg-draw-vector-d6.py'
+      - 'scripts/build-p1a-dg-draw-vector-d6.sh'
+      - 'tests/p1a/RG35XXDGDrawVectorD6DifferentialGate.java'
+      - '.github/workflows/p1a-dg-draw-vector-d6.yml'
+  workflow_dispatch:
+
+jobs:
+  p1a-dg-draw-vector-d6:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout candidate branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 8
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Verify exact D4 parent ancestry
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor 2c2b1f2b0ca99d42ef9965a24f1eb7678eca428a HEAD
+          if git merge-base --is-ancestor 159ae7baa27ee232e49bce63092b37ebdbce8f43 HEAD; then
+            echo 'P1A_DG_D6_FAIL=diagnostic branch became runtime parent' >&2
+            exit 1
+          fi
+          echo P1A_DG_D6_D4_PARENT_ANCESTRY=PASS
+          echo P1A_DG_D6_DIAGNOSTIC_PARENT=NO
+
+      - name: Build and gate D6 candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x scripts/build-p1a-dg-draw-vector-d6.sh
+          JAVA8="$JAVA_HOME" bash scripts/build-p1a-dg-draw-vector-d6.sh | tee /tmp/p1a-dg-d6-build.log
+          grep -q '^P1A_DG_D6_BUILD=PASS$' /tmp/p1a-dg-d6-build.log
+          ID=out/p1a-dg-draw-vector-d6/P1A-DG-D6-IDENTITY.txt
+          grep -q '^OWNER=RG35XX_GRAPHICS_BOUNDARY$' "$ID"
+          grep -q '^D6_STRICT_DIFFERENTIAL=PASS$' "$ID"
+          grep -q '^D6_CANONICAL_EQUIVALENT=YES$' "$ID"
+          grep -q '^D4_FILL_VECTOR_REGRESSION=PASS$' "$ID"
+          grep -q '^CORE2D_CHANGE=NO$' "$ID"
+          grep -q '^NATIVE_CHANGE=NO$' "$ID"
+          grep -q '^GAME_SPECIFIC_CODE=NO$' "$ID"
+          grep -q '^SPECULATIVE_OPTIMIZATION=NO$' "$ID"
+          grep -q '^DEVICE-PASS=NO$' "$ID"
+          grep -q '^STABLE=NO$' "$ID"
+
+      - name: Upload D6 host candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: RG35XX-P1A-DG-DRAW-VECTOR-D6-${{ github.sha }}
+          path: out/p1a-dg-draw-vector-d6/
+          if-no-files-found: error
