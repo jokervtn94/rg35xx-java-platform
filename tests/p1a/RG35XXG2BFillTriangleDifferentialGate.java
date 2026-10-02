@@ -40,7 +40,11 @@ public final class RG35XXG2BFillTriangleDifferentialGate {
         scopeMatch("PARENT_FILLROUNDRECT", new Op(){ public void run(PlatformGraphics g){ g.fillRoundRect(4,4,20,14,7,5); }});
         scopeException("SENTINEL_DRAWARC", new Op(){ public void run(PlatformGraphics g){ g.drawArc(5,4,17,13,25,230); }});
         scopeException("SENTINEL_FILLARC", new Op(){ public void run(PlatformGraphics g){ g.fillArc(5,4,17,13,25,230); }});
-        scopeException("SENTINEL_DRAWROUNDRECT", new Op(){ public void run(PlatformGraphics g){ g.drawRoundRect(4,4,20,14,7,5); }});
+        if (Boolean.getBoolean("p1a.g2c.parentregression")) {
+            scopeMatch("PARENT_DRAWROUNDRECT_G2C", new Op(){ public void run(PlatformGraphics g){ g.drawRoundRect(4,4,20,14,7,5); }});
+        } else {
+            scopeException("SENTINEL_DRAWROUNDRECT", new Op(){ public void run(PlatformGraphics g){ g.drawRoundRect(4,4,20,14,7,5); }});
+        }
         scopeException("SENTINEL_DG_FILLTRIANGLE_7ARG", new Op(){ public void run(PlatformGraphics g){ g.fillTriangle(4,4,24,7,10,22,0xCC3366CC); }});
 
         System.out.println("P1A_G2B_STRICT_FAILURE_COUNT="+failures);
