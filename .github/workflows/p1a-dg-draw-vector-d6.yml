@@ -7,6 +7,7 @@ on:
     paths:
       - 'scripts/stage-p1a-dg-draw-vector-d6.py'
       - 'scripts/build-p1a-dg-draw-vector-d6.sh'
+      - 'scripts/build-p1a-dg-draw-vector-d6-v2.sh'
       - 'tests/p1a/RG35XXDGDrawVectorD6DifferentialGate.java'
       - '.github/workflows/p1a-dg-draw-vector-d6.yml'
   workflow_dispatch:
@@ -73,8 +74,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          chmod +x scripts/build-p1a-dg-draw-vector-d6.sh
-          JAVA8="$JAVA_HOME" bash scripts/build-p1a-dg-draw-vector-d6.sh | tee /tmp/p1a-dg-d6-build.log
+          chmod +x scripts/build-p1a-dg-draw-vector-d6-v2.sh
+          JAVA8="$JAVA_HOME" bash scripts/build-p1a-dg-draw-vector-d6-v2.sh | tee /tmp/p1a-dg-d6-build.log
           grep -q '^P1A_DG_D6_BUILD=PASS$' /tmp/p1a-dg-d6-build.log
           ID=out/p1a-dg-draw-vector-d6/P1A-DG-D6-IDENTITY.txt
           grep -q '^OWNER=RG35XX_GRAPHICS_BOUNDARY$' "$ID"
