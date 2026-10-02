@@ -1,7 +1,7 @@
 # RG35XX P1A CORE GRAPHICS COVERAGE — DESIGN & TEST MATRIX v1
 
-**Status:** `DESIGN_LOCK / NO_RUNTIME_CHANGE`  
-**Parent authority:** exact device-accepted Golden `057567d4...336c`  
+**Status:** `G1_BUILD_HOST_PASS / P1A_IN_PROGRESS`  
+**Parent authority:** exact device-accepted Golden `057567d4...336c` / semantic A8 `7cd3a4a2...4adf`  
 **Canonical authority:** Aweigit `ca11dfe8...`  
 **Failure owner:** `RG35XX_GRAPHICS_BOUNDARY`  
 **Game-specific runtime code:** `FORBIDDEN`
@@ -32,7 +32,9 @@ Every P1A method must use the accepted ClipTranslate convention.
 
 ## 4. Canonical quirks to preserve
 
-- `copyArea`: pinned source reads source subx/suby directly and destination is affected by Graphics translation.
+- `copyArea`: pinned source reads source `subx/suby` directly and destination is affected by Graphics translation.
+- `copyArea` overlap is **not snapshot/memmove semantics** in the pinned JDK8 reference path. `canvas.getSubimage(...)` is a live sub-raster and `gc.drawImage(...)` was experimentally characterized as top-to-bottom, left-to-right for the tested `TYPE_INT_ARGB` path; right/down overlap therefore propagates writes into later source reads.
+- `copyArea` semi-alpha SrcOver must match the pinned Java2D staged 8-bit arithmetic. G1 uses OpenJDK-compatible `MUL8`/`DIV8` rounding, not a single high-precision blend followed by one final rounding step.
 - `fillRoundRect`: pinned source performs `fillRoundRect` and then `fillRect`; final covered region is a full rectangle.
 - DirectGraphics `getPixels(byte[])` is a canonical stub/log; P1A will not invent behavior.
 - DirectGraphics `drawPixels(int[])` keeps pinned alpha/transparency behavior.
@@ -45,7 +47,10 @@ Every P1A method must use the accepted ClipTranslate convention.
 
 ### G1 — Clear/copy
 - `clearRect`: clipped device-space transparent clear matching canonical transparent background.
-- `copyArea`: overlap-safe source snapshot + canonical anchor + translated/clipped destination.
+- `copyArea`: canonical anchor + translated/clipped destination + live same-raster top-to-bottom/left-to-right traversal, including canonical overlap propagation.
+- `copyArea` alpha: Java2D-compatible staged `MUL8`/`DIV8` SrcOver rounding.
+- G1 implementation scope is `PlatformGraphics.class` only; `RG35XXCore2D.blit` remains unchanged because its snapshot/source-over behavior is protected for image/drawRegion ownership.
+- G1 host/build status: `PASS` at run `36946272693`; physical status remains `DEVICE-PASS=NO`.
 
 ### G2 — MIDP shapes
 - `drawArc`
@@ -80,7 +85,9 @@ Explicit DirectGraphics ARGB must use source-over. Normal MIDP Graphics color st
 
 ## 6. RG35XXCore2D boundary
 
-Reusable helper categories may include clip bounds, opaque/ARGB pixel operations, overlap-safe copy, explicit-color line, polygon outline/fill, ellipse/arc raster, round-rect raster and DirectGraphics pixel conversion/transform staging.
+Reusable helper categories may include clip bounds, opaque/ARGB pixel operations, explicit-color line, polygon outline/fill, ellipse/arc raster, round-rect raster and DirectGraphics pixel conversion/transform staging.
+
+`copyArea` is intentionally **not** routed through the protected `RG35XXCore2D.blit` helper because the pinned Java2D self-copy contract is live-raster rather than snapshot semantics.
 
 `RG35XXCore2D` owns backing only; API argument/anchor/state/quirk semantics remain in `PlatformGraphics`.
 
@@ -96,6 +103,13 @@ B) rg35xx.raw2d PlatformGraphics
 Same canvas, initial pixels, color/ARGB, stroke state, translation, clipping, coordinates, anchors and transforms. Compare outputs through `getRGB`.
 
 Bit-exact comparison is required where practical (clear/copy/pixels/transforms/clip/alpha). Arc/round-rect raster work must be reference-driven against the pinned CI JDK rather than accepted merely because it looks similar.
+
+G1 additionally locks:
+- copy overlap in both horizontal directions, both vertical directions and both tested diagonal directions;
+- transparent source behavior;
+- semi-alpha non-overlap and overlapping self-copy;
+- AWT/Raw pre-operation alpha baseline equality before attributing any mismatch to `copyArea`;
+- scope sentinels proving G2/G3 remain untouched (`drawArc` and MIDP `fillTriangle` still raw exceptions; generic DirectGraphics `fillPolygon` still the known mismatch).
 
 ## 8. One platform exerciser JAR
 
@@ -138,6 +152,8 @@ NO_A9_PARENT=YES
 NO_TRACE_IN_STABLE_CANDIDATE=YES
 ```
 
+For G1 specifically, the changed JAR entry is exactly `org/recompile/mobile/PlatformGraphics.class`; `CORE2D_CHANGE=NO`.
+
 ## 10. Promotion sequence
 
 ```text
@@ -172,6 +188,20 @@ These are platform modules, not per-game fixes.
 P0_EXACT_GOLDEN=RECOVERED
 AUDIT_V1_1=LOCKED
 P1A_DESIGN=LOCKED
-P1A_RUNTIME_CHANGE=NOT_YET_STARTED
-NEXT_ACTION=P1A_DIFFERENTIAL_TEST_HARNESS_AND_STAGING_DESIGN
+P1A_PHASE0_DIFFERENTIAL=PASS
+P1A_G1_CLEAR_COPY_BUILD=PASS
+P1A_G1_HOST_DIFFERENTIAL=PASS
+P1A_G1_DEVICE_PASS=NO
+P1A_G1_STABLE=NO
+P1A_G2_PLUS=NOT_STARTED
+NEXT_ACTION=P1A_G2_MIDP_SHAPES_DIFFERENTIAL_FIRST
 ```
+
+G1 authoritative build/host evidence:
+- CI run: `36946272693`
+- head: `14bb0d4e3c8f3e1c7fe4a5e92ae2b76f5dedd014`
+- parent A8 semantic: `7cd3a4a29d4238e0d2464a213db48ba555bdf3c590aa77fe60c68b480bdc4adf`
+- candidate semantic: `86cdf216cf08a93747e38ed90a81b29cff84139dcfd013fcf9f5aead5e9ca527`
+- candidate `PlatformGraphics.class`: `c92cc05b31e4ce56eed8f7afae5abee6a62eba9a731ba39b232d3a8b895004b0`
+- protected input/video hashes unchanged.
+- artifact ID: `11201888516`; uploaded artifact ZIP digest: `7d56fc6e1b2cd2258b555494ba9285f9f97b54468c954f0bb415bfae46eb2f71`.
