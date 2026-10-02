@@ -31,8 +31,7 @@ print(h.hexdigest())
 PY
 }
 
-# Reconstruct the accepted graphics parent, then the exact accepted A7/A8 Java
-# semantics. G1 is staged only after both parent gates have succeeded.
+# Reconstruct accepted graphics parent, then exact accepted A7/A8 Java semantics.
 bash "$ROOT/scripts/build-a6-corpus3-cliptranslate-fix.sh"
 bash "$ROOT/scripts/build-a7-audio-java-a1p1.sh"
 
@@ -43,12 +42,9 @@ PARENT_JAR="$PARENT/freej2me-rg35xx.jar"
 PARENT_SEMANTIC="$(semantic_digest "$PARENT_JAR")"
 INPUT_SHA="$(sha256sum "$PARENT/librg35xx_input.so" | awk '{print $1}')"
 VIDEO_SHA="$(sha256sum "$PARENT/librg35xx_video.so" | awk '{print $1}')"
-[ "$PARENT_SEMANTIC" = "7cd3a4a29d4238e0d2464a213db48ba555bdf3c590aa77fe60c68b480bdc4adf" ] \
-  || fail "A8 semantic parent mismatch $PARENT_SEMANTIC"
-[ "$INPUT_SHA" = "69a8aeb3940bfbc234f3a562a7ae4bcaea10b50f8a8f2c38ad229a5430930f6d" ] \
-  || fail "input identity drift $INPUT_SHA"
-[ "$VIDEO_SHA" = "c6687c0a43b24b425af0727c928afb5414da811ecbcbbe3538928470abe8bd0d" ] \
-  || fail "video identity drift $VIDEO_SHA"
+[ "$PARENT_SEMANTIC" = "7cd3a4a29d4238e0d2464a213db48ba555bdf3c590aa77fe60c68b480bdc4adf" ] || fail "A8 semantic parent mismatch $PARENT_SEMANTIC"
+[ "$INPUT_SHA" = "69a8aeb3940bfbc234f3a562a7ae4bcaea10b50f8a8f2c38ad229a5430930f6d" ] || fail "input identity drift $INPUT_SHA"
+[ "$VIDEO_SHA" = "c6687c0a43b24b425af0727c928afb5414da811ecbcbbe3538928470abe8bd0d" ] || fail "video identity drift $VIDEO_SHA"
 
 PARENT_PG_SHA="$(python3 - "$PARENT_JAR" <<'PY'
 import hashlib,sys,zipfile
@@ -56,8 +52,7 @@ with zipfile.ZipFile(sys.argv[1]) as z:
     print(hashlib.sha256(z.read('org/recompile/mobile/PlatformGraphics.class')).hexdigest())
 PY
 )"
-[ "$PARENT_PG_SHA" = "b06b027b46e3545dfcaf716dc370462919b6005ad2120907f1ce07326555b853" ] \
-  || fail "PlatformGraphics parent class drift $PARENT_PG_SHA"
+[ "$PARENT_PG_SHA" = "b06b027b46e3545dfcaf716dc370462919b6005ad2120907f1ce07326555b853" ] || fail "PlatformGraphics parent class drift $PARENT_PG_SHA"
 echo P1A_G1_PARENT_IDENTITY_GATE=PASS
 
 python3 "$ROOT/scripts/stage-p1a-g1-clear-copy.py" "$STAGE"
@@ -74,8 +69,7 @@ mkdir -p "$OUT" "$CLASSES"
   -d "$CLASSES" "$PG_SRC"
 
 CLASS_LIST="$(cd "$CLASSES" && find . -type f -name '*.class' -printf '%P\n' | LC_ALL=C sort)"
-[ "$CLASS_LIST" = "org/recompile/mobile/PlatformGraphics.class" ] \
-  || fail "owner compile emitted unexpected classes: $CLASS_LIST"
+[ "$CLASS_LIST" = "org/recompile/mobile/PlatformGraphics.class" ] || fail "owner compile emitted unexpected classes: $CLASS_LIST"
 
 CANDIDATE_JAR="$OUT/freej2me-rg35xx.jar"
 cp "$PARENT_JAR" "$CANDIDATE_JAR"
@@ -110,8 +104,7 @@ PY
 "$JAVA8/bin/javap" -classpath "$CANDIDATE_JAR" -p -c org.recompile.mobile.PlatformGraphics > "$OUT/CANDIDATE-PLATFORMGRAPHICS-JAVAP.txt"
 cp "$PG_SRC" "$OUT/P1A-G1-PLATFORMGRAPHICS-SOURCE.java.txt"
 
-# Canonical differential gate: all G1 cases must become MATCH while later
-# method groups remain at their pre-G1 failure classification.
+# Canonical differential gate: G1 becomes MATCH; later groups stay failing.
 HOST="$BUILD/p1a-g1-host"
 rm -rf "$HOST"; mkdir -p "$HOST"
 "$JAVA8/bin/javac" -encoding UTF-8 -source 1.6 -target 1.6 \
@@ -120,10 +113,22 @@ rm -rf "$HOST"; mkdir -p "$HOST"
 "$JAVA8/bin/java" -Djava.awt.headless=true -cp "$CANDIDATE_JAR:$HOST" \
   org.recompile.rg35xx.p1a.RG35XXGraphicsG1DifferentialGate \
   | tee "$OUT/P1A-G1-DIFFERENTIAL-GATE.txt"
-grep -q '^P1A_G1_DIFFERENTIAL_GATE=PASS$' "$OUT/P1A-G1-DIFFERENTIAL-GATE.txt" \
-  || fail "G1 differential marker missing"
-grep -q '^P1A_G1_SCOPE=clearRect+copyArea_ONLY$' "$OUT/P1A-G1-DIFFERENTIAL-GATE.txt" \
-  || fail "G1 scope marker missing"
+grep -q '^P1A_G1_DIFFERENTIAL_GATE=PASS$' "$OUT/P1A-G1-DIFFERENTIAL-GATE.txt" || fail "G1 differential marker missing"
+grep -q '^P1A_G1_SCOPE=clearRect+copyArea_ONLY$' "$OUT/P1A-G1-DIFFERENTIAL-GATE.txt" || fail "G1 scope marker missing"
+grep -q '^P1A_G1_COPYAREA_OVERLAP=JDK8_LIVE_RASTER_TOP_TO_BOTTOM_LEFT_TO_RIGHT$' "$OUT/P1A-G1-DIFFERENTIAL-GATE.txt" || fail "G1 overlap marker missing"
+
+# Semi-alpha gate is part of BUILD-PASS: baseline must be bit-identical before
+# copyArea, then Java2D and Raw2D must match after JDK8 MUL8/DIV8 SrcOver.
+ALPHA_HOST="$BUILD/p1a-g1-alpha-host"
+rm -rf "$ALPHA_HOST"; mkdir -p "$ALPHA_HOST"
+"$JAVA8/bin/javac" -encoding UTF-8 -source 1.6 -target 1.6 \
+  -bootclasspath "$JAVA8/jre/lib/rt.jar" -classpath "$CANDIDATE_JAR" \
+  -d "$ALPHA_HOST" "$ROOT/tests/p1a/RG35XXCopyAreaAlphaDifferentialGate.java"
+"$JAVA8/bin/java" -Djava.awt.headless=true -cp "$CANDIDATE_JAR:$ALPHA_HOST" \
+  org.recompile.rg35xx.p1a.RG35XXCopyAreaAlphaDifferentialGate \
+  | tee "$OUT/P1A-G1-ALPHA-DIFFERENTIAL-GATE.txt"
+grep -q '^P1A_G1_ALPHA_BASELINE_MATCH=true ' "$OUT/P1A-G1-ALPHA-DIFFERENTIAL-GATE.txt" || fail "alpha baseline not equivalent"
+grep -q '^P1A_G1_COPYAREA_ALPHA_DIFFERENTIAL_GATE=PASS$' "$OUT/P1A-G1-ALPHA-DIFFERENTIAL-GATE.txt" || fail "alpha differential marker missing"
 
 # Preserve accepted raw graphics/PNG gates on the candidate itself.
 run_gate() {
@@ -137,16 +142,11 @@ run_gate() {
   grep -q "^${marker}$" "$OUT/$out" || fail "regression gate $src"
 }
 
-run_gate RG35XXRawClipTranslateHostGate.java org.recompile.rg35xx.a6.RG35XXRawClipTranslateHostGate \
-  A6_CORPUS3_CLIPTRANSLATE_HOST_GATE=PASS A6-CLIPTRANSLATE-REGRESSION.txt
-run_gate RG35XXRawDrawRectHostGate.java org.recompile.rg35xx.a6.RG35XXRawDrawRectHostGate \
-  A6_R5P3I2_RAW_DRAWRECT_HOST_GATE=PASS A6-DRAWRECT-REGRESSION.txt
-run_gate RG35XXRawDrawLineHostGate.java org.recompile.rg35xx.a6.RG35XXRawDrawLineHostGate \
-  A6_R5_RAW_DRAWLINE_HOST_GATE=PASS A6-DRAWLINE-REGRESSION.txt
-run_gate RG35XXRawRectPolygonHostGate.java org.recompile.rg35xx.a6.RG35XXRawRectPolygonHostGate \
-  A6_R5P3_RAW_RECT_POLYGON_HOST_GATE=PASS A6-RECTPOLYGON-REGRESSION.txt
-run_gate RG35XXAdam7HostGate.java org.recompile.rg35xx.a6.RG35XXAdam7HostGate \
-  A6_ADAM7_HOST_GATE=PASS A6-ADAM7-REGRESSION.txt
+run_gate RG35XXRawClipTranslateHostGate.java org.recompile.rg35xx.a6.RG35XXRawClipTranslateHostGate A6_CORPUS3_CLIPTRANSLATE_HOST_GATE=PASS A6-CLIPTRANSLATE-REGRESSION.txt
+run_gate RG35XXRawDrawRectHostGate.java org.recompile.rg35xx.a6.RG35XXRawDrawRectHostGate A6_R5P3I2_RAW_DRAWRECT_HOST_GATE=PASS A6-DRAWRECT-REGRESSION.txt
+run_gate RG35XXRawDrawLineHostGate.java org.recompile.rg35xx.a6.RG35XXRawDrawLineHostGate A6_R5_RAW_DRAWLINE_HOST_GATE=PASS A6-DRAWLINE-REGRESSION.txt
+run_gate RG35XXRawRectPolygonHostGate.java org.recompile.rg35xx.a6.RG35XXRawRectPolygonHostGate A6_R5P3_RAW_RECT_POLYGON_HOST_GATE=PASS A6-RECTPOLYGON-REGRESSION.txt
+run_gate RG35XXAdam7HostGate.java org.recompile.rg35xx.a6.RG35XXAdam7HostGate A6_ADAM7_HOST_GATE=PASS A6-ADAM7-REGRESSION.txt
 
 cp "$PARENT/librg35xx_input.so" "$OUT/librg35xx_input.so"
 cp "$PARENT/librg35xx_video.so" "$OUT/librg35xx_video.so"
@@ -177,7 +177,11 @@ CHANGED_METHODS=clearRect,copyArea
 CHANGED_JAR_ENTRIES=org/recompile/mobile/PlatformGraphics.class
 CORE2D_CHANGE=NO
 CANONICAL_AWT_FALLBACK=PRESERVED
+P1A_G1_COPYAREA_OVERLAP=JDK8_LIVE_RASTER_TOP_TO_BOTTOM_LEFT_TO_RIGHT
+P1A_G1_COPYAREA_ALPHA=JDK8_MUL8_DIV8_SRCOVER
 P1A_G1_DIFFERENTIAL_GATE=PASS
+P1A_G1_ALPHA_DIFFERENTIAL_GATE=PASS
+HOST-DIFFERENTIAL-PASS=YES
 A6_CLIPTRANSLATE_REGRESSION=PASS
 A6_DRAWRECT_REGRESSION=PASS
 A6_DRAWLINE_REGRESSION=PASS
