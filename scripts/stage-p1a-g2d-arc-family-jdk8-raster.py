@@ -22,7 +22,7 @@ for marker in [
     if marker not in s:
         raise SystemExit("P1A_G2D_STAGE_FAIL parent marker missing: %s" % marker)
 
-for helper in ["rg35xxDrawArcJdk8", "rg35xxFillArcJdk8Lattice"]:
+for helper in ["rg35xxDrawArcJdk8", "rg35xxFillArcJdk8Lattice", "rg35xxPPDrawCubicCanonicalSplit"]:
     if helper in s:
         raise SystemExit("P1A_G2D_STAGE_FAIL helper already present: %s" % helper)
 
@@ -31,13 +31,110 @@ old_draw = '''\tpublic void drawArc(int x, int y, int width, int height, int sta
 new_draw = r'''	/*
 	 * RG35XX raw2D JDK8-equivalent arc outline.
 	 * Canonical path: LoopPipe.drawArc -> Arc2D.OPEN -> ArcIterator ->
-	 * Path2D.Float -> ProcessPath.drawPath.  The G2C ProcessPath drawing
-	 * helpers below are reused; only ArcIterator geometry is added here.
+	 * Path2D.Float -> ProcessPath.drawPath.
+	 *
+	 * Important: ArcIterator limits each Bezier to <= 90 degrees, but an
+	 * arbitrary start angle means a segment can still cross an ellipse X/Y
+	 * extremum. JDK8 ProcessPath therefore solves dX/dt and dY/dt and splits
+	 * the cubic at those roots before forward differencing. G2C quarter-round
+	 * cubics were already monotonic and did not expose this requirement.
 	 */
 	private static double rg35xxArcBtan(double increment)
 	{
 		increment /= 2.0;
 		return 4.0 / 3.0 * Math.sin(increment) / (1.0 + Math.cos(increment));
+	}
+
+	/* Exact coefficient/root strategy used by QuadCurve2D.solveQuadratic. */
+	private static int rg35xxPPSolveQuadratic(double c, double b, double a, double[] res)
+	{
+		int roots = 0;
+		if(a == 0.0)
+		{
+			if(b == 0.0) return -1;
+			res[roots++] = -c / b;
+		}
+		else
+		{
+			double d = b * b - 4.0 * a * c;
+			if(d < 0.0) return 0;
+			d = Math.sqrt(d);
+			if(b < 0.0) d = -d;
+			double q = (b + d) / -2.0;
+			res[roots++] = q / a;
+			if(q != 0.0) res[roots++] = c / q;
+		}
+		return roots;
+	}
+
+	private void rg35xxPPDrawFirstCanonicalMonotonicPart(float[] c, float t, int argb)
+	{
+		float[] first = new float[8];
+		float tx, ty;
+		first[0] = c[0];
+		first[1] = c[1];
+		tx = c[2] + t * (c[4] - c[2]);
+		ty = c[3] + t * (c[5] - c[3]);
+		first[2] = c[0] + t * (c[2] - c[0]);
+		first[3] = c[1] + t * (c[3] - c[1]);
+		first[4] = first[2] + t * (tx - first[2]);
+		first[5] = first[3] + t * (ty - first[3]);
+		c[4] = c[4] + t * (c[6] - c[4]);
+		c[5] = c[5] + t * (c[7] - c[5]);
+		c[2] = tx + t * (c[4] - tx);
+		c[3] = ty + t * (c[5] - ty);
+		c[0] = first[6] = first[4] + t * (c[2] - first[4]);
+		c[1] = first[7] = first[5] + t * (c[3] - first[5]);
+		rg35xxPPDrawCubic(first, argb);
+	}
+
+	/* JDK8 ProcessPath.ProcessCubic extrema split, specialized for drawArc. */
+	private void rg35xxPPDrawCubicCanonicalSplit(float[] c, int argb)
+	{
+		double[] params = new double[4];
+		double[] res = new double[2];
+		int cnt = 0;
+
+		if((c[0] > c[2] || c[2] > c[4] || c[4] > c[6]) &&
+		   (c[0] < c[2] || c[2] < c[4] || c[4] < c[6]))
+		{
+			double a = -c[0] + 3.0*c[2] - 3.0*c[4] + c[6];
+			double b = 2.0*(c[0] - 2.0*c[2] + c[4]);
+			double cc = -c[0] + c[2];
+			int nr = rg35xxPPSolveQuadratic(cc, b, a, res);
+			for(int i=0; i<nr; i++) if(res[i] > 0.0 && res[i] < 1.0) params[cnt++] = res[i];
+		}
+
+		if((c[1] > c[3] || c[3] > c[5] || c[5] > c[7]) &&
+		   (c[1] < c[3] || c[3] < c[5] || c[5] < c[7]))
+		{
+			double a = -c[1] + 3.0*c[3] - 3.0*c[5] + c[7];
+			double b = 2.0*(c[1] - 2.0*c[3] + c[5]);
+			double cc = -c[1] + c[3];
+			int nr = rg35xxPPSolveQuadratic(cc, b, a, res);
+			for(int i=0; i<nr; i++) if(res[i] > 0.0 && res[i] < 1.0) params[cnt++] = res[i];
+		}
+
+		for(int i=1; i<cnt; i++)
+		{
+			double v = params[i];
+			int j = i - 1;
+			while(j >= 0 && params[j] > v) { params[j+1] = params[j]; j--; }
+			params[j+1] = v;
+		}
+
+		if(cnt > 0)
+		{
+			rg35xxPPDrawFirstCanonicalMonotonicPart(c, (float)params[0], argb);
+			for(int i=1; i<cnt; i++)
+			{
+				double p = params[i] - params[i-1];
+				if(p > 0.0)
+					rg35xxPPDrawFirstCanonicalMonotonicPart(c,
+						(float)(p / (1.0 - params[i-1])), argb);
+			}
+		}
+		rg35xxPPDrawCubic(c, argb);
 	}
 
 	private void rg35xxDrawArcJdk8(int x, int y, int width, int height, int startAngle, int arcAngle)
@@ -68,7 +165,7 @@ new_draw = r'''	/*
 		else
 		{
 			arcSegs = (int)Math.ceil(Math.abs(ext) / 90.0);
-			if(arcSegs == 0) return; // ArcIterator emits MOVETO only.
+			if(arcSegs == 0) return;
 			increment = Math.toRadians(ext / (double)arcSegs);
 			cv = rg35xxArcBtan(increment);
 			if(cv == 0.0) return;
@@ -97,7 +194,7 @@ new_draw = r'''	/*
 			q[5] = (float)(cy + (r1y - cv * r1x) * ah) + ty;
 			q[6] = (float)(cx + r1x * aw) + tx;
 			q[7] = (float)(cy + r1y * ah) + ty;
-			rg35xxPPDrawCubic(q, argb);
+			rg35xxPPDrawCubicCanonicalSplit(q, argb);
 			px = q[6]; py = q[7];
 		}
 	}
@@ -211,7 +308,9 @@ out = s.replace(old_draw, new_draw, 1).replace(old_fill, new_fill, 1)
 for token in [
     "rg35xxDrawArcJdk8",
     "rg35xxFillArcJdk8Lattice",
-    "ArcIterator ->",
+    "rg35xxPPDrawCubicCanonicalSplit",
+    "rg35xxPPSolveQuadratic",
+    "ProcessPath.drawPath",
     "deterministic fuzz protects this equivalence",
 ]:
     if token not in out:
@@ -221,7 +320,7 @@ pg.write_text(out, encoding="utf-8")
 print("P1A_G2D_STAGE=PASS")
 print("P1A_G2D_OWNER=RG35XX_GRAPHICS_BOUNDARY")
 print("P1A_G2D_CHANGED_METHODS=Graphics.drawArc,Graphics.fillArc")
-print("P1A_G2D_DRAW_RASTER=OPENJDK8_ARCITERATOR_PROCESSPATH_DRAW_REUSE_G2C")
+print("P1A_G2D_DRAW_RASTER=OPENJDK8_ARCITERATOR_PROCESSPATH_DRAWCUBIC_EXTREMA_SPLIT")
 print("P1A_G2D_FILL_RASTER=JDK8_PROCESSPATH_EQUIVALENT_INTEGER_ELLIPSE_PARAMETER_SECTOR")
 print("P1A_G2D_CORE2D_CHANGE=NO")
 print("P1A_G2D_PHYSICAL_TEST=NO_MODULE_INTEGRATION_PENDING")
