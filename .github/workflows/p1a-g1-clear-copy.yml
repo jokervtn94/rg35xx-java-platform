@@ -10,6 +10,7 @@ on:
       - 'scripts/stage-p1a-g1-clear-copy.py'
       - 'scripts/build-p1a-g1-clear-copy.sh'
       - 'tests/p1a/RG35XXGraphicsG1DifferentialGate.java'
+      - 'tests/p1a/RG35XXCopyAreaAlphaDifferentialGate.java'
 
 permissions:
   contents: read
@@ -58,11 +59,27 @@ jobs:
       - name: Build P1A G1 candidate and differential gates
         run: bash ./scripts/build-p1a-g1-clear-copy.sh
 
+      - name: Run semi-alpha copyArea differential gate
+        run: |
+          set -euo pipefail
+          JAR=out/p1a-g1-clear-copy/freej2me-rg35xx.jar
+          HOST=build/p1a-g1-alpha-host
+          LOG=out/p1a-g1-clear-copy/P1A-G1-ALPHA-DIFFERENTIAL-GATE.txt
+          rm -rf "$HOST"
+          mkdir -p "$HOST"
+          javac -encoding UTF-8 -source 1.6 -target 1.6 \
+            -bootclasspath "$JAVA_HOME/jre/lib/rt.jar" -classpath "$JAR" \
+            -d "$HOST" tests/p1a/RG35XXCopyAreaAlphaDifferentialGate.java
+          java -Djava.awt.headless=true -cp "$JAR:$HOST" \
+            org.recompile.rg35xx.p1a.RG35XXCopyAreaAlphaDifferentialGate | tee "$LOG"
+          grep -q '^P1A_G1_COPYAREA_ALPHA_DIFFERENTIAL_GATE=PASS$' "$LOG"
+
       - name: Verify owner and scope lock
         run: |
           set -euo pipefail
           ID=out/p1a-g1-clear-copy/P1A-G1-IDENTITY.txt
           LOG=out/p1a-g1-clear-copy/P1A-G1-DIFFERENTIAL-GATE.txt
+          ALOG=out/p1a-g1-clear-copy/P1A-G1-ALPHA-DIFFERENTIAL-GATE.txt
           grep -q '^PARENT_A8_SEMANTIC_SHA256=7cd3a4a29d4238e0d2464a213db48ba555bdf3c590aa77fe60c68b480bdc4adf$' "$ID"
           grep -q '^INPUT_NATIVE_SHA256=69a8aeb3940bfbc234f3a562a7ae4bcaea10b50f8a8f2c38ad229a5430930f6d$' "$ID"
           grep -q '^VIDEO_NATIVE_SHA256=c6687c0a43b24b425af0727c928afb5414da811ecbcbbe3538928470abe8bd0d$' "$ID"
@@ -77,9 +94,11 @@ jobs:
           grep -q '^DEVICE-PASS=NO$' "$ID"
           grep -q '^STABLE=NO$' "$ID"
           grep -q '^P1A_G1_DIFFERENTIAL_GATE=PASS$' "$LOG"
+          grep -q '^P1A_G1_COPYAREA_OVERLAP=JDK8_LIVE_RASTER_TOP_TO_BOTTOM_LEFT_TO_RIGHT$' "$LOG"
           grep -q '^P1A_G1_CASE=SENTINEL_DRAWARC EXPECTED=RAW_EXCEPTION ACTUAL=RAW_EXCEPTION' "$LOG"
           grep -q '^P1A_G1_CASE=SENTINEL_FILLTRIANGLE EXPECTED=RAW_EXCEPTION ACTUAL=RAW_EXCEPTION' "$LOG"
           grep -q '^P1A_G1_CASE=SENTINEL_GENERIC_FILLPOLYGON EXPECTED=MISMATCH ACTUAL=MISMATCH' "$LOG"
+          grep -q '^P1A_G1_COPYAREA_ALPHA_DIFFERENTIAL_GATE=PASS$' "$ALOG"
           echo P1A_G1_CI_SCOPE_LOCK=PASS
 
       - name: Upload P1A G1 candidate
