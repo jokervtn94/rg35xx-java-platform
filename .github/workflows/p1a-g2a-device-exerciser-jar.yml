@@ -9,6 +9,7 @@ on:
       - '.github/workflows/p1a-g2a-device-exerciser-jar.yml'
       - 'tests/p1a/RG35XXP1AG2ADeviceExerciserMIDlet.java'
       - 'scripts/build-p1a-g2a-device-exerciser-jar.sh'
+      - 'scripts/build-p1a-g2a-device-bundle.sh'
 
 permissions:
   contents: read
@@ -75,9 +76,12 @@ jobs:
           (cd out/p1a-g2a-device-exerciser-jar && sha256sum -c SHA256SUMS.txt)
           echo P1A_G2A_DEVICE_EXERCISER_CI_SCOPE_LOCK=PASS
 
-      - name: Upload exerciser JAR
+      - name: Bind exact platform candidate to exerciser artifact
+        run: bash ./scripts/build-p1a-g2a-device-bundle.sh
+
+      - name: Upload bound device bundle
         uses: actions/upload-artifact@v4
         with:
-          name: RG35XX-P1A-G2A-DEVICE-EXERCISER-JAR-${{ github.sha }}
-          path: out/p1a-g2a-device-exerciser-jar/
+          name: RG35XX-P1A-G2A-DEVICE-BUNDLE-${{ github.sha }}
+          path: out/p1a-g2a-device-bundle/
           if-no-files-found: error
