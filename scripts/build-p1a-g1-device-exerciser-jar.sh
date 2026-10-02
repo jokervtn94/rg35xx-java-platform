@@ -52,8 +52,22 @@ with zipfile.ZipFile(jar) as z:
         if major>50: bad.append((n,major))
     if bad:
         raise SystemExit('P1A_G1_EXERCISER_JAVA6_FAIL '+repr(bad))
-    mf=z.read('META-INF/MANIFEST.MF').decode('utf-8','replace')
-    for marker in ['MIDlet-Name: RG35XX P1A G1 Exerciser','org.recompile.rg35xx.p1a.device.RG35XXP1AG1DeviceExerciserMIDlet']:
+    raw=z.read('META-INF/MANIFEST.MF').decode('utf-8','replace').replace('\r\n','\n')
+    # JAR manifests fold physical lines at 72 bytes. Unfold continuation lines
+    # before checking semantic MIDlet attributes so the gate validates the
+    # manifest contract instead of depending on its physical line wrapping.
+    logical=[]
+    for line in raw.split('\n'):
+        if line.startswith(' ') and logical:
+            logical[-1] += line[1:]
+        else:
+            logical.append(line)
+    mf='\n'.join(logical)
+    markers=[
+        'MIDlet-Name: RG35XX P1A G1 Exerciser',
+        'MIDlet-1: RG35XX P1A G1 Exerciser,,org.recompile.rg35xx.p1a.device.RG35XXP1AG1DeviceExerciserMIDlet',
+    ]
+    for marker in markers:
         if marker not in mf:
             raise SystemExit('P1A_G1_EXERCISER_MANIFEST_FAIL '+marker)
 print('P1A_G1_EXERCISER_JAVA6_GATE=PASS')
