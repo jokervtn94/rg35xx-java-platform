@@ -1,47 +1,47 @@
 AREA	CLASS_OR_METHOD	CANONICAL_AWEIGIT	CURRENT_RG35XX	CLASSIFICATION	PHYSICAL_EVIDENCE	NEXT_ACTION
 Graphics	PlatformGraphics constructor/reset	AWT BufferedImage + Graphics2D state	A4 raw int[] surface; gc/canvas intentionally null; raw reset/clip/color/font state	RG35XX_RAW_BACKING	A4 Canvas/GameCanvas PASS	PROTECT
-Graphics	clearRect	gc.clearRect	No accepted raw overlay found	MISSING_RG35XX_BACKING	NOT_TESTED	PLATFORM_COMPLETION
-Graphics	copyArea	canvas.getSubimage + gc.drawImage	No accepted raw overlay found	MISSING_RG35XX_BACKING	NOT_TESTED	PLATFORM_COMPLETION
-Graphics	drawArc	gc.drawArc	No accepted raw overlay found	MISSING_RG35XX_BACKING	NOT_TESTED	PLATFORM_COMPLETION
+Graphics	clearRect	gc.clearRect	P1A G1 raw transparent clear with canonical clip/translate semantics	RG35XX_RAW_BACKING_HOST_ACCEPTED	G1 HOST DIFFERENTIAL PASS; P1A MODULE DEVICE PENDING	PROTECT_MODULE_TEST
+Graphics	copyArea	canvas.getSubimage + gc.drawImage	P1A G1 live-raster self-copy with canonical anchor/clip/translate and JDK8 MUL8/DIV8 SrcOver	RG35XX_RAW_BACKING_HOST_ACCEPTED	G1 HOST DIFFERENTIAL + ALPHA PASS; P1A MODULE DEVICE PENDING	PROTECT_MODULE_TEST
+Graphics	drawArc	gc.drawArc	P1A G2D OpenJDK8-reference raw raster	RG35XX_RAW_BACKING_HOST_ACCEPTED	G2D 37 FIXED + 320 FUZZ HOST DIFFERENTIAL PASS; MODULE DEVICE PENDING	PROTECT_MODULE_TEST
 Graphics	drawChar	Delegates drawString	A5 raw drawString path	RG35XX_RAW_BACKING_PARTIAL_FONT	Text tests partial	VERIFY
 Graphics	drawChars	Delegates drawString	A5 raw drawString path	RG35XX_RAW_BACKING_PARTIAL_FONT	Text tests partial	VERIFY
 Graphics	drawImage(Image,x,y,anchor)	AWT image blit	A5 raw blit	RG35XX_RAW_BACKING	PNG/alpha real-game evidence	PROTECT
 Graphics	drawImage(Image,x,y)	AWT image blit	A5 raw blit	RG35XX_RAW_BACKING	PNG/alpha real-game evidence	PROTECT
 Graphics	drawImage2(Image,...)	AWT image blit	A5 raw blit	RG35XX_RAW_BACKING	accepted image chain	PROTECT
-Graphics	drawImage2(BufferedImage,...)	gc.drawImage(BufferedImage)	No raw equivalent; BufferedImage is AWT-only	MISSING_RG35XX_BACKING	NOT_TESTED	AUDIT_CALLERS
-Graphics	drawImage2Test(BufferedImage,...)	AWT canvas pixel fallback	No raw equivalent	MISSING_RG35XX_BACKING	NOT_TESTED	AUDIT_CALLERS
+Graphics	drawImage2(BufferedImage,...)	gc.drawImage(BufferedImage)	Canonical AWT-only import/decode helper; live callers are PlatformImage AWT-backed constructors, not the Raw2D public contract	CANONICAL_AWT_INTERNAL_NOT_RAW_API	CALLER AUDIT COMPLETE; NO P1A RAW API OWNER	PRESERVE_AWT_FALLBACK
+Graphics	drawImage2Test(BufferedImage,...)	AWT canvas pixel fallback	Canonical diagnostic/helper method; no live caller (only commented reference in drawImage manipulation path)	UNUSED_CANONICAL_AWT_DIAGNOSTIC_HELPER	CALLER AUDIT COMPLETE	DO_NOT_PORT_AS_RAW_API
 Graphics	flushGraphics	AWT subimage -> LCD gc	A4 raw copy/present chain	RG35XX_RAW_BACKING	A4 repeated flush PASS	PROTECT
 Graphics	drawRegion	AWT subimage/transform	A5 Core2D raw transform/blit + accepted clip correction	RG35XX_RAW_BACKING	drawRegion/Tier-0 accepted	PROTECT
 Graphics	drawRGB	BufferedImage temp + gc.drawImage	A5 raw copy/source-over path	RG35XX_RAW_BACKING	accepted graphics chain	PROTECT
 Graphics	drawLine	gc.drawLine	A6 raw line implementation	RG35XX_RAW_BACKING	A6 host + physical parent evidence	PROTECT
 Graphics	drawRect	gc.drawRect	A6 four device-proven drawLine calls	RG35XX_RAW_BACKING	A6 host + physical parent evidence	PROTECT
-Graphics	drawRoundRect	gc.drawRoundRect	No accepted raw overlay found	MISSING_RG35XX_BACKING	NOT_TESTED	PLATFORM_COMPLETION
-Graphics	drawString / drawSubstring	AWT FontMetrics + gc.drawString	A5 headless bitmap glyph renderer	RG35XX_RAW_BACKING_PARTIAL_FONT	Text rendered in accepted corpus	PLATFORM_COMPLETION
-Graphics	fillArc	gc.fillArc	No accepted raw overlay found	MISSING_RG35XX_BACKING	NOT_TESTED	PLATFORM_COMPLETION
+Graphics	drawRoundRect	gc.drawRoundRect	P1A G2C OpenJDK8-reference raw raster	RG35XX_RAW_BACKING_HOST_ACCEPTED	G2C 19-CASE HOST DIFFERENTIAL PASS; MODULE DEVICE PENDING	PROTECT_MODULE_TEST
+Graphics	drawString / drawSubstring	AWT FontMetrics + gc.drawString	A5 headless bitmap glyph renderer	RG35XX_RAW_BACKING_PARTIAL_FONT	Text rendered in accepted corpus	P1C_FONT_TEXT_MODULE
+Graphics	fillArc	gc.fillArc	P1A G2D OpenJDK8-reference raw raster	RG35XX_RAW_BACKING_HOST_ACCEPTED	G2D 37 FIXED + 320 FUZZ HOST DIFFERENTIAL PASS; MODULE DEVICE PENDING	PROTECT_MODULE_TEST
 Graphics	fillRect	gc.fillRect	A4 raw clipped fill	RG35XX_RAW_BACKING	A4 PASS	PROTECT
-Graphics	fillRoundRect	gc.fillRoundRect + gc.fillRect	No accepted raw overlay found	MISSING_RG35XX_BACKING	NOT_TESTED	PLATFORM_COMPLETION
+Graphics	fillRoundRect	gc.fillRoundRect + gc.fillRect	P1A G2A raw path preserves canonical final full-rectangle quirk	RG35XX_RAW_BACKING_HOST_ACCEPTED	G2A HOST DIFFERENTIAL PASS; MODULE DEVICE PENDING	PROTECT_MODULE_TEST
 Graphics	setColor	AWT Color + gc.setColor	A4 keeps MIDP color state, skips AWT gc	RG35XX_RAW_BACKING	A4 PASS	PROTECT
-Graphics	setFont	AWT font + metrics	A4/A5 raw font state/backing	RG35XX_RAW_BACKING_PARTIAL_FONT	accepted text scope	VERIFY
+Graphics	setFont	AWT font + metrics	A4/A5 raw font state/backing	RG35XX_RAW_BACKING_PARTIAL_FONT	accepted text scope	P1C_FONT_TEXT_MODULE
 Graphics	setClip / clipRect / translate	Graphics2D clip/transform	A4 raw clip/translate; A6 ClipTranslate correction	RG35XX_RAW_BACKING	GoW + host regression PASS	PROTECT
-Graphics	setAlphaRGB	gc.setColor(new Color(argb,true))	No accepted raw overlay	MISSING_RG35XX_BACKING	NOT_TESTED	PLATFORM_COMPLETION
-DirectGraphics	drawImage(...,manipulation)	getCanvas + BufferedImage manipulation	raw image getCanvas is null; no accepted DirectGraphics raw path	MISSING_RG35XX_BACKING	NOT_TESTED	PLATFORM_COMPLETION
-DirectGraphics	drawPixels(byte[])	BufferedImage temp + gc.drawImage	No raw overlay found	MISSING_RG35XX_BACKING	NOT_TESTED	PLATFORM_COMPLETION
-DirectGraphics	drawPixels(int[])	BufferedImage temp + gc.drawImage	No raw overlay found	MISSING_RG35XX_BACKING	NOT_TESTED	PLATFORM_COMPLETION
-DirectGraphics	drawPixels(short[])	BufferedImage temp + gc.drawImage	No raw overlay found	MISSING_RG35XX_BACKING	NOT_TESTED	PLATFORM_COMPLETION
-DirectGraphics	drawPolygon	setAlphaRGB + gc.drawPolygon	No raw overlay found	MISSING_RG35XX_BACKING	NOT_TESTED	PLATFORM_COMPLETION
-DirectGraphics	drawTriangle(7arg)	setAlphaRGB + gc.drawPolygon	No accepted raw overlay	MISSING_RG35XX_BACKING	NOT_TESTED	PLATFORM_COMPLETION
-DirectGraphics	fillPolygon	gc.fillPolygon	A6 raw path only for 4-point axis-aligned rectangle; generic polygon intentionally absent	RG35XX_RAW_BACKING_PARTIAL	rectangle host gate only	PLATFORM_COMPLETION
-Graphics	fillTriangle(6arg MIDP)	gc.fillPolygon triangle	Missing on exact A8; COMP-02 owner-scoped candidate proved gap on device	MISSING_A8_BACKING_PROVEN_GAP	COMP-02 scoped DEVICE-PASS	INTEGRATE_ONLY_IN_PLATFORM_COMPLETION
-DirectGraphics	fillTriangle(7arg color)	setAlphaRGB + gc.fillPolygon	No accepted raw overlay; COMP-02 intentionally did not change it	MISSING_RG35XX_BACKING	NOT_TESTED	PLATFORM_COMPLETION
-DirectGraphics	getPixels(byte[])	Canonical implementation is a stub/log only	Same canonical limitation	CANONICAL_LIMITATION	NOT_TESTED	DO_NOT_RG35XX_FIX_WITHOUT_CANONICAL_DECISION
-DirectGraphics	getPixels(int[])	canvas.getRGB	raw canvas is null; no overlay found	MISSING_RG35XX_BACKING	NOT_TESTED	PLATFORM_COMPLETION
-DirectGraphics	getPixels(short[])	canvas.getRGB + conversion	raw canvas is null; no overlay found	MISSING_RG35XX_BACKING	NOT_TESTED	PLATFORM_COMPLETION
+Graphics	setAlphaRGB	gc.setColor(new Color(argb,true))	Canonical AWT helper used by AWT DirectGraphics paths and deferred M3D; accepted P1A raw explicit-color shape paths do not depend on raw setAlphaRGB	CANONICAL_AWT_INTERNAL_DEFERRED_3D_CALLER	P1A D4/D6 HOST PASS WITHOUT RAW HELPER; M3D DEFERRED	PRESERVE_AWT_FALLBACK_DEFER_3D
+DirectGraphics	drawImage(...,manipulation)	getCanvas + BufferedImage manipulation	P1A G4 maps pinned Nokia manipulation semantics to accepted raw transform + blit/SrcOver	RG35XX_RAW_BACKING_HOST_ACCEPTED	G4G5 R3 24 DRAWIMAGE CASES PASS; MODULE DEVICE PENDING	PROTECT_MODULE_TEST
+DirectGraphics	drawPixels(byte[])	BufferedImage temp + gc.drawImage	P1A G4 raw gray format -1/1 unpack + canonical manipulation/blit	RG35XX_RAW_BACKING_HOST_ACCEPTED	G4G5 R3 8 BYTE CASES PASS; MODULE DEVICE PENDING	PROTECT_MODULE_TEST
+DirectGraphics	drawPixels(int[])	BufferedImage temp + gc.drawImage	P1A G4 raw ARGB staging; canonical transparency-flag behavior preserved	RG35XX_RAW_BACKING_HOST_ACCEPTED	G4G5 R3 16 INT CASES PASS; MODULE DEVICE PENDING	PROTECT_MODULE_TEST
+DirectGraphics	drawPixels(short[])	BufferedImage temp + gc.drawImage	P1A G4 raw ushort conversion/transparency semantics + accepted raw blit	RG35XX_RAW_BACKING_HOST_ACCEPTED	G4G5 R3 10 SHORT CASES PASS; MODULE DEVICE PENDING	PROTECT_MODULE_TEST
+DirectGraphics	drawPolygon	setAlphaRGB + gc.drawPolygon	P1A D6 raw explicit-color polygon outline with canonical opaque/alpha behavior	RG35XX_RAW_BACKING_HOST_ACCEPTED	D6 100 FIXED + 320 FUZZ + OFFSET/STATE PASS; MODULE DEVICE PENDING	PROTECT_MODULE_TEST
+DirectGraphics	drawTriangle(7arg)	setAlphaRGB + gc.drawPolygon	P1A D6 raw explicit-color triangle outline	RG35XX_RAW_BACKING_HOST_ACCEPTED	D6 30 TRIANGLE CASES PASS; MODULE DEVICE PENDING	PROTECT_MODULE_TEST
+DirectGraphics	fillPolygon	gc.fillPolygon	P1A D4 generic even-odd polygon fill; rectangle protected path retained	RG35XX_RAW_BACKING_HOST_ACCEPTED	D4 17 FIXED + 320 FUZZ + PROTECTED RECT REGRESSION PASS; MODULE DEVICE PENDING	PROTECT_MODULE_TEST
+Graphics	fillTriangle(6arg MIDP)	gc.fillPolygon triangle	P1A G2B OpenJDK8-reference raw triangle raster using current opaque Graphics color	RG35XX_RAW_BACKING_HOST_ACCEPTED	G2B 21-CASE HOST DIFFERENTIAL PASS; PRIOR COMP-02 WAS GAP PROOF, NOT CURRENT MODULE PASS	PROTECT_MODULE_TEST
+DirectGraphics	fillTriangle(7arg color)	setAlphaRGB + gc.fillPolygon	P1A D4 raw explicit-color triangle fill with G1 exact SrcOver	RG35XX_RAW_BACKING_HOST_ACCEPTED	D4 105 TRIANGLE CASES PASS; MODULE DEVICE PENDING	PROTECT_MODULE_TEST
+DirectGraphics	getPixels(byte[])	Canonical implementation is a stub/log only	Same canonical limitation; P1A R3 verifies output buffers remain unchanged	CANONICAL_LIMITATION	G4G5 R3 STUB CASE PASS; MODULE DEVICE PENDING	DO_NOT_RG35XX_FIX_WITHOUT_CANONICAL_DECISION
+DirectGraphics	getPixels(int[])	canvas.getRGB	P1A G5 reads raw PlatformImage framebuffer with canonical offset/scanlength behavior	RG35XX_RAW_BACKING_HOST_ACCEPTED	G4G5 R3 3 INT READ CASES PASS; MODULE DEVICE PENDING	PROTECT_MODULE_TEST
+DirectGraphics	getPixels(short[])	canvas.getRGB + conversion	P1A G5 raw framebuffer read + canonical ushort conversion and canonical scanlength-ignored quirk	RG35XX_RAW_BACKING_HOST_ACCEPTED	G4G5 R3 10 SHORT READ CASES PASS; MODULE DEVICE PENDING	PROTECT_MODULE_TEST
 Image	blank mutable image	BufferedImage ARGB	A4 int[] ARGB raw backing	RG35XX_RAW_BACKING	A4 PASS	PROTECT
-Image	resource/InputStream/byte[] decode	ImageIO read; canonical comments cover PNG/JPG/etc.	A5 Core2D decoder is PNG-only; later Adam7 expands PNG only	RG35XX_RAW_BACKING_PARTIAL_FORMAT	PNG/alpha accepted	PLATFORM_COMPLETION
+Image	resource/InputStream/byte[] decode	ImageIO read; canonical comments cover PNG/JPG/etc.	A5 Core2D decoder is PNG-only; later Adam7 expands PNG only	RG35XX_RAW_BACKING_PARTIAL_FORMAT	PNG/alpha accepted	P1B_IMAGE_FORMAT_MODULE
 Image	copy / RGB / subimage transform	AWT copy/transform	A5 Core2D raw copy/transform	RG35XX_RAW_BACKING	accepted image/drawRegion	PROTECT
 Image	getRGB/getARGB/getPixel/setPixel	BufferedImage access	A5 raw pixel access	RG35XX_RAW_BACKING	accepted image chain	PROTECT
 Image	getCanvas / transformImage(BufferedImage)	AWT internal backing	raw getCanvas null; AWT transform not a raw API	RAW_NULL_INTERFACE	3D callers deferred	AUDIT_CALLERS
-Font	metrics/glyph rendering	Aweigit AWT font resource/FontMetrics	RG35XXCore2D bitmap glyph/metrics; unknown glyph -> box; limited style fidelity	RG35XX_RAW_BACKING_PARTIAL_FONT	basic text accepted	PLATFORM_COMPLETION
+Font	metrics/glyph rendering	Aweigit AWT font resource/FontMetrics	RG35XXCore2D bitmap glyph/metrics; unknown glyph -> box; limited style fidelity	RG35XX_RAW_BACKING_PARTIAL_FONT	basic text accepted	P1C_FONT_TEXT_MODULE
 Canvas	paint/repaint/fullscreen	Canonical Canvas semantics	Canonical retained; backing replaced below PlatformImage/Graphics	CANONICAL_UNCHANGED	A4 Canvas PASS	PROTECT
 GameCanvas	getGraphics/flushGraphics/getKeyStates	Canonical GameCanvas semantics	Canonical retained; MobilePlatform key state + raw presenter	CANONICAL_UNCHANGED	A4 GameCanvas PASS	PROTECT
 Pointer	Canvas pointer API	Canonical reports pointer events and dispatch methods	RG35XX adapter currently has no pointer/touch-emulation producer	FRONTEND_CAPABILITY_GAP	NOT_TESTED	PLATFORM_COMPLETION_OR_EXPLICIT_UNSUPPORTED
