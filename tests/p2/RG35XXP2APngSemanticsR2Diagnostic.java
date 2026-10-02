@@ -69,8 +69,16 @@ public final class RG35XXP2APngSemanticsR2Diagnostic {
         if(trns && ct==0) chunk(out,"tRNS",new byte[]{0,(byte)gray(0,0)});
         if(trns && ct==2) chunk(out,"tRNS",new byte[]{0,(byte)red(0,0),0,(byte)green(0,0),0,(byte)blue(0,0)});
         ByteArrayOutputStream scan=new ByteArrayOutputStream();
-        if(interlace==0){for(int y=0;y<H;y++){scan.write(0);scan.write(row(ct,0,y,1,W,forcedAlpha));}}
-        else {int[] sx={0,4,0,2,0,1,0},sy={0,0,4,0,2,0,1},dx={8,8,4,4,2,2,1},dy={8,8,8,4,4,2,2};for(int p=0;p<7;p++){int pw=size(W,sx[p],dx[p]),ph=size(H,sy[p],dy[p]);for(int py=0;py<ph;py++){scan.write(0);scan.write(row(ct,sx[p],sy[p]+py*dy[p],dx[p],pw,forcedAlpha));}}}
+        if(interlace==0){
+            for(int y=0;y<H;y++){scan.write(0);scan.write(row(ct,0,y,1,W,forcedAlpha));}
+        } else {
+            int[] sx={0,4,0,2,0,1,0},sy={0,0,4,0,2,0,1},dx={8,8,4,4,2,2,1},dy={8,8,8,4,4,2,2};
+            for(int p=0;p<7;p++){
+                int pw=size(W,sx[p],dx[p]),ph=size(H,sy[p],dy[p]);
+                if(pw==0 || ph==0) continue;
+                for(int py=0;py<ph;py++){scan.write(0);scan.write(row(ct,sx[p],sy[p]+py*dy[p],dx[p],pw,forcedAlpha));}
+            }
+        }
         ByteArrayOutputStream z=new ByteArrayOutputStream();DeflaterOutputStream def=new DeflaterOutputStream(z);def.write(scan.toByteArray());def.finish();def.close();chunk(out,"IDAT",z.toByteArray());chunk(out,"IEND",new byte[0]);return out.toByteArray();
     }
 
