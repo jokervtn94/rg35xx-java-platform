@@ -71,6 +71,52 @@ jobs:
       - name: Apply accepted A5 Core2D overlay
         run: bash ./scripts/build-a5-core2d-java.sh
 
+      - name: Preflight rebuild D6 and stage G4 G5
+        shell: bash
+        run: |
+          set -euo pipefail
+          JAVA8="$JAVA_HOME" bash scripts/build-p1a-dg-draw-vector-d6-v2.sh > /tmp/p1a-complete-preflight-d6.log
+          grep -q '^P1A_DG_D6_BUILD=PASS$' /tmp/p1a-complete-preflight-d6.log
+          python3 scripts/stage-p1a-complete-graphics-g4g5.py build/a3/stage-src | tee /tmp/p1a-complete-preflight-stage.log
+          grep -q '^P1A_COMPLETE_G4G5_STAGE=PASS$' /tmp/p1a-complete-preflight-stage.log
+          echo P1A_COMPLETE_GRAPHICS_PREFLIGHT_STAGE=PASS
+
+      - name: Preflight compile owner class and strict gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          PARENT=out/p1a-dg-draw-vector-d6/freej2me-rg35xx.jar
+          SRC=build/a3/stage-src/org/recompile/mobile/PlatformGraphics.java
+          CLS=build/p1a-complete-preflight-classes
+          HOST=build/p1a-complete-preflight-host
+          rm -rf "$CLS" "$HOST" && mkdir -p "$CLS" "$HOST"
+          "$JAVA_HOME/bin/javac" -encoding UTF-8 -source 1.6 -target 1.6 \
+            -bootclasspath "$JAVA_HOME/jre/lib/rt.jar" \
+            -classpath "$PARENT:upstream/freej2me-miyoomini/lib/jsr305-3.0.2.jar" \
+            -d "$CLS" "$SRC"
+          list="$(cd "$CLS" && find . -type f -name '*.class' -printf '%P\n' | LC_ALL=C sort)"
+          [ "$list" = "org/recompile/mobile/PlatformGraphics.class" ]
+          cp "$PARENT" /tmp/p1a-complete-preflight.jar
+          "$JAVA_HOME/bin/jar" uf /tmp/p1a-complete-preflight.jar -C "$CLS" org/recompile/mobile/PlatformGraphics.class
+          "$JAVA_HOME/bin/javac" -encoding UTF-8 -source 1.6 -target 1.6 \
+            -bootclasspath "$JAVA_HOME/jre/lib/rt.jar" \
+            -classpath /tmp/p1a-complete-preflight.jar \
+            -d "$HOST" tests/p1a/RG35XXCompleteGraphicsG4G5DifferentialGate.java
+          echo P1A_COMPLETE_GRAPHICS_PREFLIGHT_COMPILE=PASS
+
+      - name: Preflight run strict G4 G5 differential only
+        shell: bash
+        run: |
+          set -euo pipefail
+          LOG=/tmp/p1a-complete-preflight-g4g5.log
+          "$JAVA_HOME/bin/java" -Djava.awt.headless=true \
+            -cp /tmp/p1a-complete-preflight.jar:build/p1a-complete-preflight-host \
+            org.recompile.rg35xx.p1a.RG35XXCompleteGraphicsG4G5DifferentialGate | tee "$LOG"
+          grep -q '^P1A_COMPLETE_G4G5_TOTAL_CASE_COUNT=72$' "$LOG"
+          grep -q '^P1A_COMPLETE_G4G5_STRICT_FAILURE_COUNT=0$' "$LOG"
+          grep -q '^P1A_COMPLETE_G4G5_DIFFERENTIAL_GATE=PASS$' "$LOG"
+          echo P1A_COMPLETE_GRAPHICS_PREFLIGHT_G4G5=PASS
+
       - name: Build and gate P1A complete graphics candidate
         shell: bash
         run: |
