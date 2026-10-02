@@ -42,6 +42,7 @@ PY
 echo P1A_G2D_G2C_PARENT_IDENTITY_GATE=PASS
 
 python3 "$ROOT/scripts/stage-p1a-g2d-arc-family-jdk8-raster.py" "$STAGE"
+python3 "$ROOT/scripts/stage-p1a-g2d6a-generalrenderer-lineclip.py" "$STAGE"
 PG_SRC="$STAGE/org/recompile/mobile/PlatformGraphics.java"
 rm -rf "$OUT" "$CLASSES"; mkdir -p "$OUT" "$CLASSES"
 "$JAVA8/bin/javac" -encoding UTF-8 -source 1.6 -target 1.6 \
