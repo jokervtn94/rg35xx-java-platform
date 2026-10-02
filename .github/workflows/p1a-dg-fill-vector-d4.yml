@@ -1,0 +1,128 @@
+name: P1A DG Fill Vector D4
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - p1a-dg-fill-vector-candidate
+    paths:
+      - '.github/workflows/p1a-dg-fill-vector-d4.yml'
+      - 'scripts/stage-p1a-dg-fill-vector-d4.py'
+      - 'scripts/build-p1a-dg-fill-vector-d4.sh'
+      - 'tests/p1a/RG35XXDGFillVectorD4DifferentialGate.java'
+
+permissions:
+  contents: read
+
+jobs:
+  p1a-dg-fill-vector-d4:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 75
+    steps:
+      - name: Checkout D4 candidate and pinned canonical submodule
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Set up JDK 8
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Materialize A4 raw2D baseline
+        run: bash ./scripts/build-a4-raw2d-java.sh
+
+      - name: Stage protected PERF-A1 presenter chain
+        run: |
+          python3 ./scripts/stage-a6-rg35xx-video-perf-p1.py "$GITHUB_WORKSPACE"
+          python3 ./scripts/stage-a6-rg35xx-video-perf-p2.py "$GITHUB_WORKSPACE"
+          python3 ./scripts/stage-a6-rg35xx-video-perf-p3.py "$GITHUB_WORKSPACE"
+          python3 ./scripts/stage-a6-rg35xx-perf-a1-async-native.py "$GITHUB_WORKSPACE"
+
+      - name: Build exact protected native adapters
+        env:
+          TOOLCHAIN: docker.io/miyoocfw/toolchain-shared-uclibc@sha256:6f6761867b4e4dcc27c99bf25fb91b2910264165f27bdd40b1c17e6f98cf751e
+        run: |
+          docker pull "$TOOLCHAIN"
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/work" \
+            -w /work \
+            "$TOOLCHAIN" \
+            bash -lc 'git config --global --add safe.directory /work/upstream/freej2me-miyoomini && ./scripts/build-a3.sh native'
+
+      - name: Apply accepted A5 Core2D overlay
+        run: bash ./scripts/build-a5-core2d-java.sh
+
+      - name: Build and strictly gate D4 DirectGraphics fill vector candidate
+        run: bash ./scripts/build-p1a-dg-fill-vector-d4.sh
+
+      - name: Verify D4 scope and host status
+        run: |
+          set -euo pipefail
+          ID=out/p1a-dg-fill-vector-d4/P1A-DG-D4-IDENTITY.txt
+          LOG=out/p1a-dg-fill-vector-d4/D4-FILL-VECTOR-DIFFERENTIAL.txt
+          SCOPE=out/p1a-dg-fill-vector-d4/G2B-D4-SCOPE-GATE.txt
+
+          grep -q '^WORK_UNIT=P1A-DG-FILL-VECTOR-D4$' "$ID"
+          grep -q '^OWNER=OPENJDK8_SHAPESPANITERATOR_APPENDPOLY$' "$ID"
+          grep -q '^CANONICAL_AWEIGIT=ca11dfe8ea1cc273d92460f9a83bbf192023fa63$' "$ID"
+          grep -q '^EXACT_RUNTIME_PARENT=c1f33f6f72d8560b32ef7d98804dfb20fd325dad$' "$ID"
+          grep -q '^DIAGNOSTIC_BRANCH_PARENT=NO$' "$ID"
+          grep -q '^A9_PARENT=NO$' "$ID"
+          grep -q '^PARENT_G2D_SEMANTIC_SHA256=98c4f5f858888c072b6f56a64b25624b413ef2b95b2b1e30d08ee16a5103c040$' "$ID"
+          grep -q '^PARENT_G2D_PLATFORMGRAPHICS_CLASS_SHA256=85995f6d08af9fcd648a3601398cbe2fd5a2f0cca1ae6e1fafb8a843dea28b5e$' "$ID"
+          grep -q '^CHANGED_METHODS=DirectGraphics.fillTriangle_7arg,DirectGraphics.fillPolygon$' "$ID"
+          grep -q '^CHANGED_JAR_ENTRIES=org/recompile/mobile/PlatformGraphics.class$' "$ID"
+          grep -q '^WINDING=EVEN_ODD$' "$ID"
+          grep -q '^EDGE_PRECISION=DOUBLE_SLOPE_FLOOR_SUBTRACTION_BEFORE_FRACTTOJINT$' "$ID"
+          grep -q '^ALPHA_MODEL=G1_EXACT_8BIT_SRCOVER$' "$ID"
+          grep -q '^COLOR_STATE_RESTORE=PASS$' "$ID"
+          grep -q '^D4_TRIANGLE_CASES=105$' "$ID"
+          grep -q '^D4_POLYGON_FIXED_CASES=17$' "$ID"
+          grep -q '^D4_POLYGON_FUZZ_CASES=320$' "$ID"
+          grep -q '^D4_OFFSET_CASES=1$' "$ID"
+          grep -q '^D4_STRICT_DIFFERENTIAL=PASS$' "$ID"
+          grep -q '^D4_CANONICAL_EQUIVALENT=YES$' "$ID"
+          grep -q '^G2D_37_PLUS_320_REGRESSION=PASS$' "$ID"
+          grep -q '^G2C_19_CASE_REGRESSION=PASS$' "$ID"
+          grep -q '^G2B_21_GEOMETRY_REGRESSION=PASS$' "$ID"
+          grep -q '^G2B_DG_7ARG_SCOPE_EXPANSION=PASS$' "$ID"
+          grep -q '^G1_G2A_BEHAVIOR_REGRESSION=PASS$' "$ID"
+          grep -q '^G1_ALPHA_REGRESSION=PASS$' "$ID"
+          grep -q '^A6_PROTECTED_REGRESSIONS=PASS$' "$ID"
+          grep -q '^CORE2D_CHANGE=NO$' "$ID"
+          grep -q '^DRAW_VECTOR_CHANGE=NO$' "$ID"
+          grep -q '^DRAWARC_FILLARC_CHANGE=NO$' "$ID"
+          grep -q '^GAME_SPECIFIC_CODE=NO$' "$ID"
+          grep -q '^SPECULATIVE_OPTIMIZATION=NO$' "$ID"
+          grep -q '^NO_A9_PARENT=YES$' "$ID"
+          grep -q '^JAMVM_GLIBJ=NOT_TOUCHED$' "$ID"
+          grep -q '^BUILD-PASS=YES$' "$ID"
+          grep -q '^HOST-DIFFERENTIAL-PASS=YES$' "$ID"
+          grep -q '^DEVICE-PASS=NO$' "$ID"
+          grep -q '^DEVICE-TEST-PENDING=NO_MODULE_INTEGRATION_PENDING$' "$ID"
+          grep -q '^STABLE=NO$' "$ID"
+
+          grep -q '^P1A_DG_D4_TRIANGLE_CASE_COUNT=105$' "$LOG"
+          grep -q '^P1A_DG_D4_POLYGON_FIXED_COUNT=17$' "$LOG"
+          grep -q '^P1A_DG_D4_POLYGON_FUZZ_COUNT=320$' "$LOG"
+          grep -q '^P1A_DG_D4_OFFSET_CASE_COUNT=1$' "$LOG"
+          grep -q '^P1A_DG_D4_STATE_FAILURE_COUNT=0$' "$LOG"
+          grep -q '^P1A_DG_D4_RANDOM_SEED=35d3001$' "$LOG"
+          grep -q '^P1A_DG_D4_STRICT_FAILURE_COUNT=0$' "$LOG"
+          grep -q '^P1A_DG_D4_FILL_VECTOR_DIFFERENTIAL_GATE=PASS$' "$LOG"
+          grep -q '^P1A_DG_D4_CANONICAL_EQUIVALENT=YES$' "$LOG"
+          grep -q '^P1A_DG_D4_G2B_21_CASE_SCOPE_EXPANSION_GATE=PASS$' "$SCOPE"
+
+          echo P1A_DG_D4_CI_SCOPE_LOCK=PASS
+          echo P1A_DG_D4_HOST_CANDIDATE=YES
+          echo P1A_DG_D4_DEVICE_PASS=NO
+
+      - name: Upload D4 host candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: RG35XX-P1A-DG-FILL-VECTOR-D4-${{ github.sha }}
+          path: out/p1a-dg-fill-vector-d4/
+          if-no-files-found: error
