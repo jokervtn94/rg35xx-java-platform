@@ -1,0 +1,122 @@
+#!/bin/sh
+# P1A-G1 platform module exerciser for original RG35XX / GarlicOS.
+# Scope is clearRect + copyArea only. No commercial game is involved.
+APP="$(CDPATH= cd -- "$(dirname -- "$0")" 2>/dev/null && pwd)"
+PKG="$APP/RG35XX-P1A-G1"
+JAMVM=/mnt/mmc/CFW/java/bin/jamvm
+GLIBJ=/mnt/mmc/CFW/java/share/classpath/glibj.zip
+EVIDENCE_ROOT=/mnt/mmc/A8-COMPAT-EVIDENCE
+EXPECTED_JAMVM=eea1b97cebfaca67b69ed365e966d80cdac22d8ff245c7a556137cfb2898ea34
+EXPECTED_GLIBJ=d7abe888d2980329434c30f18c0eec124be1f02284bf9ed28e88d7242a1f2bea
+EXPECTED_PLATFORM=72feb0a928539f428c57978774c6e5a5677c3c23d4203bc63e1a2087fde45ba8
+EXPECTED_INPUT=69a8aeb3940bfbc234f3a562a7ae4bcaea10b50f8a8f2c38ad229a5430930f6d
+EXPECTED_VIDEO=c6687c0a43b24b425af0727c928afb5414da811ecbcbbe3538928470abe8bd0d
+EXPECTED_AUDIO=4522157846c33c150a85c50b4bed6f68351f1c62d54b8cd7805cbb97c5727644
+EXPECTED_PRIME=8c30691e755abd6791ac75887b56e20f1a56266b2eb0286bfb4007b98f7d7a7e
+EXPECTED_EXERCISER=6c4c0563c8b8eb0923b3677d876986e2cd109bd0ea4b03682571874f86d043fe
+STAMP=$(date +%Y%m%d-%H%M%S 2>/dev/null || true)
+[ -n "$STAMP" ] || STAMP=NO-DATE
+OUTDIR="$EVIDENCE_ROOT/P1A-G1-PLATFORM-EXERCISER-$STAMP"
+mkdir -p "$OUTDIR" || exit 20
+OUT="$OUTDIR/RUNTIME-RESULT.txt"
+: > "$OUT"
+fail() {
+  echo "PRECONDITION=FAIL:$1" >> "$OUT"
+  echo 'TECHNICAL_GATE=FAIL' >> "$OUT"
+  echo 'DEVICE_PASS=NO' >> "$OUT"
+  sync
+  exit 20
+}
+[ -x "$JAMVM" ] || fail JAMVM_MISSING
+[ -f "$GLIBJ" ] || fail GLIBJ_MISSING
+[ -d "$PKG" ] || fail PAYLOAD_MISSING
+for F in freej2me-rg35xx.jar librg35xx_input.so librg35xx_video.so libaudio.so a7-a1p5-rw-silence-prime.s32le RG35XX-P1A-G1-EXERCISER.jar RUNTIME-SHA256SUMS.txt; do
+  [ -f "$PKG/$F" ] || fail "MISSING:$F"
+done
+JB=$(sha256sum "$JAMVM" | awk '{print $1}')
+GB=$(sha256sum "$GLIBJ" | awk '{print $1}')
+PH=$(sha256sum "$PKG/freej2me-rg35xx.jar" | awk '{print $1}')
+IH=$(sha256sum "$PKG/librg35xx_input.so" | awk '{print $1}')
+VH=$(sha256sum "$PKG/librg35xx_video.so" | awk '{print $1}')
+AH=$(sha256sum "$PKG/libaudio.so" | awk '{print $1}')
+PRH=$(sha256sum "$PKG/a7-a1p5-rw-silence-prime.s32le" | awk '{print $1}')
+EH=$(sha256sum "$PKG/RG35XX-P1A-G1-EXERCISER.jar" | awk '{print $1}')
+{
+  echo 'PROJECT=RG35XX-AWEIGIT-R1'
+  echo 'WORK_UNIT=P1A-G1-CLEAR-COPY'
+  echo 'TEST=P1A-G1-PLATFORM-MODULE-EXERCISER'
+  echo 'COMMERCIAL_GAME_DEPENDENCY=NO'
+  echo "JAMVM_SHA256=$JB"
+  echo "GLIBJ_SHA256=$GB"
+  echo "PLATFORM_SHA256=$PH"
+  echo "INPUT_NATIVE_SHA256=$IH"
+  echo "VIDEO_NATIVE_SHA256=$VH"
+  echo "AUDIO_NATIVE_SHA256=$AH"
+  echo "PRIME_PCM_SHA256=$PRH"
+  echo "EXERCISER_JAR_SHA256=$EH"
+  echo 'AUDIO_ROUTE_PRIME_EXECUTED=NO'
+  echo 'DEVICE_PASS=NO_PENDING_PHYSICAL_REVIEW'
+} >> "$OUT"
+[ "$JB" = "$EXPECTED_JAMVM" ] || fail JAMVM_HASH_MISMATCH
+[ "$GB" = "$EXPECTED_GLIBJ" ] || fail GLIBJ_HASH_MISMATCH
+[ "$PH" = "$EXPECTED_PLATFORM" ] || fail PLATFORM_HASH_MISMATCH
+[ "$IH" = "$EXPECTED_INPUT" ] || fail INPUT_HASH_MISMATCH
+[ "$VH" = "$EXPECTED_VIDEO" ] || fail VIDEO_HASH_MISMATCH
+[ "$AH" = "$EXPECTED_AUDIO" ] || fail AUDIO_HASH_MISMATCH
+[ "$PRH" = "$EXPECTED_PRIME" ] || fail PRIME_HASH_MISMATCH
+[ "$EH" = "$EXPECTED_EXERCISER" ] || fail EXERCISER_HASH_MISMATCH
+(cd "$PKG" && sha256sum -c RUNTIME-SHA256SUMS.txt) >> "$OUT" 2>&1 || fail RUNTIME_MANIFEST_FAIL
+
+cat > "$OUTDIR/IDENTITY.txt" <<EOF
+PROJECT=RG35XX-AWEIGIT-R1
+WORK_UNIT=P1A-G1-CLEAR-COPY
+TEST=P1A-G1-PLATFORM-MODULE-EXERCISER
+CANONICAL_AWEIGIT=ca11dfe8ea1cc273d92460f9a83bbf192023fa63
+G1_PLATFORM_SHA256=$PH
+EXERCISER_JAR_SHA256=$EH
+JAMVM_SHA256_BEFORE=$JB
+GLIBJ_SHA256_BEFORE=$GB
+INPUT_NATIVE_SHA256=$IH
+VIDEO_NATIVE_SHA256=$VH
+AUDIO_NATIVE_SHA256=$AH
+PRIME_PCM_SHA256=$PRH
+COMMERCIAL_GAME_DEPENDENCY=NO
+TIMESTAMP=$STAMP
+EOF
+cat > "$OUTDIR/OBSERVATION.txt" <<'OBS'
+TEST=P1A-G1-PLATFORM-MODULE-EXERCISER
+SCREEN_GREEN_PASS_PATTERN=NOT_TESTED
+CRASH_HANG=NOT_TESTED
+VISUAL_ANOMALY=NOT_TESTED
+NORMAL_RETURN_TO_GARLICOS=NOT_TESTED
+RESULT=NEEDS_REVIEW
+NOTES=
+OBS
+
+echo 'IDENTITY_GATE=PASS' >> "$OUT"
+DATA="$PKG/data"
+mkdir -p "$DATA" || fail DATA_DIR_CREATE_FAIL
+LD_LIBRARY_PATH="$PKG${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+  "$JAMVM" -Xmx64m \
+  -Drg35xx.raw2d=true \
+  -Drg35xx.native.dir="$PKG" \
+  -cp "$GLIBJ:$PKG/freej2me-rg35xx.jar" \
+  org.recompile.rg35xx.RG35XXLauncher "$PKG/RG35XX-P1A-G1-EXERCISER.jar" 240 320 "$DATA" "$DATA" >> "$OUT" 2>&1
+RC=$?
+echo "RUNTIME_EXIT_CODE=$RC" >> "$OUT"
+if grep -q '^P1A_G1_DEVICE_EXERCISER_RESULT=PASS$' "$OUT"; then
+  echo 'PROGRAMMATIC_EXERCISER=PASS' >> "$OUT"
+else
+  echo 'PROGRAMMATIC_EXERCISER=FAIL_OR_MISSING' >> "$OUT"
+fi
+JA=$(sha256sum "$JAMVM" | awk '{print $1}')
+GA=$(sha256sum "$GLIBJ" | awk '{print $1}')
+echo "JAMVM_SHA256_AFTER=$JA" >> "$OUT"
+echo "GLIBJ_SHA256_AFTER=$GA" >> "$OUT"
+[ "$JA" = "$EXPECTED_JAMVM" ] && [ "$GA" = "$EXPECTED_GLIBJ" ] && echo 'PROTECTED_HASHES=PASS' >> "$OUT" || echo 'PROTECTED_HASHES=FAIL' >> "$OUT"
+[ "$RC" -eq 0 ] && echo 'NORMAL_EXIT=PASS' >> "$OUT" || echo 'NORMAL_EXIT=FAIL' >> "$OUT"
+echo 'DEVICE_PASS=NO_PENDING_PHYSICAL_REVIEW' >> "$OUT"
+echo "WRAPPER_EXIT_CODE=$RC" >> "$OUTDIR/IDENTITY.txt"
+echo "EVIDENCE_DIR=$OUTDIR" >> "$OUTDIR/IDENTITY.txt"
+sync
+exit "$RC"
