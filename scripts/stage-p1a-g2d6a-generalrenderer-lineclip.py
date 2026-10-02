@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 from pathlib import Path
+import subprocess
 import sys
 
 if len(sys.argv) != 2:
@@ -193,8 +194,13 @@ for marker in ["rg35xxDrawArcJdk8", "rg35xxFillArcJdk8Lattice", "rg35xxPPDrawCub
         raise SystemExit("P1A_G2D6A_STAGE_FAIL parent lost: %s" % marker)
 
 pg.write_text(out, encoding="utf-8")
+next_stage = Path(__file__).with_name("stage-p1a-g2d6a3-processpath-drawstate.py")
+if not next_stage.is_file():
+    raise SystemExit("P1A_G2D6A_STAGE_FAIL chained G2D6A3 stage missing")
+subprocess.check_call([sys.executable, str(next_stage), str(root)])
 print("P1A_G2D6A_STAGE=PASS")
 print("P1A_G2D6A_OWNER=RG35XX_GRAPHICS_BOUNDARY")
 print("P1A_G2D6A_FIX=OPENJDK8_GENERALRENDERER_ADJUSTLINE_ERROR_PHASE")
+print("P1A_G2D6A3_CHAIN=PASS")
 print("P1A_G2D6A_FILLARC=UNCHANGED_REJECTED_PENDING_G2D6B")
 print("P1A_G2D6A_PHYSICAL_TEST=NO_MODULE_INTEGRATION_PENDING")
