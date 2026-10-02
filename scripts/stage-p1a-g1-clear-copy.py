@@ -12,6 +12,7 @@ if not path.is_file():
     raise SystemExit("P1A_G1_STAGE_FAIL missing %s" % path)
 
 text = path.read_text(encoding="utf-8")
+parent_text = text
 
 
 def replace_once(old, new, label):
@@ -92,13 +93,16 @@ for token in [
     if token not in text:
         raise SystemExit("P1A_G1_STAGE_FAIL missing semantic token: %s" % token)
 
+# Parent staging history may contain diagnostic names in comments/log strings.
+# G1 must not add any new game-specific marker; compare delta, not whole parent.
 for forbidden in ["Asphalt", "God of War", "Vua Cuop Bien", "Vua Cướp Biển"]:
-    if forbidden in text:
-        raise SystemExit("P1A_G1_STAGE_FAIL game-specific marker: %s" % forbidden)
+    if text.count(forbidden) != parent_text.count(forbidden):
+        raise SystemExit("P1A_G1_STAGE_FAIL game-specific marker delta: %s" % forbidden)
 
 path.write_text(text, encoding="utf-8")
 print("P1A_G1_OWNER=RG35XX_GRAPHICS_BOUNDARY")
 print("P1A_G1_CHANGED_SOURCE=org/recompile/mobile/PlatformGraphics.java")
 print("P1A_G1_METHODS=clearRect,copyArea")
 print("P1A_G1_CORE2D_CHANGE=NO")
+print("P1A_G1_GAME_SPECIFIC_MARKER_DELTA=NO")
 print("P1A_G1_STAGE=PASS")
