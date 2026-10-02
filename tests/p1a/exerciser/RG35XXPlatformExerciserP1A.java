@@ -334,7 +334,7 @@ public final class RG35XXPlatformExerciserP1A extends MIDlet {
             g.setClip(0, 0, getWidth(), getHeight());
         }
 
-        protected void keyPressed(int keyCode) { app.notifyDestroyed(); }
+        public void keyPressed(int keyCode) { app.notifyDestroyed(); }
 
         private static Image blackImage(int w, int h) {
             Image image = Image.createImage(w, h);
