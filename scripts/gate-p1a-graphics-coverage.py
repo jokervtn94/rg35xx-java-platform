@@ -39,7 +39,8 @@ for key in accepted:
         raise SystemExit('P1A_COVERAGE_GATE_FAIL=missing_row:' + repr(key))
     if r['CLASSIFICATION'] != 'RG35XX_RAW_BACKING_HOST_ACCEPTED':
         raise SystemExit('P1A_COVERAGE_GATE_FAIL=not_host_accepted:%s:%s' % (key[0], key[1]))
-    if 'MODULE DEVICE PENDING' not in r['PHYSICAL_EVIDENCE']:
+    evidence = r['PHYSICAL_EVIDENCE']
+    if 'MODULE DEVICE PENDING' not in evidence and 'NOT CURRENT MODULE PASS' not in evidence:
         raise SystemExit('P1A_COVERAGE_GATE_FAIL=device_state_not_pending:%s:%s' % (key[0], key[1]))
 
 stub = by_key.get(('DirectGraphics', 'getPixels(byte[])'))
