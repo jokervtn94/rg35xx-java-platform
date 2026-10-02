@@ -1,0 +1,66 @@
+name: P1A DG Vector D3.1 First Divergence Trace
+
+on:
+  push:
+    branches:
+      - p1a-dg-vector-diagnostic
+    paths:
+      - 'tests/p1a/RG35XXDGVectorD31FirstDivergenceTrace.java'
+      - '.github/workflows/p1a-dg-vector-d31-first-divergence.yml'
+  workflow_dispatch:
+
+jobs:
+  dg-vector-d31-first-divergence:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pinned host family JDK 8
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Compile diagnostic-only D3.1 trace
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf out/p1a-dg-vector-d31
+          mkdir -p out/p1a-dg-vector-d31/classes
+          javac -encoding UTF-8 -source 1.6 -target 1.6 \
+            -d out/p1a-dg-vector-d31/classes \
+            tests/p1a/RG35XXDGVectorD31FirstDivergenceTrace.java
+          echo DGVD31_JAVA6_GATE=PASS
+
+      - name: Run first divergence trace
+        shell: bash
+        run: |
+          set -euo pipefail
+          java -Djava.awt.headless=true \
+            -cp out/p1a-dg-vector-d31/classes \
+            org.recompile.rg35xx.p1a.RG35XXDGVectorD31FirstDivergenceTrace \
+            | tee out/p1a-dg-vector-d31/D31-FIRST-DIVERGENCE.txt
+
+          grep -q '^DGVD31_FUZZ253_IDENTITY=PASS$' out/p1a-dg-vector-d31/D31-FIRST-DIVERGENCE.txt
+          grep -q '^DGVD31_STAR_BUMPERR_DELTA=64$' out/p1a-dg-vector-d31/D31-FIRST-DIVERGENCE.txt
+          grep -q '^DGVD31_STAR_X_FLOAT_AT_DIFF=20$' out/p1a-dg-vector-d31/D31-FIRST-DIVERGENCE.txt
+          grep -q '^DGVD31_STAR_X_NATIVE_AT_DIFF=21$' out/p1a-dg-vector-d31/D31-FIRST-DIVERGENCE.txt
+          grep -q '^DGVD31_STAR_NATIVE_FULLFRAME_MATCH=YES$' out/p1a-dg-vector-d31/D31-FIRST-DIVERGENCE.txt
+          grep -q '^DGVD31_FUZZ_253_BUMPERR_DELTA=64$' out/p1a-dg-vector-d31/D31-FIRST-DIVERGENCE.txt
+          grep -q '^DGVD31_FUZZ_253_X_FLOAT_AT_DIFF=17$' out/p1a-dg-vector-d31/D31-FIRST-DIVERGENCE.txt
+          grep -q '^DGVD31_FUZZ_253_X_NATIVE_AT_DIFF=18$' out/p1a-dg-vector-d31/D31-FIRST-DIVERGENCE.txt
+          grep -q '^DGVD31_FUZZ_253_NATIVE_FULLFRAME_MATCH=YES$' out/p1a-dg-vector-d31/D31-FIRST-DIVERGENCE.txt
+          grep -q '^DGVD31_ROOT_CAUSE=SLOPE_FLOOR_SUBTRACTION_PRECISION$' out/p1a-dg-vector-d31/D31-FIRST-DIVERGENCE.txt
+          grep -q '^DGVD31_OPENJDK_C_SUBTRACTION=DOUBLE$' out/p1a-dg-vector-d31/D31-FIRST-DIVERGENCE.txt
+          grep -q '^DGVD31_G2B_JAVA_SUBTRACTION=FLOAT$' out/p1a-dg-vector-d31/D31-FIRST-DIVERGENCE.txt
+          grep -q '^DGVD31_RUNTIME_CHANGE=NO$' out/p1a-dg-vector-d31/D31-FIRST-DIVERGENCE.txt
+          grep -q '^DGVD31_FIRST_DIVERGENCE_TRACE=PASS$' out/p1a-dg-vector-d31/D31-FIRST-DIVERGENCE.txt
+          echo DGVD31_WORKFLOW_GATE=PASS
+
+      - name: Upload D3.1 diagnostic evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: RG35XX-P1A-DG-VECTOR-D31-FIRST-DIVERGENCE-${{ github.sha }}
+          path: out/p1a-dg-vector-d31/D31-FIRST-DIVERGENCE.txt
+          if-no-files-found: error
