@@ -6,8 +6,10 @@ on:
       - p1a-complete-graphics-candidate
     paths:
       - 'docs/RG35XX-PLATFORM-SOURCE-COVERAGE-MATRIX-v1.tsv'
+      - 'packaging/p1a/**'
       - 'scripts/build-p1a-complete-graphics-candidate.sh'
       - 'scripts/build-p1a-graphics-exerciser.sh'
+      - 'scripts/build-p1a-graphics-physical-package.sh'
       - 'scripts/gate-p1a-graphics-coverage.py'
       - 'scripts/stage-p1a-complete-graphics-g4g5.py'
       - 'tests/p1a/RG35XXCompleteGraphicsG4G5DifferentialGate.java'
@@ -21,7 +23,7 @@ permissions:
 jobs:
   p1a-complete-graphics-module-host-gate:
     runs-on: ubuntu-22.04
-    timeout-minutes: 95
+    timeout-minutes: 100
     steps:
       - name: Checkout module candidate and pinned canonical submodule
         uses: actions/checkout@v4
@@ -43,7 +45,7 @@ jobs:
           git merge-base --is-ancestor "$D6" HEAD
           [ "$(git merge-base "$D6" HEAD)" = "$D6" ]
           changed="$(git diff --name-only "$D6"..HEAD | LC_ALL=C sort)"
-          expected=$'.github/workflows/p1a-complete-graphics-candidate-r2.yml\n.github/workflows/p1a-complete-graphics-candidate-r3.yml\n.github/workflows/p1a-complete-graphics-candidate.yml\n.github/workflows/p1a-complete-graphics-module-gate.yml\ndocs/RG35XX-PLATFORM-SOURCE-COVERAGE-MATRIX-v1.tsv\nscripts/build-p1a-complete-graphics-candidate.sh\nscripts/build-p1a-graphics-exerciser.sh\nscripts/gate-p1a-graphics-coverage.py\nscripts/stage-p1a-complete-graphics-g4g5.py\ntests/p1a/RG35XXCompleteGraphicsG4G5DifferentialGate.java\ntests/p1a/exerciser/RG35XXPlatformExerciserP1A.java'
+          expected=$'.github/workflows/p1a-complete-graphics-candidate-r2.yml\n.github/workflows/p1a-complete-graphics-candidate-r3.yml\n.github/workflows/p1a-complete-graphics-candidate.yml\n.github/workflows/p1a-complete-graphics-module-gate.yml\ndocs/RG35XX-PLATFORM-SOURCE-COVERAGE-MATRIX-v1.tsv\npackaging/p1a/COLLECT-RG35XX-P1A-GRAPHICS-EVIDENCE.ps1\npackaging/p1a/INSTALL-RG35XX-P1A-GRAPHICS.ps1\npackaging/p1a/README-FIRST.txt\npackaging/p1a/RG35XX-P1A-GRAPHICS.sh\nscripts/build-p1a-complete-graphics-candidate.sh\nscripts/build-p1a-graphics-exerciser.sh\nscripts/build-p1a-graphics-physical-package.sh\nscripts/gate-p1a-graphics-coverage.py\nscripts/stage-p1a-complete-graphics-g4g5.py\ntests/p1a/RG35XXCompleteGraphicsG4G5DifferentialGate.java\ntests/p1a/exerciser/RG35XXPlatformExerciserP1A.java'
           [ "$changed" = "$expected" ] || { echo "P1A_MODULE_SCOPE_FAIL=$changed" >&2; exit 1; }
           if git log --format=%H "$D6"..HEAD | grep -Eq '09ac133c24242f6dfa266e8fb3d506b1550ee194|c0a958277dbb6b0cf8de42bff2c70083c789566f'; then
             echo P1A_MODULE_FAIL=diagnostic_branch_became_parent >&2
@@ -129,7 +131,7 @@ jobs:
           grep -q '^STABLE=NO$' "$EX"
           echo P1A_MODULE_EXERCISER_GATE=PASS
 
-      - name: Write module host identity and physical-test handoff
+      - name: Write module host identity before physical-package gate
         shell: bash
         run: |
           set -euo pipefail
@@ -163,24 +165,60 @@ jobs:
           A9_PARENT=NO
           GAME_SPECIFIC_CODE=NO
           TRACE_ONLY_FINAL_RESIDUE=NO
-          PHYSICAL_TEST_ARTIFACT_READY=YES
+          PHYSICAL_TEST_PACKAGE_GATE=PENDING
+          PHYSICAL_TEST_ARTIFACT_READY=NO_PENDING_PHYSICAL_PACKAGE_GATE
           PHYSICAL_TEST_REQUIRED=YES_ORIGINAL_RG35XX
           PHYSICAL_ACCEPTANCE_SURFACE=ONE_P1A_GRAPHICS_EXERCISER
           DEVICE-PASS=NO
           STABLE=NO
-          NEXT_ACTION=RUN_ONE_P1A_GRAPHICS_EXERCISER_ON_ORIGINAL_RG35XX
+          NEXT_ACTION=BUILD_PHYSICAL_MODULE_PACKAGE
           EOF
           sed -i 's/^          //' "$OUT/P1A-MODULE-INTEGRATION-IDENTITY.txt"
           grep -q '^HOST_MODULE_GATE=PASS$' "$OUT/P1A-MODULE-INTEGRATION-IDENTITY.txt"
-          grep -q '^PHYSICAL_TEST_ARTIFACT_READY=YES$' "$OUT/P1A-MODULE-INTEGRATION-IDENTITY.txt"
+          grep -q '^PHYSICAL_TEST_PACKAGE_GATE=PENDING$' "$OUT/P1A-MODULE-INTEGRATION-IDENTITY.txt"
+          grep -q '^PHYSICAL_TEST_ARTIFACT_READY=NO_PENDING_PHYSICAL_PACKAGE_GATE$' "$OUT/P1A-MODULE-INTEGRATION-IDENTITY.txt"
           grep -q '^DEVICE-PASS=NO$' "$OUT/P1A-MODULE-INTEGRATION-IDENTITY.txt"
           grep -q '^STABLE=NO$' "$OUT/P1A-MODULE-INTEGRATION-IDENTITY.txt"
           echo P1A_COMPLETE_GRAPHICS_MODULE_HOST_GATE=PASS
           cat "$OUT/P1A-MODULE-INTEGRATION-IDENTITY.txt"
 
-      - name: Upload module candidate and one physical exerciser
+      - name: Build one physical module package and lock evidence contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x scripts/build-p1a-graphics-physical-package.sh
+          bash scripts/build-p1a-graphics-physical-package.sh | tee /tmp/p1a-physical-package.log
+          grep -q '^P1A_PHYSICAL_PACKAGE_BUILD=PASS$' /tmp/p1a-physical-package.log
+          PID=out/p1a-complete-graphics-candidate/P1A-PHYSICAL-PACKAGE-IDENTITY.txt
+          grep -q '^PHYSICAL_PACKAGE_GATE=PASS$' "$PID"
+          grep -q '^RUNTIME_HASH_LOGGING=PASS_CONTRACT$' "$PID"
+          grep -q '^ONE_EVIDENCE_DIRECTORY=PASS_CONTRACT$' "$PID"
+          grep -q '^NORMAL_EXIT_CHECK=PASS_CONTRACT_PENDING_DEVICE$' "$PID"
+          grep -q '^HUMAN_PHYSICAL_OBSERVATION=REQUIRED$' "$PID"
+          grep -q '^DEVICE_PASS=NO$' "$PID"
+          grep -q '^STABLE=NO$' "$PID"
+          ZIP=out/p1a-complete-graphics-candidate/RG35XX-P1A-GRAPHICS-PHYSICAL-R1.zip
+          [ -f "$ZIP" ]
+          unzip -l "$ZIP" | grep -q 'RG35XX-P1A-GRAPHICS-PHYSICAL-R1/SD/Roms/APPS/RG35XX-P1A-GRAPHICS.sh'
+          unzip -l "$ZIP" | grep -q 'RG35XX-P1A-GRAPHICS-PHYSICAL-R1/SD/Roms/APPS/RG35XX-P1A-GRAPHICS/RG35XX-Platform-Exerciser-P1A.jar'
+          unzip -p "$ZIP" '*/SD/Roms/APPS/RG35XX-P1A-GRAPHICS.sh' | grep -q '^EVID=/mnt/mmc/RG35XX-P1A-GRAPHICS-EVIDENCE$'
+          unzip -p "$ZIP" '*/SD/Roms/APPS/RG35XX-P1A-GRAPHICS.sh' | grep -q 'JAMVM_SHA256_BEFORE='
+          unzip -p "$ZIP" '*/SD/Roms/APPS/RG35XX-P1A-GRAPHICS.sh' | grep -q 'JAMVM_SHA256_AFTER='
+          unzip -p "$ZIP" '*/SD/Roms/APPS/RG35XX-P1A-GRAPHICS.sh' | grep -q 'DEVICE_PASS=NO_PENDING_MANUAL_REVIEW'
+          echo P1A_PHYSICAL_PACKAGE_HOST_GATE=PASS
+
+      - name: Upload module host evidence
         uses: actions/upload-artifact@v4
         with:
           name: RG35XX-P1A-GRAPHICS-MODULE-HOST-${{ github.sha }}
           path: out/p1a-complete-graphics-candidate/
+          if-no-files-found: error
+
+      - name: Upload the one original-RG35XX physical package
+        uses: actions/upload-artifact@v4
+        with:
+          name: RG35XX-P1A-GRAPHICS-PHYSICAL-${{ github.sha }}
+          path: |
+            out/p1a-complete-graphics-candidate/RG35XX-P1A-GRAPHICS-PHYSICAL-R1.zip
+            out/p1a-complete-graphics-candidate/P1A-PHYSICAL-PACKAGE-IDENTITY.txt
           if-no-files-found: error
