@@ -109,7 +109,7 @@ jobs:
           grep -q '^NATIVE_CHANGE=NO$' "$ID"
           grep -q '^GAME_SPECIFIC_CODE=NO$' "$ID"
           grep -q '^SPECULATIVE_OPTIMIZATION=NO$' "$ID"
-          grep -q '^NO_A9_PARENT=YES$' "$ID"
+          grep -q '^A9_PARENT=NO$' "$ID"
           grep -q '^DEVICE-PASS=NO$' "$ID"
           grep -q '^STABLE=NO$' "$ID"
           echo P1A_MODULE_CANDIDATE_HOST_GATE=PASS
