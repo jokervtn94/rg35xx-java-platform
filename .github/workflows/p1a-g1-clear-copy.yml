@@ -56,23 +56,8 @@ jobs:
       - name: Apply accepted A5 headless Core2D overlay
         run: bash ./scripts/build-a5-core2d-java.sh
 
-      - name: Build P1A G1 candidate and differential gates
+      - name: Build P1A G1 candidate and all differential gates
         run: bash ./scripts/build-p1a-g1-clear-copy.sh
-
-      - name: Run semi-alpha copyArea differential gate
-        run: |
-          set -euo pipefail
-          JAR=out/p1a-g1-clear-copy/freej2me-rg35xx.jar
-          HOST=build/p1a-g1-alpha-host
-          LOG=out/p1a-g1-clear-copy/P1A-G1-ALPHA-DIFFERENTIAL-GATE.txt
-          rm -rf "$HOST"
-          mkdir -p "$HOST"
-          javac -encoding UTF-8 -source 1.6 -target 1.6 \
-            -bootclasspath "$JAVA_HOME/jre/lib/rt.jar" -classpath "$JAR" \
-            -d "$HOST" tests/p1a/RG35XXCopyAreaAlphaDifferentialGate.java
-          java -Djava.awt.headless=true -cp "$JAR:$HOST" \
-            org.recompile.rg35xx.p1a.RG35XXCopyAreaAlphaDifferentialGate | tee "$LOG"
-          grep -q '^P1A_G1_COPYAREA_ALPHA_DIFFERENTIAL_GATE=PASS$' "$LOG"
 
       - name: Verify owner and scope lock
         run: |
@@ -87,6 +72,10 @@ jobs:
           grep -q '^CHANGED_METHODS=clearRect,copyArea$' "$ID"
           grep -q '^CHANGED_JAR_ENTRIES=org/recompile/mobile/PlatformGraphics.class$' "$ID"
           grep -q '^CORE2D_CHANGE=NO$' "$ID"
+          grep -q '^P1A_G1_COPYAREA_OVERLAP=JDK8_LIVE_RASTER_TOP_TO_BOTTOM_LEFT_TO_RIGHT$' "$ID"
+          grep -q '^P1A_G1_COPYAREA_ALPHA=JDK8_MUL8_DIV8_SRCOVER$' "$ID"
+          grep -q '^P1A_G1_ALPHA_DIFFERENTIAL_GATE=PASS$' "$ID"
+          grep -q '^HOST-DIFFERENTIAL-PASS=YES$' "$ID"
           grep -q '^GAME_SPECIFIC_CODE=NO$' "$ID"
           grep -q '^NO_A9_PARENT=YES$' "$ID"
           grep -q '^JAMVM_GLIBJ=NOT_TOUCHED$' "$ID"
@@ -98,6 +87,7 @@ jobs:
           grep -q '^P1A_G1_CASE=SENTINEL_DRAWARC EXPECTED=RAW_EXCEPTION ACTUAL=RAW_EXCEPTION' "$LOG"
           grep -q '^P1A_G1_CASE=SENTINEL_FILLTRIANGLE EXPECTED=RAW_EXCEPTION ACTUAL=RAW_EXCEPTION' "$LOG"
           grep -q '^P1A_G1_CASE=SENTINEL_GENERIC_FILLPOLYGON EXPECTED=MISMATCH ACTUAL=MISMATCH' "$LOG"
+          grep -q '^P1A_G1_ALPHA_BASELINE_MATCH=true ' "$ALOG"
           grep -q '^P1A_G1_COPYAREA_ALPHA_DIFFERENTIAL_GATE=PASS$' "$ALOG"
           echo P1A_G1_CI_SCOPE_LOCK=PASS
 
