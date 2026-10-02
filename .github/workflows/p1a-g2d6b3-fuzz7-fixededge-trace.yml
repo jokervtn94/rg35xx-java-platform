@@ -1,0 +1,56 @@
+name: P1A G2D6B3 FUZZ7 Fixed-Edge Trace
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - p1a-g2d-arc-family-jdk8-raster
+    paths:
+      - '.github/workflows/p1a-g2d6b3-fuzz7-fixededge-trace.yml'
+      - 'tests/p1a/RG35XXG2D6B3Fuzz7FillEdgeTrace.java'
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz7-fixededge-trace:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pinned host family JDK 8
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Compile diagnostic-only fixed-edge probe
+        run: |
+          set -euo pipefail
+          rm -rf out/p1a-g2d6b3
+          mkdir -p out/p1a-g2d6b3/classes
+          javac -encoding UTF-8 -source 1.6 -target 1.6 \
+            -d out/p1a-g2d6b3/classes \
+            tests/p1a/RG35XXG2D6B3Fuzz7FillEdgeTrace.java
+
+      - name: Reproduce AWT fill and trace fixed edges plus scanline 5
+        run: |
+          set -euo pipefail
+          java -Djava.awt.headless=true \
+            -cp out/p1a-g2d6b3/classes \
+            org.recompile.rg35xx.p1a.RG35XXG2D6B3Fuzz7FillEdgeTrace \
+            2>&1 | tee out/p1a-g2d6b3/FUZZ7-FIXEDEDGE-TRACE.txt
+          grep -q '^G2D6B3_PROCESSPATH_JAVA_REPRODUCES_AWT=PASS$' out/p1a-g2d6b3/FUZZ7-FIXEDEDGE-TRACE.txt
+          grep -q '^G2D6B3_EDGE_SIM_REPRODUCES_AWT=PASS$' out/p1a-g2d6b3/FUZZ7-FIXEDEDGE-TRACE.txt
+          grep -q '^G2D6B3_Y5_TRACE=PASS$' out/p1a-g2d6b3/FUZZ7-FIXEDEDGE-TRACE.txt
+          grep -q '^G2D6B3_FIRST_DIVERGENCE_PROOF=FILLPATH_FIXED_EDGE_ACTIVE_EDGE_SCAN_CONVERSION$' out/p1a-g2d6b3/FUZZ7-FIXEDEDGE-TRACE.txt
+          echo G2D6B3_TRACE_CAPTURE=PASS
+
+      - name: Upload diagnostic evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: RG35XX-P1A-G2D6B3-FUZZ7-FIXEDEDGE-TRACE-${{ github.sha }}
+          path: out/p1a-g2d6b3/FUZZ7-FIXEDEDGE-TRACE.txt
+          if-no-files-found: error
