@@ -26,6 +26,8 @@ public final class RG35XXGraphicsG1DifferentialGate {
     public static void main(String[] args) throws Exception {
         int failures = 0;
 
+        unexpectedControl();
+
         failures += expectMatch("CONTROL_FILLRECT", new Op() {
             public int[] run(PlatformImage image, PlatformGraphics g) {
                 g.setColor(0x214365);
@@ -123,6 +125,40 @@ public final class RG35XXGraphicsG1DifferentialGate {
             }
         });
 
+        // JDK8 diagnostic 36944718157 proves self-copy is a live raster traversed
+        // top-to-bottom and left-to-right. Lock both propagation and safe directions.
+        failures += expectMatch("G1_COPY_OVERLAP_DOWN", new Op() {
+            public int[] run(PlatformImage image, PlatformGraphics g) {
+                paintGrid(g);
+                g.copyArea(4, 3, 14, 12, 4, 8, PlatformGraphics.TOP | PlatformGraphics.LEFT);
+                return pixels(image);
+            }
+        });
+
+        failures += expectMatch("G1_COPY_OVERLAP_UP", new Op() {
+            public int[] run(PlatformImage image, PlatformGraphics g) {
+                paintGrid(g);
+                g.copyArea(4, 8, 14, 12, 4, 3, PlatformGraphics.TOP | PlatformGraphics.LEFT);
+                return pixels(image);
+            }
+        });
+
+        failures += expectMatch("G1_COPY_OVERLAP_DOWN_RIGHT", new Op() {
+            public int[] run(PlatformImage image, PlatformGraphics g) {
+                paintGrid(g);
+                g.copyArea(3, 3, 15, 12, 8, 7, PlatformGraphics.TOP | PlatformGraphics.LEFT);
+                return pixels(image);
+            }
+        });
+
+        failures += expectMatch("G1_COPY_OVERLAP_UP_LEFT", new Op() {
+            public int[] run(PlatformImage image, PlatformGraphics g) {
+                paintGrid(g);
+                g.copyArea(8, 7, 15, 12, 3, 3, PlatformGraphics.TOP | PlatformGraphics.LEFT);
+                return pixels(image);
+            }
+        });
+
         failures += expectMatch("G1_COPY_TRANSPARENT_SOURCE", new Op() {
             public int[] run(PlatformImage image, PlatformGraphics g) {
                 g.setColor(0x204080);
@@ -164,7 +200,14 @@ public final class RG35XXGraphicsG1DifferentialGate {
             throw new RuntimeException("P1A_G1_DIFFERENTIAL_FAIL=" + failures);
         }
         System.out.println("P1A_G1_DIFFERENTIAL_GATE=PASS");
+        System.out.println("P1A_G1_COPYAREA_OVERLAP=JDK8_LIVE_RASTER_TOP_TO_BOTTOM_LEFT_TO_RIGHT");
         System.out.println("P1A_G1_SCOPE=clearRect+copyArea_ONLY");
+    }
+
+    private static void unexpectedControl() {
+        // Keeps this gate Java 6-compatible while making accidental static init
+        // failures visible before any operation-specific classification.
+        if (W <= 0 || H <= 0) throw new RuntimeException("invalid test dimensions");
     }
 
     private static void paintBackground(PlatformGraphics g) {
@@ -190,6 +233,18 @@ public final class RG35XXGraphicsG1DifferentialGate {
             int b = (x * 97) & 0xFF;
             g.setColor((r << 16) | (gr << 8) | b);
             g.fillRect(x, 4, 1, 10);
+        }
+    }
+
+    private static void paintGrid(PlatformGraphics g) {
+        for (int y = 0; y < H; y++) {
+            for (int x = 0; x < W; x++) {
+                int r = (x * 29 + y * 11) & 0xFF;
+                int gr = (x * 17 + y * 43) & 0xFF;
+                int b = (x * 7 + y * 71) & 0xFF;
+                g.setColor((r << 16) | (gr << 8) | b);
+                g.fillRect(x, y, 1, 1);
+            }
         }
     }
 
