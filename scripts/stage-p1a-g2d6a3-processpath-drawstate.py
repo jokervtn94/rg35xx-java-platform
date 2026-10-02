@@ -31,8 +31,8 @@ if len(sys.argv) != 2:
 subprocess.check_call([sys.executable, str(next_stage), sys.argv[1]])
 print("P1A_G2D6A5_CHAIN=PASS")
 
-fill_stage = Path(__file__).with_name("stage-p1a-g2d6b4-fillpath-scan.py")
+fill_stage = Path(__file__).with_name("stage-p1a-g2d6b4-fillpath-scan-fix1.py")
 if not fill_stage.is_file():
-    raise SystemExit("P1A_G2D6B4_CHAIN_FAIL stage missing")
+    raise SystemExit("P1A_G2D6B4_CHAIN_FAIL fix1 stage missing")
 subprocess.check_call([sys.executable, str(fill_stage), sys.argv[1]])
 print("P1A_G2D6B4_CHAIN=PASS")
