@@ -226,10 +226,14 @@ public final class RG35XXDGDrawVectorD52PiscesSubsetDiagnostic {
 
         GeneralPath normalized = makeNormalizedDevicePath(c);
         Shape widened = new BasicStroke().createStrokedShape(normalized);
+        PathIterator widenedPi = widened.getPathIterator(null);
+        if (widenedPi.getWindingRule() != PathIterator.WIND_NON_ZERO) {
+            g.dispose();
+            throw new RuntimeException("P1A_DG_D52_WIDENED_WINDING_NOT_NONZERO=" + widenedPi.getWindingRule());
+        }
         ShapeSpanIterator ssi = new ShapeSpanIterator(false);
         ssi.setOutputArea(sg.getCompClip());
-        ssi.setRule(PathIterator.WIND_NON_ZERO);
-        ssi.appendPath(widened.getPathIterator(null));
+        ssi.appendPath(widenedPi);
         SpanResult out = collect(ssi);
         ssi.dispose();
         g.dispose();
