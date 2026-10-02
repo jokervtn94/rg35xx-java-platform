@@ -1,0 +1,67 @@
+name: P1A DG Vector D2 Fill Coverage Composite
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - p1a-dg-vector-diagnostic
+    paths:
+      - '.github/workflows/p1a-dg-vector-d2-fill-coverage-composite.yml'
+      - 'tests/p1a/RG35XXDGVectorD2FillCoverageCompositeGate.java'
+
+permissions:
+  contents: read
+
+jobs:
+  dg-vector-d2-fill-coverage-composite:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pinned host family JDK 8
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Compile diagnostic-only D2 gate
+        run: |
+          set -euo pipefail
+          rm -rf out/p1a-dg-vector-d2
+          mkdir -p out/p1a-dg-vector-d2/classes
+          javac -encoding UTF-8 -source 1.6 -target 1.6 \
+            -d out/p1a-dg-vector-d2/classes \
+            tests/p1a/RG35XXDGVectorD2FillCoverageCompositeGate.java
+          echo DGVD2_JAVA6_GATE=PASS
+
+      - name: Run fill coverage and SrcOver differential property gate
+        run: |
+          set -euo pipefail
+          java -Djava.awt.headless=true \
+            -cp out/p1a-dg-vector-d2/classes \
+            org.recompile.rg35xx.p1a.RG35XXDGVectorD2FillCoverageCompositeGate \
+            | tee out/p1a-dg-vector-d2/D2-FILL-COVERAGE-COMPOSITE.txt
+
+          grep -q '^DGVD2_D1_BLEND_803366CC_OVER_FF102030=ff22437e$' out/p1a-dg-vector-d2/D2-FILL-COVERAGE-COMPOSITE.txt
+          grep -q '^DGVD2_FIXED_TRIANGLE_COUNT=21$' out/p1a-dg-vector-d2/D2-FILL-COVERAGE-COMPOSITE.txt
+          grep -q '^DGVD2_FIXED_POLYGON_COUNT=17$' out/p1a-dg-vector-d2/D2-FILL-COVERAGE-COMPOSITE.txt
+          grep -q '^DGVD2_FUZZ_TRIANGLE_COUNT=128$' out/p1a-dg-vector-d2/D2-FILL-COVERAGE-COMPOSITE.txt
+          grep -q '^DGVD2_FUZZ_POLYGON_COUNT=128$' out/p1a-dg-vector-d2/D2-FILL-COVERAGE-COMPOSITE.txt
+          grep -q '^DGVD2_ALPHA_LEVEL_COUNT=3$' out/p1a-dg-vector-d2/D2-FILL-COVERAGE-COMPOSITE.txt
+          grep -q '^DGVD2_RANDOM_SEED=35d2f11$' out/p1a-dg-vector-d2/D2-FILL-COVERAGE-COMPOSITE.txt
+          grep -q '^DGVD2_STRICT_FAILURE_COUNT=0$' out/p1a-dg-vector-d2/D2-FILL-COVERAGE-COMPOSITE.txt
+          grep -q '^DGVD2_GENERIC_POLYGON_WINDING=EVEN_ODD$' out/p1a-dg-vector-d2/D2-FILL-COVERAGE-COMPOSITE.txt
+          grep -q '^DGVD2_FILL_COVERAGE_ALPHA_INDEPENDENT=YES_FOR_MATRIX$' out/p1a-dg-vector-d2/D2-FILL-COVERAGE-COMPOSITE.txt
+          grep -q '^DGVD2_FILL_ALPHA_MODEL=OPAQUE_COVERAGE_PLUS_EXACT_SRCOVER$' out/p1a-dg-vector-d2/D2-FILL-COVERAGE-COMPOSITE.txt
+          grep -q '^DGVD2_RUNTIME_CHANGE=NO$' out/p1a-dg-vector-d2/D2-FILL-COVERAGE-COMPOSITE.txt
+          grep -q '^DGVD2_FILL_DIAGNOSTIC_GATE=PASS$' out/p1a-dg-vector-d2/D2-FILL-COVERAGE-COMPOSITE.txt
+          echo DGVD2_WORKFLOW_GATE=PASS
+
+      - name: Upload D2 diagnostic evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: RG35XX-P1A-DG-VECTOR-D2-FILL-${{ github.sha }}
+          path: out/p1a-dg-vector-d2/D2-FILL-COVERAGE-COMPOSITE.txt
+          if-no-files-found: error
