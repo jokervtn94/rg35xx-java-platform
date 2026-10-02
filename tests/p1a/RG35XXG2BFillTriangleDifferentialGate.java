@@ -37,10 +37,16 @@ public final class RG35XXG2BFillTriangleDifferentialGate {
         check("PARTIAL_RIGHT_BOTTOM", new Op(){ public void run(PlatformGraphics g){ g.fillTriangle(17,9,51,14,28,42); }});
         check("SPANNING", new Op(){ public void run(PlatformGraphics g){ g.fillTriangle(-20,-12,61,3,18,49); }});
 
+        boolean g2d = Boolean.getBoolean("p1a.g2d.parentregression");
         scopeMatch("PARENT_FILLROUNDRECT", new Op(){ public void run(PlatformGraphics g){ g.fillRoundRect(4,4,20,14,7,5); }});
-        scopeException("SENTINEL_DRAWARC", new Op(){ public void run(PlatformGraphics g){ g.drawArc(5,4,17,13,25,230); }});
-        scopeException("SENTINEL_FILLARC", new Op(){ public void run(PlatformGraphics g){ g.fillArc(5,4,17,13,25,230); }});
-        if (Boolean.getBoolean("p1a.g2c.parentregression")) {
+        if (g2d) {
+            scopeMatch("PARENT_DRAWARC_G2D", new Op(){ public void run(PlatformGraphics g){ g.drawArc(5,4,17,13,25,230); }});
+            scopeMatch("PARENT_FILLARC_G2D", new Op(){ public void run(PlatformGraphics g){ g.fillArc(5,4,17,13,25,230); }});
+        } else {
+            scopeException("SENTINEL_DRAWARC", new Op(){ public void run(PlatformGraphics g){ g.drawArc(5,4,17,13,25,230); }});
+            scopeException("SENTINEL_FILLARC", new Op(){ public void run(PlatformGraphics g){ g.fillArc(5,4,17,13,25,230); }});
+        }
+        if (Boolean.getBoolean("p1a.g2c.parentregression") || g2d) {
             scopeMatch("PARENT_DRAWROUNDRECT_G2C", new Op(){ public void run(PlatformGraphics g){ g.drawRoundRect(4,4,20,14,7,5); }});
         } else {
             scopeException("SENTINEL_DRAWROUNDRECT", new Op(){ public void run(PlatformGraphics g){ g.drawRoundRect(4,4,20,14,7,5); }});
