@@ -380,23 +380,113 @@ P2B_FREETYPE_CHARWIDTH_BACKING=PROVEN_WITH_JDK8U504_SOURCE_ENGINE
 
 ## 6. String-width and complex-layout boundary
 
-The remaining text-layout blocker is not `charWidth`. Exact JDK8 source establishes two distinct measurement paths for a font without layout attributes:
+### 6.1 Exact JDK8 simple/non-simple source split
+
+Exact JDK8u504 source establishes two distinct `FontDesignMetrics` measurement paths for a font without layout attributes:
 
 ```text
-SIMPLE CHAR PATH:
+SIMPLE PATH:
   accumulate FontStrike.getCodePointAdvance() values
   round only once at end: (int)(0.5 + total)
 
-NON-SIMPLE CHAR PATH:
+NON-SIMPLE PATH:
   if FontUtilities.isNonSimpleChar(ch)
   -> measure the entire string with TextLayout
 ```
 
+For the P2B context, the exact native scaler source also converts non-fractional horizontal glyph advance with:
+
+```text
+FT26Dot6ToInt(x) = ((int)x) >> 6
+```
+
+so the FM-off simple-path advances are integer-valued floats before the final `FontDesignMetrics` round.
+
 `FontUtilities.isNonSimpleChar` treats JDK-defined complex-script ranges plus surrogate code units as non-simple. The complex ranges include combining marks, Hebrew/Arabic, Indic/Thai, Tibetan, old Hangul, Khmer, ZWJ/ZWNJ, and selected directional controls.
 
-Therefore an implementation that always sums already-rounded `FontMetrics.charWidth()` values remains invalid even though exhaustive `charWidth` itself is now exact.
+### 6.2 Simple-string contract audit
 
-The pinned Miyoo HarfBuzz differential remains non-exact for the exhaustive JDK8 complex-trigger table:
+Run `37100656286` used the exact Miyoo font, exact Temurin/OpenJDK 8u504 reference, and exact `FontUtilities.isNonSimpleChar` implementation through reflection. It exercised all 8 incoming style values, all three P2B sizes, and the existing 14-string shaping corpus.
+
+Every style/size context had the required source conditions:
+
+```text
+P2B_JDK_SIMPLE_STRING_CASES=336
+P2B_JDK_SIMPLE_STRING_LAYOUT_ATTRIBUTE_CONTEXTS=0
+P2B_JDK_SIMPLE_STRING_AA_CONTEXTS=0
+P2B_JDK_SIMPLE_STRING_FM_CONTEXTS=0
+```
+
+The corpus partitioned as:
+
+```text
+P2B_JDK_SIMPLE_STRING_SIMPLE_CASES=144
+P2B_JDK_SIMPLE_STRING_NONSIMPLE_CASES=192
+```
+
+The simple samples are indices `0,1,2,3,4,12`; the non-simple samples are `5,6,7,8,9,10,11,13`. The first triggers observed include combining marks, Arabic, Hebrew, Devanagari, Thai, and ZWJ exactly through JDK's own classification.
+
+For every simple case:
+
+```text
+stringWidth == charsWidth == sum(FontMetrics.charWidth(each UTF-16 code unit))
+```
+
+and the diagnostic produced:
+
+```text
+P2B_JDK_SIMPLE_STRING_SIMPLE_MISMATCHES=0
+P2B_JDK_SIMPLE_STRING_STRING_CHARS_MISMATCHES=0
+P2B_JDK_SIMPLE_STRING_RESULT=PASS
+P2B_JDK8_SIMPLE_STRING_BYTE_LEAK=NO
+```
+
+Combined with the already-proven 196,608/196,608 exact ARM `charWidth` table and the exact FM-off JDK scaler advance rule, this closes the P2B **simple string metric** contract for strings that have no layout attributes and contain no JDK `isNonSimpleChar` UTF-16 code unit.
+
+Classification:
+
+```text
+P2B_SIMPLE_STRING_METRIC_PATH=PASS
+P2B_SIMPLE_STRING_METRIC_SCOPE=NO_LAYOUT_ATTRS_NONCOMPLEX_UTF16
+P2B_SIMPLE_STRING_CORPUS_CASES=144
+P2B_SIMPLE_STRING_CORPUS_MISMATCHES=0
+P2B_SIMPLE_STRING_DRAW_RASTER=NOT_TESTED
+```
+
+This audit does **not** prove `drawString` raster for arbitrary simple strings; metric width and draw raster remain separate contracts.
+
+### 6.3 Exact source owner of the non-simple path
+
+The existing 336-case corpus now explains the earlier 48 `stringWidth`-versus-additive differences more precisely. The strings containing Devanagari and ZWJ differ from the rounded-additive path across all 24 style/size contexts, accounting for the 48 width differences. Other non-simple strings may still enter `TextLayout` even when their final integer width happens to equal the additive sum.
+
+Therefore the rule is **path-based**, not "only shape when widths differ".
+
+Exact JDK8u504 source tracing shows that the non-simple `TextLayout` path is backed by JDK's bundled native LayoutEngine, not by direct raw/default HarfBuzz substitution. `SunLayoutEngine.nativeLayout` constructs a `FontInstanceAdapter`, calls:
+
+```text
+LayoutEngine::layoutEngineFactory(...)
+        ↓
+engine->layoutChars(...)
+        ↓
+getGlyphs / getGlyphPositions / getCharIndices
+```
+
+The exact layout source tree at the audited JDK8u504 revision is:
+
+```text
+P2B_JDK8_LAYOUT_TREE=bc6641fecdfb59f3146bb1591e090761a24b4061
+```
+
+and the OpenJDK `libfontmanager` build recipe compiles the bundled `sun/font/layout` tree with:
+
+```text
+-DLE_STANDALONE
+-DHEADLESS
+```
+
+plus the fontmanager/FreeType headers and libraries.
+
+This is material because the earlier pinned-Miyoo HarfBuzz differential remains non-exact for the exhaustive JDK8 complex-trigger table:
 
 ```text
 P2B_HB_COMPLEX_JDK_CASES=13764
@@ -412,7 +502,7 @@ P2B_HARFBUZZ_COMPLEX_CLASSIFICATION=NOT_EXACT_FOR_EXHAUSTIVE_JDK8_TRIGGER_TABLE
 P2B_HARFBUZZ_DROPIN_COMPLEX_BACKEND=REJECTED
 ```
 
-Raw/default HarfBuzz is therefore not authorized as a `TextLayout` replacement.
+Raw/default HarfBuzz is therefore not authorized as a `TextLayout` replacement. The canonical backend audit must follow the JDK-bundled LayoutEngine source path instead.
 
 ---
 
@@ -450,7 +540,7 @@ Miyoo/AWT unavailable
   -> use raw/default FreeType as drop-in                  REJECTED
   -> use pinned Miyoo FreeType 2.11.1 as raster-exact     REJECTED
   -> use raw HarfBuzz as TextLayout drop-in               REJECTED
-  -> use per-character rounded-additive loop for strings  REJECTED
+  -> decide shaping only when additive widths differ      REJECTED
 ```
 
 The legal engineering path is now:
@@ -466,9 +556,9 @@ JDK8U504 VENDORED FREETYPE — ARMv5/uClibC SAMPLED RASTER PROVEN EXACT
         ↓
 JDK8U504 VENDORED FREETYPE — 196608/196608 CHARWIDTH/CANDISPLAY PROVEN EXACT
         ↓
-PROVE SIMPLE-STRING FINAL-ROUNDING PATH
+SIMPLE-STRING METRIC PATH — PROVEN
         ↓
-RESOLVE COMPLEX/TEXTLAYOUT PATH
+JDK8 BUNDLED LAYOUTENGINE — AUDIT TARGET FOR NON-SIMPLE TEXT
         ↓
 MINIMUM RG35XX FONT/TEXT BACKING DESIGN
         ↓
@@ -479,7 +569,7 @@ ONE P2B MODULE EXERCISER
 ONE ORIGINAL-RG35XX P2B PHYSICAL MODULE TEST
 ```
 
-No physical device test is justified yet because the string-layout/backend contract remains incomplete.
+No physical device test is justified yet because the complex string-layout/backend contract remains incomplete.
 
 ---
 
@@ -516,10 +606,17 @@ P2B_Miyoo_FREETYPE_EXHAUSTIVE_CANDISPLAY=RESIDUAL_48_OF_196608
 P2B_JDK8_CMAP_CONTROL_RULE=SOURCE_MATCHED
 P2B_FREETYPE_CHARWIDTH_BACKING=PROVEN_WITH_JDK8U504_SOURCE_ENGINE
 P2B_FREETYPE_RAW_DROPIN_BACKEND=REJECTED
-P2B_HARFBUZZ_DROPIN_COMPLEX_BACKEND=REJECTED
 
-P2B_SIMPLE_STRING_METRIC_PATH=SOURCE_IDENTIFIED_NOT_YET_DIFFERENTIALLY_PROVEN
+P2B_SIMPLE_STRING_METRIC_PATH=PASS
+P2B_SIMPLE_STRING_METRIC_SCOPE=NO_LAYOUT_ATTRS_NONCOMPLEX_UTF16
+P2B_SIMPLE_STRING_CORPUS_CASES=144
+P2B_SIMPLE_STRING_CORPUS_MISMATCHES=0
+P2B_SIMPLE_STRING_DRAW_RASTER=NOT_TESTED
+P2B_JDK8_COMPLEX_LAYOUT_BACKEND=SOURCE_IDENTIFIED
+P2B_JDK8_COMPLEX_LAYOUT_ENGINE=JDK8_BUNDLED_LAYOUTENGINE
+P2B_HARFBUZZ_DROPIN_COMPLEX_BACKEND=REJECTED
 P2B_COMPLEX_TEXTLAYOUT_PATH=PARTIAL
+
 P2B_BACKEND_SEMANTIC_SYNTHESIS=PARTIAL
 P2B_MINIMUM_REQUIRED_DELTA=PARTIAL
 P2B_FILES_ALLOWED_TO_CHANGE=PARTIAL
@@ -538,15 +635,16 @@ SPECULATIVE_OPTIMIZATION=NO
 
 Do **not** create a runtime font backend yet.
 
-The next approved audit-only unit is now the **string measurement/layout split**:
+The next approved audit-only unit is now the **exact JDK8 bundled LayoutEngine capability/decomposition**:
 
-1. prove the simple-string `FontDesignMetrics.stringWidth` path against the exact JDK8u504 vendored FreeType ARM engine using source-equivalent advances and one final round, not summed integer `charWidth` values;
-2. partition the existing JDK shaping corpus using exact `FontUtilities.isNonSimpleChar` / surrogate trigger rules;
-3. prove which simple strings are fully reproducible without `TextLayout` and classify draw-string raster separately from metric width;
-4. for non-simple strings, trace the exact JDK8 `TextLayout` / glyph-layout path and identify the minimum shaping behavior actually required by the pinned Miyoo contract;
-5. do not substitute raw HarfBuzz unless a source-matched differential proves the required fields exact;
-6. define the minimum owner-scoped runtime interface/files only after metric and string-layout semantics are complete;
-7. resolve compliant runtime font provisioning/packaging without assuming redistribution permission.
+1. verify the exact `jdk8u504-b01` bundled `sun/font/layout` source tree and `libfontmanager` compile flags/dependencies;
+2. determine the minimum `LEFontInstance` interface required by the bundled LayoutEngine (`font tables`, `char->glyph`, `glyph advance`, `glyph point`, units-per-em and pixel-scale information) without importing the JNI `FontInstanceAdapter` into the RG35XX runtime;
+3. perform a compile/link-only ARMv5/uClibC audit of the exact bundled LayoutEngine source with `LE_STANDALONE`/`HEADLESS`, excluding runtime integration and device packaging;
+4. only if that capability gate passes, build an audit-only minimal font adapter backed by the already-proven exact JDK8u504 FreeType engine and exact MiSans table bytes;
+5. compare JDK8 versus ARM bundled-LayoutEngine output on the existing complex-trigger corpus: glyph count, glyph IDs, char indices, positions and final advance before considering raster integration;
+6. keep raw/default HarfBuzz rejected unless a source-matched path proves exact semantics;
+7. define the minimum owner-scoped runtime interface/files only after complex layout semantics are complete;
+8. resolve compliant runtime font provisioning/packaging without assuming redistribution permission.
 
 Only after those fields are resolved may a P2B runtime candidate be designed.
 
@@ -560,4 +658,4 @@ P2B_DEVICE_PACKAGE=FORBIDDEN
 P2B_PHYSICAL_TEST=NOT_TESTED
 ```
 
-Reason: sampled raster portability and exhaustive `charWidth/canDisplay` are now proven exact for the JDK8u504 source-compatible ARM engine, but simple-string final-rounding, complex `TextLayout` semantics, minimum owner-scoped runtime interface, and final font provisioning contract remain `PARTIAL`.
+Reason: sampled raster portability, exhaustive `charWidth/canDisplay`, and the no-layout-attributes simple-string metric path are now proven; complex JDK8 bundled-LayoutEngine semantics, simple-string draw raster coverage, minimum owner-scoped runtime interface, and final font provisioning contract remain `PARTIAL`.
