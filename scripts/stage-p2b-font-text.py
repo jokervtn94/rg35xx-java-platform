@@ -127,15 +127,22 @@ for marker in font_owner_hooks:
         raise SystemExit('P2B_FONT_TEXT_STAGE_FAIL Font owner-hook=%r count=%d' % (marker, ft.count(marker)))
 raw_baseline = re.compile(r'\tpublic int getBaselinePosition\(\)\s*\{\s*return\s+fm\s*==\s*null\s*\?\s*RG35XXCore2D\.fontAscent\(size\)\s*:\s*convertSize\(size\)\s*;\s*\}')
 canonical_baseline = re.compile(r'\tpublic int getBaselinePosition\(\)\s*\{\s*return\s+convertSize\(size\)\s*;\s*\}')
-raw_count = len(raw_baseline.findall(ft))
-canonical_count = len(canonical_baseline.findall(ft))
+# Pinned Miyoo Font.java retains a historical canonical baseline inside a
+# block comment. Count only active Java source so that comment text cannot
+# masquerade as a second runtime method.
+ft_active = re.sub(r'/\*.*?\*/', '', ft, flags=re.S)
+raw_count = len(raw_baseline.findall(ft_active))
+canonical_count = len(canonical_baseline.findall(ft_active))
 if raw_count == 1 and canonical_count == 0:
+    raw_total = len(raw_baseline.findall(ft))
+    if raw_total != 1:
+        raise SystemExit('P2B_FONT_TEXT_STAGE_FAIL Font active-raw=1 total-raw=%d' % raw_total)
     ft = raw_baseline.sub('\tpublic int getBaselinePosition() { return convertSize(size); }', ft, count=1)
     baseline_parent_state = 'A5_RAW_FALLBACK_RESTORED_TO_MIYOO'
 elif raw_count == 0 and canonical_count == 1:
     baseline_parent_state = 'ALREADY_MIYOO_CANONICAL'
 else:
-    raise SystemExit('P2B_FONT_TEXT_STAGE_FAIL Font baseline raw=%d canonical=%d' % (raw_count, canonical_count))
+    raise SystemExit('P2B_FONT_TEXT_STAGE_FAIL Font active-baseline raw=%d canonical=%d' % (raw_count, canonical_count))
 font.write_text(ft, encoding='utf-8')
 
 pt = pg.read_text(encoding='utf-8')
