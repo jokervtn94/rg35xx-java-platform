@@ -68,7 +68,7 @@ jobs:
           grep -F 'isNonSimpleChar(ch)' out/source/FontDesignMetrics.java
           grep -F 'new TextLayout(str, font, frc).getAdvance()' out/source/FontDesignMetrics.java
           grep -F 'charsToGlyphsNS(int count, char[] unicodes, int[] glyphs)' out/source/TrueTypeGlyphMapper.java
-          grep -F 'FontUtilities.isComplexCharCode(ch)' out/source/TrueTypeGlyphMapper.java
+          grep -F 'FontUtilities.isComplexCharCode(code)' out/source/TrueTypeGlyphMapper.java
           grep -F 'info.font2D.getMapper().charsToGlyphsNS' out/source/GlyphList.java
           grep -F 'new TextLayout(s, sg2d.getFont(), sg2d.getFontRenderContext())' out/source/GlyphListPipe.java
           grep -F 'if (font.hasLayoutAttributes())' out/source/SunGraphics2D.java
