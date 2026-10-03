@@ -113,10 +113,29 @@ ct = ct[:start] + backend + ct[end:]
 core.write_text(ct, encoding='utf-8')
 
 ft = font.read_text(encoding='utf-8')
-old_baseline = '\tpublic int getBaselinePosition() { return fm == null ? RG35XXCore2D.fontAscent(size) : convertSize(size); }'
-if ft.count(old_baseline) != 1:
-    raise SystemExit('P2B_FONT_TEXT_STAGE_FAIL Font baseline count=%d' % ft.count(old_baseline))
-ft = ft.replace(old_baseline, '\tpublic int getBaselinePosition() { return convertSize(size); }', 1)
+# The accepted P2A chain must still contain A5's raw metric ownership hooks.
+# A later accepted stage may already have restored Miyoo's canonical baseline;
+# accept that exact semantic state, but never use it as a reason to skip the
+# other owner checks.
+font_owner_hooks = [
+    'if (fm == null) { return RG35XXCore2D.charWidth(ch, size, face, style); }',
+    'if (fm == null) { return RG35XXCore2D.fontHeight(size); }',
+    'if (fm == null) { return RG35XXCore2D.stringWidth(str, size, face, style); }'
+]
+for marker in font_owner_hooks:
+    if ft.count(marker) != 1:
+        raise SystemExit('P2B_FONT_TEXT_STAGE_FAIL Font owner-hook=%r count=%d' % (marker, ft.count(marker)))
+raw_baseline = re.compile(r'\tpublic int getBaselinePosition\(\)\s*\{\s*return\s+fm\s*==\s*null\s*\?\s*RG35XXCore2D\.fontAscent\(size\)\s*:\s*convertSize\(size\)\s*;\s*\}')
+canonical_baseline = re.compile(r'\tpublic int getBaselinePosition\(\)\s*\{\s*return\s+convertSize\(size\)\s*;\s*\}')
+raw_count = len(raw_baseline.findall(ft))
+canonical_count = len(canonical_baseline.findall(ft))
+if raw_count == 1 and canonical_count == 0:
+    ft = raw_baseline.sub('\tpublic int getBaselinePosition() { return convertSize(size); }', ft, count=1)
+    baseline_parent_state = 'A5_RAW_FALLBACK_RESTORED_TO_MIYOO'
+elif raw_count == 0 and canonical_count == 1:
+    baseline_parent_state = 'ALREADY_MIYOO_CANONICAL'
+else:
+    raise SystemExit('P2B_FONT_TEXT_STAGE_FAIL Font baseline raw=%d canonical=%d' % (raw_count, canonical_count))
 font.write_text(ft, encoding='utf-8')
 
 pt = pg.read_text(encoding='utf-8')
@@ -129,6 +148,7 @@ pg.write_text(pt, encoding='utf-8')
 
 print('P2B_FONT_TEXT_STAGE=PASS')
 print('P2B_FONT_TEXT_OWNER=RG35XX_GRAPHICS_BOUNDARY')
+print('P2B_FONT_BASELINE_PARENT_STATE=' + baseline_parent_state)
 print('P2B_FONT_BASELINE_SEMANTICS=MIYOO_CONVERT_SIZE')
 print('P2B_FONT_TEXT_WHOLE_STRING_RASTER=YES')
 print('P2B_FONT_TEXT_CLIP_COLOR_ANCHOR_OWNER=PLATFORMGRAPHICS')
