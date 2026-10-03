@@ -2,50 +2,46 @@
 
 Lock date: **2026-10-03**
 
-This ledger records the latest **physically accepted runtime lineage** and separates it from audit/candidate work that is not yet accepted.
+This ledger records the latest **physically accepted runtime lineage** and separates it from work that remains incomplete. A module-level physical acceptance does not imply full-platform stability.
 
 ## Official accepted runtime baseline
 
 ```text
 OFFICIAL_REPOSITORY_BRANCH=main
-OFFICIAL_ACCEPTED_RUNTIME_SCOPE=P2A_IMAGE_DECODE
-OFFICIAL_ACCEPTED_RUNTIME_COMMIT=5a8bfdf12d42e49d5d4aa8260601799c904e6441
+OFFICIAL_MAIN_PROMOTION_MERGE=3087b9ca28d4fddd70406b7058abaeb708419215
+OFFICIAL_ACCEPTED_RUNTIME_SCOPE=P2B_FONT_TEXT
+OFFICIAL_ACCEPTED_RUNTIME_COMMIT=2f18b78e9b0aa1660b7fd2f5904dd697fcef5830
+P2B_PHYSICAL_ACCEPTANCE_COMMIT=4c8e10f3d96288deda6b9b6d000125cea59e3919
+P2B_ACCEPTED_BRANCH_HEAD=6cc7461897dedeafa3d71848854341d41c533b5d
 P1A_ACCEPTED_CHECKPOINT=f502ea692518fa1e3b529718f44aaf459f90f49c
+P2A_ACCEPTED_CHECKPOINT=5a8bfdf12d42e49d5d4aa8260601799c904e6441
 CANONICAL_AWEIGIT_PIN=ca11dfe8ea1cc273d92460f9a83bbf192023fa63
 CURRENT_PHASE=P2
-CURRENT_MODULE=P2B_FONT_TEXT
+CURRENT_MODULE=P2C_INPUT_FRONTEND
+P2=PARTIAL
 RG35XX_PLATFORM_BASELINE_DEVICE_PASS=NO
 STABLE=NO
+A9_PARENT=NO
+GAME_SPECIFIC_CODE=NO
+NEW_TIER1_FIX_BEFORE_P8=NO
 ```
 
-`main` is the official repository/tracking branch after promotion of the accepted P2A lineage. This does **not** mean P8 full-platform promotion has occurred.
-
-The locked platform-first rule permits full baseline promotion only after P0–P7 have passed.
+`main` tracks accepted work. P8 full-platform promotion has **not** occurred.
 
 ## Authority and ancestry
-
-The accepted authority chain remains:
 
 ```text
 PINNED MIYOO/AWEIGIT SOURCE
         ↓
 A8 / GOLDEN PHYSICAL EVIDENCE AND PROTECTED IDENTITIES
         ↓
-PLATFORM-FIRST RECONSTRUCTION
-        ↓
 P1A GRAPHICS PHYSICAL MODULE ACCEPTANCE
         ↓
 P2A IMAGE DECODE PHYSICAL MODULE ACCEPTANCE
         ↓
-P2B FONT/TEXT — CURRENT WORK
-```
-
-Hard ancestry locks:
-
-```text
-A9_PARENT=NO
-GAME_SPECIFIC_CODE=NO
-NEW_TIER1_FIX_BEFORE_P8=NO
+P2B FONT/TEXT PHYSICAL MODULE ACCEPTANCE
+        ↓
+P2C INPUT/FRONTEND CONTRACT — NEXT WORK UNIT
 ```
 
 A9 and game-specific experimental branches remain diagnostic/history only.
@@ -56,11 +52,9 @@ A9 and game-specific experimental branches remain diagnostic/history only.
 P0_GOLDEN_AUTHORITY=PASS
 ```
 
-Historical A8 physical acceptance, protected component identities, Tier-0 evidence and exact Golden reconstruction records remain authoritative. Platform-first work must preserve them unless exact evidence formally reassigns an owner.
+Historical A8 physical acceptance and protected identities remain authoritative. Platform-first work must preserve them unless exact evidence formally reassigns an owner.
 
 ## P1 / P1A — Core 2D Graphics
-
-Accepted original-RG35XX checkpoint:
 
 ```text
 P1A_ACCEPTANCE_COMMIT=f502ea692518fa1e3b529718f44aaf459f90f49c
@@ -72,15 +66,9 @@ P1A_GRAPHICS_PROTECTED_HASHES=PASS
 P1A_GRAPHICS_NORMAL_EXIT=PASS
 ```
 
-Physical evidence included the one P1A graphics exerciser on original RG35XX, all declared programmatic graphics checks, protected-hash preservation, the visible `P1A GRAPHICS PASS` result and normal return to GarlicOS.
-
-Evidence record:
-
-- `docs/P1A-GRAPHICS-PHYSICAL-ACCEPTANCE-20261002.md`
+Evidence: `docs/P1A-GRAPHICS-PHYSICAL-ACCEPTANCE-20261002.md`.
 
 ## P2A — Image Decode
-
-Accepted original-RG35XX checkpoint:
 
 ```text
 P2A_ACCEPTANCE_COMMIT=5a8bfdf12d42e49d5d4aa8260601799c904e6441
@@ -89,108 +77,30 @@ P2A_EXACT_RUNTIME_PARENT=7c0ae595fa05dd3c23157c241cc641e8d43411d5
 P2A_IMAGE_DECODE_HOST_MODULE_GATE=PASS
 P2A_IMAGE_DECODE_PHYSICAL_MODULE_GATE=PASS
 P2A_IMAGE_DECODE_MODULE_PHYSICAL_ACCEPTANCE=PASS
-```
-
-Device evidence:
-
-```text
 P2A_EXERCISER_FIXTURE_COUNT=150
 P2A_EXERCISER_FRONTEND_COUNT=3
 P2A_EXERCISER_DECODE_COUNT=450
 P2A_EXERCISER_FAILURE_COUNT=0
 P2A_EXERCISER_RESULT=PASS
 P2A_NORMAL_EXIT=PASS
-```
-
-The three public decode frontends were byte-array, input-stream and resource-name. Human observation confirmed the visible PASS result and normal GarlicOS return.
-
-Accepted P2A candidate platform JAR:
-
-```text
 P2A_PLATFORM_JAR_SHA256=11a524c67edc631c2391573add4bcc21ea0e4d95d187fb4b34bffde01cf46b9b
 ```
 
-Evidence record:
+Evidence: `docs/P2A-IMAGE-DECODE-PHYSICAL-ACCEPTANCE-20261003.md`.
 
-- `docs/P2A-IMAGE-DECODE-PHYSICAL-ACCEPTANCE-20261003.md`
+## P2B — Font/Text
 
-## Protected runtime identities
-
-The accepted device lineage preserves:
+Runtime lineage:
 
 ```text
-JAMVM_SHA256=eea1b97cebfaca67b69ed365e966d80cdac22d8ff245c7a556137cfb2898ea34
-GLIBJ_SHA256=d7abe888d2980329434c30f18c0eec124be1f02284bf9ed28e88d7242a1f2bea
-INPUT_NATIVE_SHA256=69a8aeb3940bfbc234f3a562a7ae4bcaea10b50f8a8f2c38ad229a5430930f6d
-VIDEO_NATIVE_SHA256=c6687c0a43b24b425af0727c928afb5414da811ecbcbbe3538928470abe8bd0d
-AUDIO_NATIVE_SHA256=4522157846c33c150a85c50b4bed6f68351f1c62d54b8cd7805cbb97c5727644
+P2B_EXACT_RUNTIME_PARENT=5a8bfdf12d42e49d5d4aa8260601799c904e6441
+P2B_RUNTIME_CANDIDATE=2f18b78e9b0aa1660b7fd2f5904dd697fcef5830
+P2B_HOST_MODULE_CHECKPOINT=121ca5904b7d442161ed4639f30c5fe9f1c5772d
+P2B_PHYSICAL_PACKAGE_SOURCE_HEAD=5a8e29dd368bf99b22e81d256691b2a7ec8f1adf
+P2B_PHYSICAL_ACCEPTANCE_COMMIT=4c8e10f3d96288deda6b9b6d000125cea59e3919
 ```
 
-These owners must not be changed during P2B unless separate evidence explicitly proves one of them owns a P2B failure.
-
-## P2B — Font/Text current handoff
-
-P2B is **not part of the accepted runtime baseline yet**.
-
-Latest audit/design checkpoint:
-
-```text
-P2B_AUDIT_BRANCH=audit/p2b-font-text-post-layout-r2
-P2B_AUDIT_HEAD=8d3dc24f847380c699e18b6efd4bd9183884ac2c
-```
-
-Current implementation-candidate branch:
-
-```text
-P2B_CANDIDATE_BRANCH=module/p2b-font-text-candidate-r1
-P2B_CANDIDATE_HEAD=3fad06899232b7307fc6249f1a4dfe35c830ec3b
-P2B_CANDIDATE_PARENT=5a8bfdf12d42e49d5d4aa8260601799c904e6441
-P2B_RUNTIME_CANDIDATE=NOT_TESTED
-P2B_PHYSICAL_TEST=NOT_TESTED
-```
-
-Audit/design evidence already closed for its declared scopes:
-
-```text
-P2B_FONT_ASSET_IDENTITY=PASS
-P2B_JDK8_SEMANTIC_REFERENCE=PASS
-P2B_JDK8U504_FREETYPE_ARM_EXHAUSTIVE_CHARWIDTH=PASS
-P2B_JDK8U504_FREETYPE_ARM_EXHAUSTIVE_CANDISPLAY=PASS
-P2B_SIMPLE_STRING_METRIC_PATH=PASS
-P2B_SIMPLE_DRAWSTRING_SOURCE_PATH=PASS
-P2B_SIMPLE_STRING_DRAW_RASTER=PASS
-P2B_COMPLEX_LAYOUT_EXISTING_CORPUS=PASS
-P2B_MINIMUM_OWNER_SCOPED_RUNTIME_INTERFACE=PASS
-P2B_FILES_ALLOWED_TO_CHANGE=PASS
-P2B_MINIMUM_REQUIRED_DELTA=PASS
-P2B_FONT_PROVISIONING_PACKAGING_CONTRACT=PASS
-```
-
-Scope details matter:
-
-- exhaustive `charWidth` / `canDisplay`: exact 196,608/196,608 BMP code-unit cases;
-- simple raster: existing 144-case simple-string corpus;
-- complex layout: existing 192-case non-simple corpus;
-- font asset: exact Aweigit 2.0 MiSans runtime identity, embedded-software provisioning only, with required attribution/license handling.
-
-These are audit/design gates, not runtime/device acceptance.
-
-### P2B minimum owner scope
-
-The authorized design keeps Miyoo/MIDP semantics in their existing owners and replaces only the unavailable provisional RG35XX Raw2D backing.
-
-Allowed future runtime scope is limited to the documented P2B owner boundary, including:
-
-- `adapter/java/org/recompile/rg35xx/RG35XXCore2D.java` font/text backing section;
-- owner-scoped P2B staging/build files;
-- a new owner-scoped font native backend/glue if required;
-- Raw2D-only staged deltas in `Font.java` and `PlatformGraphics.java` while preserving their public/Miyoo semantics.
-
-Forbidden P2B changes include the canonical gitlink/pin, JamVM, glibj, protected input/video/audio natives, P1A non-text graphics semantics, P2A image semantics, RMS, MMAPI, lifecycle and game-specific logic.
-
-## Required P2B acceptance sequence
-
-Before any P2B physical package may be considered accepted, the runtime candidate must pass in order:
+Host/module gates:
 
 ```text
 P2B_CANONICAL_DIFF_VERIFIED=PASS
@@ -204,11 +114,89 @@ P2A_IMAGE_PARENT_REGRESSION=PASS
 P2B_MODULE_GATE=PASS
 ```
 
-Only after those gates may one original-RG35XX P2B physical module package be built and tested.
+Original RG35XX physical evidence:
+
+```text
+P2B_EXERCISER_CASE_COUNT=360
+P2B_EXERCISER_FAILURE_COUNT=0
+P2B_EXERCISER_RESULT=PASS
+P2B_RUNTIME_EXIT_CODE=0
+P2B_PROTECTED_HASHES=PASS
+P2B_NORMAL_EXIT=PASS
+P2B_DEVICE_PROGRAMMATIC_RESULT=PASS
+P2B_FONT_TEXT_MANUAL_OBSERVATION=PASS
+P2B_PHYSICAL_TEST=PASS
+P2B_FONT_TEXT_MODULE_PHYSICAL_ACCEPTANCE=PASS
+```
+
+Human observation confirmed a green `PASS` screen and normal return to the GarlicOS menu.
+
+Font runtime asset:
+
+```text
+P2B_FONT_SHA256=1a5f4112daaa9473747c6834041646cc9b2c338cb40ab5dbb2f0161f8968ca10
+P2B_FONT_SIZE=8092724
+P2B_FONT_NAME=MiSans_Normal
+P2B_FONT_PS_NAME=MiSans-Normal
+```
+
+Evidence: `docs/P2B-FONT-TEXT-PHYSICAL-ACCEPTANCE-20261003.md`.
+
+### P2B Windows installer R2 hygiene
+
+The user-visible Windows helper was corrected after the accepted R1 physical run. CI reconstructed R2 from the exact hash-locked R1 package and independently compared the entire `SD/` tree.
+
+```text
+P2B_R1_PACKAGE_SHA256=1e78c30c166f2ce4988478d44c476b0bfdf8c6795e433cf8f21ed934796037da
+P2B_R2_HYGIENE_RUN=37133242055
+P2B_R2_HYGIENE_JOB=111232412816
+P2B_R2_HYGIENE_ARTIFACT_ID=11277463370
+P2B_R2_PACKAGE_SHA256=7df059c07a3867eef5e6a00348b19b18ee6901cffd4bf7b53caefbbebb34de38
+P2B_R2_SD_MANIFEST_SHA256=4ff2cd9b019c1b09147731ca690fa046d9fc361a8b715bda889a42c845d9d956
+P2B_R2_INDEPENDENT_SD_TREE_IDENTITY=PASS
+P2B_R2_WINDOWS_HELPER_GATE=PASS
+P2B_R2_SD_RUNTIME_PAYLOAD_DELTA=NONE
+P2B_R2_RUNTIME_SEMANTIC_DELTA=NONE
+```
+
+This packaging-only revision does not require a second physical acceptance because the complete SD runtime payload is byte-identical to the physically accepted R1 package.
+
+Evidence: `docs/P2B-WINDOWS-INSTALLER-R2-HYGIENE-CHECKPOINT-20261003.md`.
+
+## Protected runtime identities
+
+```text
+JAMVM_SHA256=eea1b97cebfaca67b69ed365e966d80cdac22d8ff245c7a556137cfb2898ea34
+GLIBJ_SHA256=d7abe888d2980329434c30f18c0eec124be1f02284bf9ed28e88d7242a1f2bea
+INPUT_NATIVE_SHA256=69a8aeb3940bfbc234f3a562a7ae4bcaea10b50f8a8f2c38ad229a5430930f6d
+VIDEO_NATIVE_SHA256=c6687c0a43b24b425af0727c928afb5414da811ecbcbbe3538928470abe8bd0d
+AUDIO_NATIVE_SHA256=4522157846c33c150a85c50b4bed6f68351f1c62d54b8cd7805cbb97c5727644
+```
+
+These owners remain protected during P2C unless evidence specifically identifies one as the owner of a missing P2 input/frontend contract.
+
+## P2C — Input/Frontend next work unit
+
+The locked P2 contract still requires one `INPUT-FRONTEND-MODULE` covering:
+
+- complete physical input mapping;
+- keymap/frontend policy;
+- logical resolution configuration;
+- pointer/touch policy;
+- rotation policy if supported.
+
+Current state:
+
+```text
+P2C_INPUT_FRONTEND_AUDIT=NOT_TESTED
+P2C_RUNTIME_CANDIDATE=NOT_TESTED
+P2C_HOST_MODULE_GATE=NOT_TESTED
+P2C_PHYSICAL_TEST=NOT_TESTED
+```
+
+The next legal action is contract reconstruction/audit. No implementation is authorized until the exact canonical ownership, current RG35XX behavior, gap, owner and minimum delta are documented.
 
 ## Remaining platform phases
-
-Current platform state:
 
 ```text
 P0=PASS
@@ -223,22 +211,12 @@ P8=NOT_TESTED
 P9=NOT_TESTED
 ```
 
-P2 remains `PARTIAL` because P2B and the remaining frontend/input/resolution contract have not received their required runtime/module/physical acceptance.
-
-P9 work is not authorized before P8.
-
-## Human + ChatGPT collaboration record
-
-The repository owner/operator is completing this project with **ChatGPT by OpenAI as an engineering assistant**. ChatGPT assists with source/ancestry auditing, contract reconstruction, differential-test design, evidence review, GitHub/documentation work and checkpoint/tasklog continuity.
-
-Original-RG35XX physical observations and project decisions remain human-controlled. No ChatGPT analysis substitutes for a required physical device gate.
+P2 remains `PARTIAL` only because the remaining Input/Frontend contract is not yet formally accepted. P9 work is not authorized before P8.
 
 ## New-chat rule
 
-For every new chat:
-
 1. Read `TASKLOG.md` first.
 2. Treat this ledger and the locked rule files as authority.
-3. Verify exact parent/branch identity before changing runtime code.
-4. Continue the recorded `NEXT_LEGAL_ACTION` rather than reopening accepted owners.
-5. Never parent production work from A9 or from a game-specific experimental branch.
+3. Verify exact accepted parent before changing runtime code.
+4. Continue only the recorded `NEXT_LEGAL_ACTION` unless the user explicitly changes project direction.
+5. Never use A9 or a game-specific experimental branch as a production parent.
