@@ -7,7 +7,7 @@ import java.util.zip.CRC32;
 import java.util.zip.DeflaterOutputStream;
 import javax.imageio.ImageIO;
 
-/** Diagnostic only: measure pinned JDK8 non-indexed PNG tRNS at every legal depth. */
+/** Diagnostic only: observe pinned JDK8 non-indexed PNG tRNS at every legal depth without preselecting an alpha result. */
 public final class RG35XXP2ATransparencyR5Diagnostic {
     private static final int W = 8, H = 8;
     private static int cases, canonicalPass, matchAlpha0, nonmatchAlpha0;
