@@ -129,7 +129,14 @@ print('P2C_R1_V2_RAW_JAR_GATE_REPLACED=PASS')
 PY
 
 JAVA8="$JAVA8" bash "$BASE"
-ID="$ROOT/out/p2c-input-frontend-candidate-r1/P2C-INPUT-FRONTEND-IDENTITY.txt"
+OUT="$ROOT/out/p2c-input-frontend-candidate-r1"
+ID="$OUT/P2C-INPUT-FRONTEND-IDENTITY.txt"
 test -f "$ID"
-printf '%s\n' 'P2C_LAUNCH_RESOLUTION_CONTRACT_GATE=PASS' >> "$ID"
+printf '%s\n' \
+  'P2C_LAUNCH_RESOLUTION_CONTRACT_GATE=PASS' \
+  'P2C_FINAL_OUTPUT_HASH_GATE=PASS' >> "$ID"
+# Wrapper-owned identity additions must be covered by the final artifact manifest.
+(cd "$OUT" && find . -maxdepth 1 -type f ! -name SHA256SUMS.txt -print0 | LC_ALL=C sort -z | xargs -0 sha256sum) > "$OUT/SHA256SUMS.txt"
+(cd "$OUT" && sha256sum -c SHA256SUMS.txt)
 echo P2C_LAUNCH_RESOLUTION_CONTRACT_GATE=PASS
+echo P2C_FINAL_OUTPUT_HASH_GATE=PASS
