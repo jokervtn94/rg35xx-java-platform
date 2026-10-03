@@ -90,79 +90,135 @@ This is a semantic reference result, not a production backend selection.
 
 ---
 
-## 4. Pinned FreeType differential
+## 4. FreeType differential and exact JDK8 scaler reconstruction
+
+### 4.1 Pinned Miyoo FreeType identity
 
 The exact MiyooCFW toolchain FreeType tested is:
 
 ```text
-libfreetype.so.6.18.1
+FILE=libfreetype.so.6.18.1
 SHA256=dc4fe5572e1c9dbd913e70584c7c42e9e7ff6e2e573f637009b309bad6295afa
-TARGET=ARMv5TE / EABI5 / soft-float
+FT_LIBRARY_VERSION=2.11.1
+TARGET=ARMv5TE / EABI5 / soft-float / uClibc
 ```
 
-### 4.1 Initial sampled differential
+### 4.2 Initial raw/default FreeType differential
 
-The JDK8 versus ARM FreeType sampled differential produced:
+The earlier raw/default JDK8 versus ARM FreeType sampled differential produced substantial raster and some metric divergence. The exhaustive BMP `charWidth` table also left 57 mismatches out of 196,608 cases, concentrated in control/format characters.
+
+Those results remain valid for **raw/default FreeType substitution**, but they are no longer sufficient to characterize the JDK8 scaler path itself.
+
+The prior broad conclusion is therefore corrected as follows:
 
 ```text
-P2B_DIFF_METRIC_CASES=24
-P2B_DIFF_METRIC_NORMALIZED_STYLE_EXACT=24
-P2B_DIFF_METRIC_TRIPLE_EXACT=8
-P2B_DIFF_HEIGHT_EXACT=8
-P2B_DIFF_ASCENT_EXACT=24
-P2B_DIFF_DESCENT_EXACT=24
-P2B_DIFF_SAMPLE_CASES=144
-P2B_DIFF_WIDTH_EXACT=108
-P2B_DIFF_WIDTH_ABS_ERROR_MAX=7
-P2B_DIFF_RASTER_CASES=144
-P2B_DIFF_RASTER_BOUNDS_EXACT=23
-P2B_DIFF_RASTER_INK_EXACT=0
-P2B_DIFF_RASTER_ALPHA_SUM_EXACT=0
-P2B_FREETYPE_LAYOUT_CLASSIFICATION=DIVERGENT_REQUIRES_CALIBRATION_OR_OTHER_BACKEND
-P2B_FREETYPE_RASTER_CLASSIFICATION=DIAGNOSTIC_ONLY
+RAW_DEFAULT_FREETYPE_AS_JDK8_DROPIN=REJECTED
+FREETYPE_AS_LOW_LEVEL_ENGINE=NOT_REJECTED
+OPENJDK8_SCALER_POLICY=REQUIRES_SOURCE_MATCHED_PROBE
 ```
 
-### 4.2 Exhaustive BMP `charWidth` differential
+### 4.3 Exact OpenJDK8 scaler source/config path
 
-The exhaustive three-size table covered 196,608 cases:
+The audited JDK reference is Temurin/OpenJDK 8u504-b01. The `freetypeScaler.c` blob at the exact `jdk8u504-b01` source revision is the same blob used by the source reconstruction audit.
+
+The source-matched diagnostic reproduces the relevant JDK8 `FreetypeFontScaler` policy for this P2B path:
 
 ```text
-P2B_CHARWIDTH_CASES=196608
-P2B_CHARWIDTH_WIDTH_EXACT=196551
-P2B_CHARWIDTH_WIDTH_MISMATCH_COUNT=57
-P2B_CHARWIDTH_DISPLAY_MISMATCH_COUNT=48
-P2B_CHARWIDTH_WIDTH_ABS_ERROR_TOTAL=462
-P2B_CHARWIDTH_WIDTH_ABS_ERROR_MAX=10
-P2B_CHARWIDTH_CLASSIFICATION=DIVERGENT_REQUIRES_CLASSIFICATION
+TRUETYPE_INTERPRETER_VERSION=35
+AA=OFF
+FRACTIONAL_METRICS=OFF
+DPI=72
+RENDER_TARGET=MONO
+ALGORITHMIC_BOLD=FT_GlyphSlot_Embolden
+ALGORITHMIC_ITALIC=JDK8_OBLIQUE_MATRIX
+STYLE_VALUES_4_TO_7=NORMALIZED_TO_STYLE_0
 ```
 
-The remaining width mismatches are concentrated in control/format characters observed by the diagnostic, including TAB/LF and Unicode format/control code points such as ZWJ/ZWNJ and bidi controls. Therefore FreeType is very close for ordinary per-character metrics, but is not an exact JDK8 `FontMetrics.charWidth` replacement without explicit JDK-compatible classification/normalization.
+The JDK8 scaler context diagnostic also confirms the sampled AWT strike uses AA off, fractional metrics off, and identity device transform.
 
-### 4.3 Raster variants
+### 4.4 Actual JDK8 font-engine provenance
 
-The exact raster-variant comparison found the closest tested FreeType mode to be MONO:
+Dynamic-loader tracing proves the JDK8 AWT font path loads:
 
 ```text
-MONO:
-  CASES=144
-  NORMALIZED_STYLE_EXACT=144
-  WIDTH_EXACT=144
-  BOUNDS_EXACT=144
-  INK_EXACT=114
-  FP_EXACT=0
+/usr/lib/jvm/temurin-8-jdk-amd64/jre/lib/amd64/libfontmanager.so
+/usr/lib/jvm/temurin-8-jdk-amd64/jre/lib/amd64/libfreetype.so
 ```
 
-Other tested threshold variants also produced zero exact pixel fingerprints.
-
-Result:
+The bundled FreeType used by the sampled Temurin 8u504 runtime is:
 
 ```text
-P2B_FREETYPE_CHARWIDTH_BACKING=PARTIAL
-P2B_FREETYPE_DROPIN_RASTER=REJECTED
+P2B_JDK8_BUNDLED_FREETYPE_SHA256=2997f135c1f57499c00467690f3ca8346d98029bdd3f80a4f229ea037c72d882
+P2B_JDK8_BUNDLED_FREETYPE_VERSION=2.14.3
+```
+
+The corresponding Adoptium JDK8 source metadata also identifies FreeType v2.14.3 in `THIRD_PARTY_README`.
+
+This does **not** yet prove that an arbitrary vanilla FreeType 2.14.3 build has identical configure flags, patches, or raster behavior to the exact Temurin bundled library. Version identity and exact-build identity remain separate questions.
+
+### 4.5 Decisive same-probe differential
+
+The same source-matched C scaler probe was executed against three FreeType engines while keeping the P2B font, style normalization, sizes, strings, scaler policy, and comparator fixed.
+
+#### Exact Temurin bundled FreeType 2.14.3
+
+```text
+P2B_JDK8_FT_SCALER_CASES=144
+P2B_JDK8_FT_SCALER_NORMALIZED_STYLE_EXACT=144
+P2B_JDK8_FT_SCALER_WIDTH_EXACT=144
+P2B_JDK8_FT_SCALER_BOUNDS_EXACT=144
+P2B_JDK8_FT_SCALER_INK_EXACT=144
+P2B_JDK8_FT_SCALER_FP_EXACT=144
+P2B_JDK8_FT_SCALER_INK_ABS_ERROR_TOTAL=0
+P2B_JDK8_FT_SCALER_MISMATCH_COUNT=0
+P2B_JDK8_FT_SCALER_CLASSIFICATION=EXACT_FOR_SAMPLED_TABLE
+```
+
+This proves the reconstructed scaler policy is source-equivalent for the sampled 144-case raster table when backed by the exact FreeType behavior used by the JDK8 reference.
+
+#### Host system FreeType 2.13.2
+
+```text
+WIDTH_EXACT=144
+BOUNDS_EXACT=144
+INK_EXACT=138
+FP_EXACT=138
+MISMATCH_COUNT=6
+INK_ABS_ERROR_TOTAL=6
+```
+
+#### Pinned Miyoo FreeType 2.11.1
+
+```text
+WIDTH_EXACT=144
+BOUNDS_EXACT=144
+INK_EXACT=127
+FP_EXACT=127
+MISMATCH_COUNT=17
+INK_ABS_ERROR_TOTAL=48
+MISMATCH_STYLE_1_BOLD=8
+MISMATCH_STYLE_2_ITALIC=3
+MISMATCH_STYLE_3_BOLD_ITALIC=6
+```
+
+All 17 Miyoo residual cases preserve width and raster bounds; the differences are only ink/pixel occupancy in the sampled table.
+
+### 4.6 Corrected FreeType classification
+
+The evidence now supports a narrower and stronger conclusion than the earlier raw FreeType audit:
+
+```text
+P2B_OPENJDK8_SCALER_POLICY=PROVEN_FOR_SAMPLED_TABLE
+P2B_JDK8_EXACT_FREETYPE_BEHAVIOR=PROVEN_FOR_SAMPLED_TABLE
+P2B_Miyoo_FREETYPE_2_11_1_LAYOUT_PLACEMENT=EXACT_FOR_SAMPLED_TABLE
+P2B_Miyoo_FREETYPE_2_11_1_RASTER=RESIDUAL_17_OF_144
+P2B_Miyoo_FREETYPE_RESIDUAL_OWNER=FREETYPE_ENGINE_BUILD_BEHAVIOR
 P2B_FREETYPE_DROPIN_BACKEND=REJECTED
 ```
 
-`REJECTED` here is scoped only to using raw/default FreeType behavior as a drop-in replacement for the pinned Miyoo JDK8/AWT semantics. It does not reject FreeType as a possible low-level glyph source inside a later proven JDK-compatible RG35XX boundary.
+`P2B_Miyoo_FREETYPE_RESIDUAL_OWNER=FREETYPE_ENGINE_BUILD_BEHAVIOR` means the residual has been isolated away from the reconstructed OpenJDK8 scaler policy. It does **not** yet claim that the version number alone is causal, nor that a vanilla 2.14.3 ARM build is guaranteed to match Temurin.
+
+The production direction, if later authorized, must therefore preserve **OpenJDK8 scaler semantics plus a proven compatible FreeType raster behavior/build**, rather than use raw/default FreeType calls as a substitute.
 
 ---
 
@@ -195,7 +251,7 @@ Therefore:
 P2B_HARFBUZZ_DROPIN_COMPLEX_BACKEND=REJECTED
 ```
 
-This again rejects only direct substitution. HarfBuzz may remain a diagnostic/reference component, but current evidence does not authorize wiring its default output into the production runtime.
+This rejects only direct substitution. HarfBuzz may remain a diagnostic/reference component, but current evidence does not authorize wiring its default output into the production runtime.
 
 ---
 
@@ -230,23 +286,26 @@ Current evidence does **not** authorize any of these shortcuts:
 ```text
 Miyoo/AWT unavailable
   -> use current synthetic 5x7 Raw2D font                 REJECTED
-  -> use raw FreeType as drop-in                          REJECTED
+  -> use raw/default FreeType as drop-in                  REJECTED
+  -> assume Miyoo FreeType 2.11.1 is raster-exact         REJECTED
   -> use raw HarfBuzz as drop-in                          REJECTED
   -> use per-character additive draw loop for all text    REJECTED
 ```
 
-The remaining legal engineering path is:
+The legal engineering path is now more specific:
 
 ```text
 PINNED MIYOO FONT/TEXT CONTRACT
         ↓
-JDK8/AWT SEMANTIC REFERENCE
+EXACT JDK8/AWT REFERENCE
         ↓
-CLASSIFY EXACT METRIC / STRING-LAYOUT / RASTER RULES
+OPENJDK8 FREETYPEFONTSCALER POLICY — SAMPLED RECONSTRUCTION PROVEN
         ↓
-USE NATIVE FONT LIBRARIES ONLY AS LOW-LEVEL SOURCES WHERE PROVEN
+PROVE A COMPATIBLE ARMv5/uClibC FREETYPE BUILD/BEHAVIOR
         ↓
-MINIMUM RG35XX FONT/TEXT BACKING
+RESOLVE CHARWIDTH CONTROL/FORMAT + STRING-LAYOUT SEMANTICS
+        ↓
+MINIMUM RG35XX FONT/TEXT BACKING DESIGN
         ↓
 STRICT HOST DIFFERENTIAL
         ↓
@@ -255,7 +314,7 @@ ONE P2B MODULE EXERCISER
 ONE ORIGINAL-RG35XX P2B PHYSICAL MODULE TEST
 ```
 
-No physical device test is justified yet because the host/backend contract is not complete.
+No physical device test is justified yet because the host/backend contract remains incomplete.
 
 ---
 
@@ -276,8 +335,13 @@ P2B_FONT_PACKAGING_LICENSE_SCOPE=PARTIAL
 
 P2B_JDK8_SEMANTIC_REFERENCE=PASS
 P2B_JDK_STRING_LEVEL_BEHAVIOR=PASS
+P2B_OPENJDK8_SCALER_POLICY=PROVEN_FOR_SAMPLED_TABLE
+P2B_JDK8_BUNDLED_FREETYPE_VERSION=2.14.3
+P2B_JDK8_BUNDLED_FREETYPE_SAMPLED_RASTER=EXACT
+P2B_Miyoo_FREETYPE_VERSION=2.11.1
+P2B_Miyoo_FREETYPE_SAMPLED_WIDTH_BOUNDS=EXACT
+P2B_Miyoo_FREETYPE_SAMPLED_RASTER=RESIDUAL_17_OF_144
 P2B_FREETYPE_CHARWIDTH_BACKING=PARTIAL
-P2B_FREETYPE_DROPIN_RASTER=REJECTED
 P2B_FREETYPE_DROPIN_BACKEND=REJECTED
 P2B_HARFBUZZ_DROPIN_COMPLEX_BACKEND=REJECTED
 
@@ -299,15 +363,16 @@ SPECULATIVE_OPTIMIZATION=NO
 
 Do **not** create a runtime font backend yet.
 
-The next approved unit is an audit-only **JDK8 text-backend semantic decomposition** that resolves, separately:
+The next approved unit is an audit-only **FreeType exact-behavior portability/provenance check**, followed by the remaining text semantic decomposition:
 
-1. exact `FontMetrics` metric derivation and rounding;
-2. exact control/format-character `charWidth` / display classification responsible for the remaining 57 exhaustive mismatches;
-3. exact simple-string rule versus complex/string-level layout rule;
-4. exact glyph raster placement/pixel rule responsible for `MONO` having exact bounds but zero exact fingerprints;
-5. the minimum interface needed between `Font` / `PlatformGraphics` and any RG35XX low-level glyph provider;
-6. exact owner-scoped files allowed to change;
-7. compliant runtime font provisioning/packaging strategy without assuming redistribution permission.
+1. determine the exact source/config/patch provenance of the Temurin 8u504 bundled FreeType 2.14.3 sufficiently to avoid assuming that a vanilla same-version build is equivalent;
+2. build only a diagnostic ARMv5/uClibC candidate with the pinned Miyoo toolchain, without modifying production/runtime files;
+3. execute the identical source-matched scaler probe and require 144/144 width, bounds, ink, and fingerprint before considering that build behavior compatible;
+4. if exact behavior is not reproduced, classify build-option/version/patch causes rather than calibrating pixels heuristically;
+5. separately resolve the remaining exhaustive control/format-character `charWidth` classification;
+6. separately resolve simple-string versus complex/string-level layout behavior;
+7. define the minimum owner-scoped interface and files that may change only after the backend behavior is proven;
+8. resolve compliant runtime font provisioning/packaging without assuming redistribution permission.
 
 Only after those fields are resolved may a P2B runtime candidate be designed.
 
@@ -321,4 +386,4 @@ P2B_DEVICE_PACKAGE=FORBIDDEN
 P2B_PHYSICAL_TEST=NOT_TESTED
 ```
 
-Reason: backend semantics and final font provisioning contract remain `PARTIAL`.
+Reason: exact sampled JDK8 scaler raster behavior is now understood, but the ARM-compatible exact FreeType build/provenance, remaining `charWidth` control/format rules, string-layout semantics, and final font provisioning contract remain `PARTIAL`.
