@@ -1,0 +1,261 @@
+name: P2B Font JDK8 Runtime Planner Mark Classifier V3 Audit
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - audit/p2b-font-text
+    paths:
+      - '.github/workflows/p2b-font-jdk8-runtime-planner-mark-classifier-v3-audit.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  p2b-jdk8-runtime-planner-mark-classifier-v3:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    env:
+      BASE: 77a36526e0f6d875c57c7e9a973e0c1a05573721
+      JDK8U_TAG: jdk8u504-b01
+      JDK8U_COMMIT: 4efe36434f44bafb854e602ccbbe1b5696fce1a2
+      JDK8_UNICODEDATA_BLOB: 3ed5585528adace2cf0627b8125708b9afff6cf4
+      GNU_CLASSPATH_VERSION: '0.99'
+      GNU_CLASSPATH_TARBALL_SHA256: f929297f8ae9b613a1a167e231566861893260651d913ad9b6c11933895fecc8
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Verify audit-only ancestry and protected scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git merge-base HEAD "$BASE")" = "$BASE"
+          if git diff --name-only "$BASE"...HEAD | grep -E '^(adapter/|native/|upstream/|packaging/|runtime/|patches/|scripts/stage-|scripts/build-)'; then
+            echo 'P2B_RUNTIME_DELTA=FAIL'; exit 1
+          fi
+          test "$(git -C upstream/freej2me-miyoomini rev-parse HEAD)" = ca11dfe8ea1cc273d92460f9a83bbf192023fa63
+          mkdir -p out/p2b-mark-v3
+          {
+            echo 'P2B_PLANNER_MARK_V3_AUDIT_SCOPE=PASS'
+            echo 'P2B_RUNTIME_DELTA=NONE'
+            echo 'P2B_PROTECTED_JAMVM_GLIBJ_CHANGE=NO'
+          } | tee out/p2b-mark-v3/SCOPE.txt
+
+      - name: Pin exact JDK8 source and exact GNU Classpath generated data owner
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/jdk8u /tmp/classpath-0.99 /tmp/classpath-0.99.tar.gz
+          git clone --filter=blob:none --no-checkout https://github.com/adoptium/jdk8u.git /tmp/jdk8u
+          git -C /tmp/jdk8u fetch --depth 1 origin tag "$JDK8U_TAG"
+          git -C /tmp/jdk8u checkout --detach "$JDK8U_TAG"
+          test "$(git -C /tmp/jdk8u rev-parse HEAD)" = "$JDK8U_COMMIT"
+          test "$(git -C /tmp/jdk8u rev-parse HEAD:jdk/make/data/unicodedata/UnicodeData.txt)" = "$JDK8_UNICODEDATA_BLOB"
+
+          curl -fL --retry 3 --retry-delay 2 \
+            "https://ftp.gnu.org/gnu/classpath/classpath-${GNU_CLASSPATH_VERSION}.tar.gz" \
+            -o /tmp/classpath-0.99.tar.gz
+          echo "$GNU_CLASSPATH_TARBALL_SHA256  /tmp/classpath-0.99.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/classpath-0.99.tar.gz -C /tmp
+          CD=/tmp/classpath-0.99/gnu/java/lang/CharData.java
+          CH=/tmp/classpath-0.99/java/lang/Character.java
+          test -f "$CD" && test -f "$CH"
+          grep -Fq 'String SOURCE = "../doc/unicode/UnicodeData-4.0.0.txt";' "$CD"
+          grep -Fq 'private static final int TYPE_MASK = 0x1F;' "$CH"
+          grep -Fq 'if (plane > 2 && plane < 14)' "$CH"
+          grep -Fq 'if (plane > 14)' "$CH"
+          grep -Fq 'return readCodePoint(codePoint) & TYPE_MASK;' "$CH"
+          grep -Fq 'return data[plane][(char) (blocks[plane][offset >> CharData.SHIFT[plane]] + offset)];' "$CH"
+          {
+            echo "OPENJDK8_TAG=$JDK8U_TAG"
+            echo "OPENJDK8_COMMIT=$JDK8U_COMMIT"
+            echo "JDK8_UNICODEDATA_BLOB=$JDK8_UNICODEDATA_BLOB"
+            echo "GNU_CLASSPATH_VERSION=$GNU_CLASSPATH_VERSION"
+            echo "GNU_CLASSPATH_TARBALL_SHA256=$GNU_CLASSPATH_TARBALL_SHA256"
+            echo "GNU_CLASSPATH_CHARDATA_SHA256=$(sha256sum "$CD" | awk '{print $1}')"
+            echo "GNU_CLASSPATH_CHARACTER_SHA256=$(sha256sum "$CH" | awk '{print $1}')"
+            echo 'GNU_CLASSPATH_CHARACTER_DATA_OWNER=gnu/java/lang/CharData.java'
+            echo 'GNU_CLASSPATH_CHARACTER_DATA_SOURCE=GENERATED_UNICODEDATA_4_0_0'
+            echo 'P2B_PLANNER_MARK_V3_SOURCE_PROVENANCE=PASS'
+          } | tee out/p2b-mark-v3/PROVENANCE.txt
+
+      - name: Generate compact JDK8 Mn Mc Me classifier from pinned UnicodeData
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out/p2b-mark-v3/src/org/recompile/rg35xx/p2b/jdk8/mark
+          python3 - /tmp/jdk8u/jdk/make/data/unicodedata/UnicodeData.txt \
+            out/p2b-mark-v3/src/org/recompile/rg35xx/p2b/jdk8/mark/Jdk8MarkClassifier.java \
+            out/p2b-mark-v3/GENERATION.txt <<'PY'
+          from pathlib import Path
+          import sys
+          src,dst,meta=map(Path,sys.argv[1:])
+          cats={'Mn','Mc','Me'}; marks=set(); pending=None
+          for raw in src.read_text(encoding='utf-8').splitlines():
+              if not raw or raw.startswith('#'): continue
+              f=raw.split(';'); cp=int(f[0],16); name=f[1]; cat=f[2]
+              if name.endswith(', First>'):
+                  if pending is not None: raise SystemExit('NESTED_FIRST')
+                  pending=(cp,cat); continue
+              if name.endswith(', Last>'):
+                  if pending is None: raise SystemExit('LAST_WITHOUT_FIRST')
+                  st,pcat=pending
+                  if pcat!=cat: raise SystemExit('RANGE_CATEGORY_MISMATCH')
+                  if cat in cats: marks.update(range(st,cp+1))
+                  pending=None; continue
+              if pending is not None: raise SystemExit('UNTERMINATED_FIRST')
+              if cat in cats: marks.add(cp)
+          if pending is not None: raise SystemExit('UNTERMINATED_RANGE')
+          vals=sorted(marks); ranges=[]
+          if vals:
+              st=pr=vals[0]
+              for cp in vals[1:]:
+                  if cp==pr+1: pr=cp
+                  else: ranges.append((st,pr)); st=pr=cp
+              ranges.append((st,pr))
+          flat=[]
+          for a,b in ranges: flat.extend((a,b))
+          chunks=[]
+          for i in range(0,len(flat),12):
+              chunks.append('        '+', '.join('0x%X'%x for x in flat[i:i+12]))
+          body='''package org.recompile.rg35xx.p2b.jdk8.mark;\n\n/** Mechanically generated from pinned OpenJDK8 UnicodeData; Mn/Mc/Me only. */\npublic final class Jdk8MarkClassifier {\n    private static final int[] RANGES = new int[] {\n%s\n    };\n    private Jdk8MarkClassifier() { }\n    public static boolean isEngineMark(int cp) {\n        int lo=0, hi=(RANGES.length/2)-1;\n        while (lo<=hi) {\n            int mid=(lo+hi) >>> 1;\n            int st=RANGES[mid*2], en=RANGES[mid*2+1];\n            if (cp<st) hi=mid-1;\n            else if (cp>en) lo=mid+1;\n            else return true;\n        }\n        return false;\n    }\n}\n''' % (',\n'.join(chunks))
+          dst.write_text(body,encoding='utf-8')
+          meta.write_text('\n'.join([
+              'P2B_PLANNER_MARK_SOURCE=OPENJDK8_PINNED_UNICODEDATA_MN_MC_ME',
+              'P2B_PLANNER_MARK_CODEPOINT_COUNT='+str(len(vals)),
+              'P2B_PLANNER_MARK_RANGE_COUNT='+str(len(ranges)),
+              'P2B_PLANNER_MARK_GENERATION=PASS'])+'\n',encoding='utf-8')
+          print(meta.read_text(),end='')
+          PY
+
+      - name: Compile Java6 and exhaustively differential JDK8 classifier plus Classpath CharData
+        shell: bash
+        run: |
+          set -euo pipefail
+          JAVA8="$JAVA_HOME"
+          CLASSES=out/p2b-mark-v3/classes
+          mkdir -p "$CLASSES" out/p2b-mark-v3/src/gnu/java/lang
+          cp /tmp/classpath-0.99/gnu/java/lang/CharData.java out/p2b-mark-v3/src/gnu/java/lang/CharData.java
+          cat > out/p2b-mark-v3/MarkDifferential.java <<'JAVA'
+          import gnu.java.lang.CharData;
+          import org.recompile.rg35xx.p2b.jdk8.mark.Jdk8MarkClassifier;
+
+          public final class MarkDifferential {
+              private static boolean classpathMark(int cp) {
+                  if (cp < 0 || cp > 0x10ffff) return false;
+                  int plane=cp >>> 16;
+                  // Exact Character.getType owner semantics: these planes bypass CharData.
+                  // Unassigned/private-use categories are never Mn/Mc/Me.
+                  if (plane > 2 && plane < 14) return false;
+                  if (plane > 14) return false;
+                  int off=cp & 0xffff;
+                  int block=CharData.BLOCKS[plane].charAt(off >> CharData.SHIFT[plane]);
+                  int index=(char)(block + off);
+                  int type=CharData.DATA[plane].charAt(index) & 0x1f;
+                  return type==6 || type==7 || type==8;
+              }
+
+              public static void main(String[] args) {
+                  int localMismatch=0, classpathDiff=0;
+                  int refTrue=0, localTrue=0, classpathTrue=0;
+                  for (int cp=0; cp<=0x10ffff; cp++) {
+                      int t=Character.getType(cp);
+                      boolean ref=t==Character.NON_SPACING_MARK ||
+                                  t==Character.COMBINING_SPACING_MARK ||
+                                  t==Character.ENCLOSING_MARK;
+                      boolean local=Jdk8MarkClassifier.isEngineMark(cp);
+                      boolean old=classpathMark(cp);
+                      if(ref) refTrue++;
+                      if(local) localTrue++;
+                      if(old) classpathTrue++;
+                      if(ref!=local) {
+                          localMismatch++;
+                          if(localMismatch<=16) System.out.println("LOCAL_MARK_MISMATCH=U+"+Integer.toHexString(cp));
+                      }
+                      if(ref!=old) {
+                          classpathDiff++;
+                          if(classpathDiff<=16) System.out.println("GLIBJ_MARK_DIFF=U+"+Integer.toHexString(cp)+" ref="+ref+" glib="+old);
+                      }
+                  }
+                  System.out.println("P2B_PLANNER_MARK_CODEPOINTS_TESTED=1114112");
+                  System.out.println("P2B_PLANNER_MARK_JDK8_REFERENCE_TRUE="+refTrue);
+                  System.out.println("P2B_PLANNER_MARK_LOCAL_TRUE="+localTrue);
+                  System.out.println("P2B_PLANNER_MARK_GLIBJ_TRUE="+classpathTrue);
+                  System.out.println("P2B_PLANNER_MARK_MISMATCH_COUNT="+localMismatch);
+                  System.out.println("P2B_PROTECTED_GLIBJ_MARK_DIFF_COUNT="+classpathDiff);
+                  System.out.println("P2B_PROTECTED_GLIBJ_MARK_CLASSIFIER="+(classpathDiff==0?"EXACT":"NOT_EXACT_JDK8"));
+                  if(localMismatch!=0) throw new RuntimeException("local JDK8 mark mismatch="+localMismatch);
+                  System.out.println("P2B_PLANNER_MARK_DIFFERENTIAL=PASS");
+              }
+          }
+          JAVA
+
+          "$JAVA8/bin/javac" -encoding UTF-8 -source 1.6 -target 1.6 \
+            -bootclasspath "$JAVA8/jre/lib/rt.jar" -d "$CLASSES" \
+            out/p2b-mark-v3/src/gnu/java/lang/CharData.java \
+            out/p2b-mark-v3/src/org/recompile/rg35xx/p2b/jdk8/mark/Jdk8MarkClassifier.java \
+            out/p2b-mark-v3/MarkDifferential.java
+          python3 - "$CLASSES" <<'PY'
+          from pathlib import Path
+          import sys
+          root=Path(sys.argv[1]); bad=[]; majors=set(); count=0
+          for p in root.rglob('*.class'):
+              b=p.read_bytes(); m=int.from_bytes(b[6:8],'big'); majors.add(m); count+=1
+              if m>50: bad.append((str(p),m))
+          if bad: raise SystemExit('P2B_PLANNER_MARK_V3_JAVA6_FAIL '+repr(bad))
+          print('P2B_PLANNER_MARK_V3_CLASS_COUNT='+str(count))
+          print('P2B_PLANNER_MARK_V3_CLASS_MAJORS='+','.join(map(str,sorted(majors))))
+          print('P2B_PLANNER_MARK_V3_JAVA6_GATE=PASS')
+          PY
+          "$JAVA8/bin/java" -cp "$CLASSES" MarkDifferential | tee out/p2b-mark-v3/DIFFERENTIAL.log
+          grep -q '^P2B_PLANNER_MARK_MISMATCH_COUNT=0$' out/p2b-mark-v3/DIFFERENTIAL.log
+          grep -q '^P2B_PLANNER_MARK_DIFFERENTIAL=PASS$' out/p2b-mark-v3/DIFFERENTIAL.log
+          GLIB=$(awk -F= '/^P2B_PROTECTED_GLIBJ_MARK_CLASSIFIER=/{print $2}' out/p2b-mark-v3/DIFFERENTIAL.log)
+          GLIB_DIFF=$(awk -F= '/^P2B_PROTECTED_GLIBJ_MARK_DIFF_COUNT=/{print $2}' out/p2b-mark-v3/DIFFERENTIAL.log)
+          {
+            echo 'P2B_JDK8_PLANNER_MARK_CLASSIFIER=PASS'
+            echo 'P2B_JDK8_PLANNER_MARK_CLASSIFIER_JAVA6=PASS'
+            echo 'P2B_JDK8_PLANNER_NO_GLIBJ_PATCH=PASS'
+            echo "P2B_PROTECTED_GLIBJ_MARK_CLASSIFIER=$GLIB"
+            echo "P2B_PROTECTED_GLIBJ_MARK_DIFF_COUNT=$GLIB_DIFF"
+            echo 'P2B_LOCAL_COMPONENT_PLAN_DIFFERENTIAL=NOT_YET_RUN'
+            echo 'P2B_RUNTIME_PATCH=FORBIDDEN'
+            echo 'P2B_DEVICE_PACKAGE=FORBIDDEN'
+            echo 'DEVICE_TEST=NOT_REQUESTED'
+            echo 'STABLE=NO'
+          } | tee out/p2b-mark-v3/STATUS.txt
+
+      - name: Cleanup generated/private inputs and enforce evidence-only artifact
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/jdk8u /tmp/classpath-0.99 /tmp/classpath-0.99.tar.gz
+          rm -rf out/p2b-mark-v3/src out/p2b-mark-v3/classes
+          rm -f out/p2b-mark-v3/MarkDifferential.java
+          if find out/p2b-mark-v3 -type f | grep -Ei '\.(class|java|ttf|otf|jar|zip|so|a|o|icu|tar|gz)$'; then
+            echo 'P2B_PLANNER_MARK_V3_EVIDENCE_LEAK=FAIL'; exit 1
+          fi
+          echo 'P2B_PLANNER_MARK_V3_EVIDENCE_LEAK=NO' | tee out/p2b-mark-v3/CLEANUP.txt
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: RG35XX-P2B-JDK8-RUNTIME-PLANNER-MARK-V3-${{ github.sha }}
+          path: |
+            out/p2b-mark-v3/SCOPE.txt
+            out/p2b-mark-v3/PROVENANCE.txt
+            out/p2b-mark-v3/GENERATION.txt
+            out/p2b-mark-v3/DIFFERENTIAL.log
+            out/p2b-mark-v3/STATUS.txt
+            out/p2b-mark-v3/CLEANUP.txt
+          if-no-files-found: warn
