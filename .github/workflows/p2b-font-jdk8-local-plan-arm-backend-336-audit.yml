@@ -1,0 +1,404 @@
+name: P2B Font JDK8 Local Planner to ARM Backend 336 Audit
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - audit/p2b-font-text
+    paths:
+      - '.github/workflows/p2b-font-jdk8-local-plan-arm-backend-336-audit.yml'
+      - 'tests/p2b/diagnostic/RG35XXP2BLocalWholePlanReplay.java'
+      - 'tests/p2b/diagnostic/RG35XXP2BLocalComponentPlanDiagnostic.java'
+      - 'tests/p2b/diagnostic/stage_jdk8_text_planner_audit.py'
+      - 'tests/p2b/diagnostic/RG35XXP2BJdkWholeStringRasterDiagnostic.java'
+      - 'tests/p2b/diagnostic/p2b_jdk8_whole_raster_arm.cpp'
+      - 'tests/p2b/diagnostic/p2b_jdk8_complex_width_arm.cpp'
+      - 'tests/p2b/diagnostic/compare_p2b_jdk8_whole_raster.py'
+      - 'tests/p2b/diagnostic/compare_p2b_jdk8_complex_width.py'
+
+permissions:
+  contents: read
+
+jobs:
+  p2b-local-plan-arm-backend-336:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      BASE: 77a36526e0f6d875c57c7e9a973e0c1a05573721
+      TOOLCHAIN_IMAGE: docker.io/miyoocfw/toolchain-shared-uclibc@sha256:6f6761867b4e4dcc27c99bf25fb91b2910264165f27bdd40b1c17e6f98cf751e
+      EXPECTED_FONT_SHA256: 1a5f4112daaa9473747c6834041646cc9b2c338cb40ab5dbb2f0161f8968ca10
+      EXPECTED_FONT_SIZE: '8092724'
+      JDK8U_TAG: jdk8u504-b01
+      JDK8U_COMMIT: 4efe36434f44bafb854e602ccbbe1b5696fce1a2
+      JDK8_LAYOUT_TREE: bc6641fecdfb59f3146bb1591e090761a24b4061
+      JDK8U_FT_INCLUDE_TREE: 43f2e4398cfd927acac29ce3515e23a195349eb7
+      JDK8U_FT_SRC_TREE: 8690dd39ef9f4da5bae000d757fe6dfa2d2102a6
+      BIDI_BLOB: 3d0e1381adb1cb11cbd45d2f8e09c4830aa1fba8
+      BIDIBASE_BLOB: 6485bea94e69f1cb3f054360fb5caad461a60ef8
+      BIDILINE_BLOB: 1d54867ad42b486857693e63a3cf15fbe99354e9
+      BIDIRUN_BLOB: 07519db3934eb47a566ad0e597611bcfa8ed2b67
+      UBIDIPROPS_BLOB: c7ac9aeac61a3abcf6f9fc28105585ff3110f61f
+      ICUDATA_BLOB: 20c21a583d6689356e1d3c65aecfd37aca223521
+      ICUBINARY_BLOB: 20984d3b8fbd9d3523a9de7a9df05caff0e9be55
+      TRIE_BLOB: 0430bf5e955db100512d6f366b509b97bd07f51d
+      CHARTRIE_BLOB: 9726e8932f6ddeacf7ff4f0f3faf08d2b908777f
+      UTF16_BLOB: 934eecca8ff9aaf6f4ac8f80fe33cc5285a895e1
+      UCHAR_BLOB: bad507e2ee03b22e1c72680c4b60ca0787fd30b3
+      UCHARPROP_BLOB: 0149140feab974541f5ca1e56027b864aa9e803d
+      SCRIPT_BLOB: 155ab07d93cacf854c19187e020a66ef63921e52
+      SCRIPTRUNDATA_BLOB: e72c85624242ce7c486d78dbf800c91facb2cfbf
+      SCRIPTRUN_BLOB: e719fc335605f957f6bd713da226700aba15b8c9
+      BIDIUTILS_BLOB: 41d6acd02b95656b3644e669443b3230b950eb08
+      UNICODEDATA_BLOB: 3ed5585528adace2cf0627b8125708b9afff6cf4
+      UBIDI_RESOURCE_BLOB: 3c545bd7a450e407f4755effb75f68886faa43e5
+      UBIDI_RESOURCE_SIZE: '19924'
+      UBIDI_RESOURCE_SHA256: 38b96789a88870d20c0eb1392cb8fc2bd58e2c31cfff3326bea1e00a52ec9889
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Verify audit-only ancestry and scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git merge-base HEAD "$BASE")" = "$BASE"
+          git diff --name-only "$BASE"...HEAD | tee /tmp/p2b-local-plan-336-files.txt
+          if grep -Ev '^(docs/P2B-[^/]+\.md|tests/p2b/diagnostic/[^/]+|\.github/workflows/p2b-font-[^/]+-audit\.yml)$' /tmp/p2b-local-plan-336-files.txt | grep -q .; then
+            echo 'P2B_LOCAL_PLAN_ARM_336_AUDIT_SCOPE=FAIL'
+            exit 1
+          fi
+          if git diff --name-only "$BASE"...HEAD | grep -E '^(adapter/|native/|upstream/|packaging/|runtime/|patches/|scripts/stage-|scripts/build-)'; then
+            echo 'P2B_RUNTIME_DELTA=FAIL'
+            exit 1
+          fi
+          test "$(git -C upstream/freej2me-miyoomini rev-parse HEAD)" = ca11dfe8ea1cc273d92460f9a83bbf192023fa63
+          mkdir -p out/p2b-local-plan-arm-336
+          {
+            echo 'P2B_LOCAL_PLAN_ARM_336_AUDIT_SCOPE=PASS'
+            echo 'P2B_RUNTIME_DELTA=NONE'
+            echo 'P2B_PROTECTED_JAMVM_GLIBJ_CHANGE=NO'
+            echo 'P2B_RUNTIME_CANDIDATE_BRANCH=DO_NOT_CREATE_IN_THIS_GATE'
+          } | tee out/p2b-local-plan-arm-336/SCOPE.txt
+
+      - name: Install qemu and exact pinned Miyoo ARMv5 uClibC toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update >/dev/null
+          sudo apt-get install -y --no-install-recommends qemu-user >/dev/null
+          docker pull "$TOOLCHAIN_IMAGE"
+          cid=$(docker create "$TOOLCHAIN_IMAGE" true)
+          trap 'docker rm -f "$cid" >/dev/null 2>&1 || true' EXIT
+          sudo rm -rf /opt/miyoo
+          sudo docker cp "$cid:/opt/miyoo" /opt/miyoo
+          sudo chown -R "$(id -u):$(id -g)" /opt/miyoo
+          test -x /opt/miyoo/bin/arm-miyoo-linux-uclibcgnueabi-gcc
+          test -x /opt/miyoo/bin/arm-miyoo-linux-uclibcgnueabi-g++
+          /opt/miyoo/bin/arm-miyoo-linux-uclibcgnueabi-g++ --version | head -n 1 \
+            | tee out/p2b-local-plan-arm-336/TOOLCHAIN.txt
+          echo 'P2B_LOCAL_PLAN_ARM_336_TOOLCHAIN=PASS' | tee -a out/p2b-local-plan-arm-336/TOOLCHAIN.txt
+
+      - name: Pin exact JDK8 planner backend sources and data
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/jdk8u
+          git clone --filter=blob:none --no-checkout https://github.com/adoptium/jdk8u.git /tmp/jdk8u
+          git -C /tmp/jdk8u fetch --depth 1 origin tag "$JDK8U_TAG"
+          git -C /tmp/jdk8u checkout --detach "$JDK8U_TAG"
+          test "$(git -C /tmp/jdk8u rev-parse HEAD)" = "$JDK8U_COMMIT"
+          check_blob(){ test "$(git -C /tmp/jdk8u rev-parse HEAD:"$1")" = "$2"; }
+          check_blob jdk/src/share/classes/java/text/Bidi.java "$BIDI_BLOB"
+          check_blob jdk/src/share/classes/sun/text/bidi/BidiBase.java "$BIDIBASE_BLOB"
+          check_blob jdk/src/share/classes/sun/text/bidi/BidiLine.java "$BIDILINE_BLOB"
+          check_blob jdk/src/share/classes/sun/text/bidi/BidiRun.java "$BIDIRUN_BLOB"
+          check_blob jdk/src/share/classes/sun/text/normalizer/UBiDiProps.java "$UBIDIPROPS_BLOB"
+          check_blob jdk/src/share/classes/sun/text/normalizer/ICUData.java "$ICUDATA_BLOB"
+          check_blob jdk/src/share/classes/sun/text/normalizer/ICUBinary.java "$ICUBINARY_BLOB"
+          check_blob jdk/src/share/classes/sun/text/normalizer/Trie.java "$TRIE_BLOB"
+          check_blob jdk/src/share/classes/sun/text/normalizer/CharTrie.java "$CHARTRIE_BLOB"
+          check_blob jdk/src/share/classes/sun/text/normalizer/UTF16.java "$UTF16_BLOB"
+          check_blob jdk/src/share/classes/sun/text/normalizer/UCharacter.java "$UCHAR_BLOB"
+          check_blob jdk/src/share/classes/sun/text/normalizer/UCharacterProperty.java "$UCHARPROP_BLOB"
+          check_blob jdk/src/share/classes/sun/font/Script.java "$SCRIPT_BLOB"
+          check_blob jdk/src/share/classes/sun/font/ScriptRunData.java "$SCRIPTRUNDATA_BLOB"
+          check_blob jdk/src/share/classes/sun/font/ScriptRun.java "$SCRIPTRUN_BLOB"
+          check_blob jdk/src/share/classes/sun/font/BidiUtils.java "$BIDIUTILS_BLOB"
+          check_blob jdk/make/data/unicodedata/UnicodeData.txt "$UNICODEDATA_BLOB"
+          check_blob jdk/src/share/classes/sun/text/resources/ubidi.icu "$UBIDI_RESOURCE_BLOB"
+          test "$(git -C /tmp/jdk8u rev-parse HEAD:jdk/src/share/native/sun/font/layout)" = "$JDK8_LAYOUT_TREE"
+          test "$(git -C /tmp/jdk8u rev-parse HEAD:jdk/src/share/native/sun/awt/libfreetype/include)" = "$JDK8U_FT_INCLUDE_TREE"
+          test "$(git -C /tmp/jdk8u rev-parse HEAD:jdk/src/share/native/sun/awt/libfreetype/src)" = "$JDK8U_FT_SRC_TREE"
+          test "$(wc -c </tmp/jdk8u/jdk/src/share/classes/sun/text/resources/ubidi.icu | tr -d ' ')" = "$UBIDI_RESOURCE_SIZE"
+          test "$(sha256sum /tmp/jdk8u/jdk/src/share/classes/sun/text/resources/ubidi.icu | awk '{print $1}')" = "$UBIDI_RESOURCE_SHA256"
+          grep -F 'Freetype v2.14.3' /tmp/jdk8u/THIRD_PARTY_README
+          {
+            echo "OPENJDK8_TAG=$JDK8U_TAG"
+            echo "OPENJDK8_COMMIT=$JDK8U_COMMIT"
+            echo "JDK8_LAYOUT_TREE=$JDK8_LAYOUT_TREE"
+            echo "JDK8_FT_INCLUDE_TREE=$JDK8U_FT_INCLUDE_TREE"
+            echo "JDK8_FT_SRC_TREE=$JDK8U_FT_SRC_TREE"
+            echo "UBIDI_RESOURCE_SHA256=$UBIDI_RESOURCE_SHA256"
+            echo "UNICODEDATA_BLOB=$UNICODEDATA_BLOB"
+            echo 'P2B_LOCAL_PLAN_ARM_336_SOURCE_PROVENANCE=PASS'
+          } | tee out/p2b-local-plan-arm-336/PROVENANCE.txt
+
+      - name: Materialize exact Miyoo font and generate JDK8 width raster oracle
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL='https://github.com/aweigit/freej2me-miyoomini/releases/download/2.0/miyoomini-freej2me.zip'
+          curl -fL --retry 3 --retry-delay 2 "$URL" -o /tmp/miyoomini-freej2me.zip
+          ENTRY=$(unzip -Z1 /tmp/miyoomini-freej2me.zip | grep -Ei '(^|/)font\.ttf$')
+          test "$(printf '%s\n' "$ENTRY" | wc -l | tr -d ' ')" = 1
+          unzip -p /tmp/miyoomini-freej2me.zip "$ENTRY" > /tmp/p2b-font.ttf
+          test "$(sha256sum /tmp/p2b-font.ttf | awk '{print $1}')" = "$EXPECTED_FONT_SHA256"
+          test "$(wc -c </tmp/p2b-font.ttf | tr -d ' ')" = "$EXPECTED_FONT_SIZE"
+          rm -rf /tmp/p2b-jdk-oracle-classes && mkdir -p /tmp/p2b-jdk-oracle-classes
+          "$JAVA_HOME/bin/javac" -encoding UTF-8 -source 1.6 -target 1.6 \
+            -d /tmp/p2b-jdk-oracle-classes \
+            tests/p2b/diagnostic/RG35XXP2BJdkWholeStringRasterDiagnostic.java
+          "$JAVA_HOME/bin/java" -Djava.awt.headless=true -cp /tmp/p2b-jdk-oracle-classes \
+            RG35XXP2BJdkWholeStringRasterDiagnostic /tmp/p2b-font.ttf /tmp/P2B-JDK8-WHOLE-ORACLE.tsv \
+            | tee out/p2b-local-plan-arm-336/JDK-ORACLE.log
+          grep -Fq 'P2B_JDK8_WHOLE_RASTER_CASES=336' out/p2b-local-plan-arm-336/JDK-ORACLE.log
+          grep -Fq 'P2B_JDK8_WHOLE_RASTER_DIRECT_CASES=144' out/p2b-local-plan-arm-336/JDK-ORACLE.log
+          grep -Fq 'P2B_JDK8_WHOLE_RASTER_COMPLEX_CASES=192' out/p2b-local-plan-arm-336/JDK-ORACLE.log
+          grep -Fq 'P2B_JDK8_WHOLE_RASTER_RTL_CASES=72' out/p2b-local-plan-arm-336/JDK-ORACLE.log
+          echo 'P2B_LOCAL_PLAN_ARM_336_FONT_ORACLE=PASS' | tee out/p2b-local-plan-arm-336/FONT.txt
+
+      - name: Stage source-derived Java6 local planner and generate 336 local plans
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/p2b-local-planner
+          mkdir -p /tmp/p2b-local-planner
+          python3 tests/p2b/diagnostic/stage_jdk8_text_planner_audit.py \
+            /tmp/jdk8u /tmp/p2b-local-planner \
+            | tee out/p2b-local-plan-arm-336/PLANNER-STAGE.log
+          grep -Fq 'P2B_TEXT_PLANNER_STAGE=PASS' out/p2b-local-plan-arm-336/PLANNER-STAGE.log
+
+          mkdir -p /tmp/p2b-local-planner/src/org/recompile/rg35xx/p2b/jdk8/mark
+          python3 - /tmp/jdk8u/jdk/make/data/unicodedata/UnicodeData.txt \
+            /tmp/p2b-local-planner/src/org/recompile/rg35xx/p2b/jdk8/mark/Jdk8MarkClassifier.java <<'PY'
+          from pathlib import Path
+          import sys
+          src=Path(sys.argv[1]); dst=Path(sys.argv[2]); cats={'Mn','Mc','Me'}
+          marks=set(); pending=None
+          for raw in src.read_text(encoding='utf-8').splitlines():
+              if not raw or raw.startswith('#'): continue
+              f=raw.split(';'); cp=int(f[0],16); name=f[1]; cat=f[2]
+              if name.endswith(', First>'):
+                  pending=(cp,cat); continue
+              if name.endswith(', Last>'):
+                  if pending is None: raise SystemExit('LAST_WITHOUT_FIRST')
+                  st,pcat=pending
+                  if pcat!=cat: raise SystemExit('RANGE_CATEGORY_MISMATCH')
+                  if cat in cats: marks.update(range(st,cp+1))
+                  pending=None; continue
+              if pending is not None: raise SystemExit('UNTERMINATED_FIRST')
+              if cat in cats: marks.add(cp)
+          if pending is not None: raise SystemExit('UNTERMINATED_RANGE')
+          vals=sorted(marks); ranges=[]
+          if vals:
+              st=pr=vals[0]
+              for cp in vals[1:]:
+                  if cp==pr+1: pr=cp
+                  else: ranges.append((st,pr)); st=pr=cp
+              ranges.append((st,pr))
+          flat=[]
+          for a,b in ranges: flat.extend((a,b))
+          chunks=[]
+          for i in range(0,len(flat),12): chunks.append('        '+', '.join('0x%X'%x for x in flat[i:i+12]))
+          body='''package org.recompile.rg35xx.p2b.jdk8.mark;\npublic final class Jdk8MarkClassifier {\n    private static final int[] RANGES = new int[] {\n%s\n    };\n    private Jdk8MarkClassifier() { }\n    public static boolean isEngineMark(int cp) {\n        int lo=0, hi=(RANGES.length/2)-1;\n        while(lo<=hi){int mid=(lo+hi)>>>1;int st=RANGES[mid*2],en=RANGES[mid*2+1];if(cp<st)hi=mid-1;else if(cp>en)lo=mid+1;else return true;}\n        return false;\n    }\n}\n''' % (',\n'.join(chunks))
+          dst.write_text(body,encoding='utf-8')
+          print('P2B_LOCAL_PLAN_ARM_336_MARK_CODEPOINTS='+str(len(vals)))
+          print('P2B_LOCAL_PLAN_ARM_336_MARK_RANGES='+str(len(ranges)))
+          if len(vals)!=1645 or len(ranges)!=204: raise SystemExit('MARK_TABLE_IDENTITY_FAIL')
+          PY
+
+          mkdir -p /tmp/p2b-local-planner/diag
+          cp tests/p2b/diagnostic/RG35XXP2BLocalComponentPlanDiagnostic.java /tmp/p2b-local-planner/diag/
+          sed -i 's/org\.recompile\.rg35xx\.p2b\.jdk8\.script\.ScriptRun/org.recompile.rg35xx.p2b.jdk8.font.ScriptRun/' \
+            /tmp/p2b-local-planner/diag/RG35XXP2BLocalComponentPlanDiagnostic.java
+          cp tests/p2b/diagnostic/RG35XXP2BLocalWholePlanReplay.java /tmp/p2b-local-planner/diag/
+          CLASSES=/tmp/p2b-local-planner/classes
+          mkdir -p "$CLASSES/sun/text/resources"
+          cp /tmp/jdk8u/jdk/src/share/classes/sun/text/resources/ubidi.icu "$CLASSES/sun/text/resources/ubidi.icu"
+          find /tmp/p2b-local-planner/src -name '*.java' -print | sort > /tmp/p2b-local-planner/sources.list
+          printf '%s\n' \
+            /tmp/p2b-local-planner/diag/RG35XXP2BLocalComponentPlanDiagnostic.java \
+            /tmp/p2b-local-planner/diag/RG35XXP2BLocalWholePlanReplay.java \
+            >> /tmp/p2b-local-planner/sources.list
+          "$JAVA_HOME/bin/javac" -encoding UTF-8 -source 1.6 -target 1.6 \
+            -bootclasspath "$JAVA_HOME/jre/lib/rt.jar" -d "$CLASSES" @/tmp/p2b-local-planner/sources.list
+          python3 - "$CLASSES" <<'PY'
+          from pathlib import Path
+          import sys
+          root=Path(sys.argv[1]); bad=[]; majors=set(); count=0
+          for p in root.rglob('*.class'):
+              b=p.read_bytes(); m=int.from_bytes(b[6:8],'big'); majors.add(m); count+=1
+              if m>50: bad.append((str(p),m))
+          if bad: raise SystemExit('P2B_LOCAL_PLAN_ARM_336_JAVA6_FAIL '+repr(bad))
+          print('P2B_LOCAL_PLAN_ARM_336_CLASS_COUNT='+str(count))
+          print('P2B_LOCAL_PLAN_ARM_336_CLASS_MAJORS='+','.join(map(str,sorted(majors))))
+          print('P2B_LOCAL_PLAN_ARM_336_JAVA6_GATE=PASS')
+          PY
+          "$JAVA_HOME/bin/java" -cp "$CLASSES" RG35XXP2BLocalWholePlanReplay \
+            /tmp/P2B-JDK8-WHOLE-ORACLE.tsv /tmp/P2B-LOCAL-PLAN-WHOLE.tsv \
+            | tee out/p2b-local-plan-arm-336/LOCAL-PLAN.log
+          grep -Fq 'P2B_LOCAL_WHOLE_PLAN_CASES=336' out/p2b-local-plan-arm-336/LOCAL-PLAN.log
+          grep -Fq 'P2B_LOCAL_WHOLE_PLAN_COMPLEX_CASES=192' out/p2b-local-plan-arm-336/LOCAL-PLAN.log
+          grep -Fq 'P2B_LOCAL_WHOLE_PLAN_RTL_CASES=72' out/p2b-local-plan-arm-336/LOCAL-PLAN.log
+          grep -Fq 'P2B_LOCAL_WHOLE_PLAN_MISMATCH_COUNT=0' out/p2b-local-plan-arm-336/LOCAL-PLAN.log
+          grep -Fq 'P2B_LOCAL_WHOLE_PLAN_GENERATION=PASS' out/p2b-local-plan-arm-336/LOCAL-PLAN.log
+
+      - name: Cross-build exact JDK8u504 vendored FreeType
+        shell: bash
+        run: |
+          set -euo pipefail
+          FTROOT=/tmp/jdk8u/jdk/src/share/native/sun/awt/libfreetype
+          CC=/opt/miyoo/bin/arm-miyoo-linux-uclibcgnueabi-gcc
+          AR=/opt/miyoo/bin/arm-miyoo-linux-uclibcgnueabi-ar
+          OBJ=/tmp/p2b-local-plan-ft-obj
+          rm -rf "$OBJ" && mkdir -p "$OBJ"
+          count=0
+          while IFS= read -r src; do
+            rel=${src#"$FTROOT/src/"}
+            obj="$OBJ/${rel//\//_}.o"
+            "$CC" -Os -pipe -fPIC -march=armv5te -mtune=arm926ej-s -mfloat-abi=soft \
+              -DFT2_BUILD_LIBRARY -I"$FTROOT/include" -c "$src" -o "$obj"
+            count=$((count+1))
+          done < <(find "$FTROOT/src" -type f -name '*.c' -print | sort)
+          test "$count" = 106
+          "$AR" rcs /tmp/libp2b-local-plan-ft.a "$OBJ"/*.o
+          echo "P2B_LOCAL_PLAN_ARM_336_FT_OBJECTS=$count" | tee out/p2b-local-plan-arm-336/BUILD.txt
+          echo 'P2B_LOCAL_PLAN_ARM_336_FREETYPE_BUILD=PASS' | tee -a out/p2b-local-plan-arm-336/BUILD.txt
+
+      - name: Cross-build exact JDK8 LayoutEngine and both ARM probes
+        shell: bash
+        run: |
+          set -euo pipefail
+          CXX=/opt/miyoo/bin/arm-miyoo-linux-uclibcgnueabi-g++
+          AR=/opt/miyoo/bin/arm-miyoo-linux-uclibcgnueabi-ar
+          FONT=/tmp/jdk8u/jdk/src/share/native/sun/font
+          LAYOUT="$FONT/layout"
+          FTROOT=/tmp/jdk8u/jdk/src/share/native/sun/awt/libfreetype
+          OBJ=/tmp/p2b-local-plan-le-obj
+          rm -rf "$OBJ" && mkdir -p "$OBJ"
+          compiled=0; excluded=0
+          while IFS= read -r src; do
+            base=$(basename "$src")
+            if test "$base" = SunLayoutEngine.cpp; then excluded=$((excluded+1)); continue; fi
+            "$CXX" -O2 -pipe -fPIC -std=gnu++98 \
+              -march=armv5te -mtune=arm926ej-s -mfloat-abi=soft \
+              -DLE_STANDALONE -DHEADLESS -I"$FONT" -I"$LAYOUT" \
+              -c "$src" -o "$OBJ/${base%.cpp}.o"
+            compiled=$((compiled+1))
+          done < <(find "$LAYOUT" -maxdepth 1 -type f -name '*.cpp' -print | sort)
+          test "$compiled" = 87
+          test "$excluded" = 1
+          "$AR" rcs /tmp/libp2b-local-plan-le.a "$OBJ"/*.o
+          COMMON=( -O2 -pipe -std=gnu++98 -march=armv5te -mtune=arm926ej-s -mfloat-abi=soft -DLE_STANDALONE -DHEADLESS -I"$FONT" -I"$LAYOUT" -I"$FTROOT/include" )
+          "$CXX" "${COMMON[@]}" tests/p2b/diagnostic/p2b_jdk8_whole_raster_arm.cpp \
+            -Wl,--whole-archive /tmp/libp2b-local-plan-le.a -Wl,--no-whole-archive \
+            /tmp/libp2b-local-plan-ft.a -lm -o /tmp/p2b-local-plan-whole-arm
+          "$CXX" "${COMMON[@]}" tests/p2b/diagnostic/p2b_jdk8_complex_width_arm.cpp \
+            -Wl,--whole-archive /tmp/libp2b-local-plan-le.a -Wl,--no-whole-archive \
+            /tmp/libp2b-local-plan-ft.a -lm -o /tmp/p2b-local-plan-width-arm
+          file /tmp/p2b-local-plan-whole-arm | tee out/p2b-local-plan-arm-336/ELF-WHOLE.txt
+          file /tmp/p2b-local-plan-width-arm | tee out/p2b-local-plan-arm-336/ELF-WIDTH.txt
+          {
+            echo "P2B_LOCAL_PLAN_ARM_336_LAYOUT_OBJECTS=$compiled"
+            echo "P2B_LOCAL_PLAN_ARM_336_LAYOUT_JNI_WRAPPER_EXCLUDED=$excluded"
+            echo 'P2B_LOCAL_PLAN_ARM_336_PROBES_BUILD=PASS'
+          } | tee -a out/p2b-local-plan-arm-336/BUILD.txt
+
+      - name: Run local-plan ARM whole-raster differential
+        shell: bash
+        run: |
+          set -euo pipefail
+          SYSROOT=/opt/miyoo/arm-miyoo-linux-uclibcgnueabi/sysroot
+          qemu-arm -L "$SYSROOT" /tmp/p2b-local-plan-whole-arm \
+            /tmp/p2b-font.ttf /tmp/P2B-LOCAL-PLAN-WHOLE.tsv /tmp/P2B-LOCAL-PLAN-ARM-WHOLE.tsv \
+            | tee out/p2b-local-plan-arm-336/ARM-WHOLE.log
+          grep -Fq 'P2B_ARM_WHOLE_RASTER_CASES=336' out/p2b-local-plan-arm-336/ARM-WHOLE.log
+          grep -Fq 'P2B_ARM_WHOLE_RASTER_DIRECT_CASES=144' out/p2b-local-plan-arm-336/ARM-WHOLE.log
+          grep -Fq 'P2B_ARM_WHOLE_RASTER_COMPLEX_CASES=192' out/p2b-local-plan-arm-336/ARM-WHOLE.log
+          grep -Fq 'P2B_ARM_WHOLE_RASTER_RTL_CASES=72' out/p2b-local-plan-arm-336/ARM-WHOLE.log
+          python3 tests/p2b/diagnostic/compare_p2b_jdk8_whole_raster.py \
+            /tmp/P2B-JDK8-WHOLE-ORACLE.tsv /tmp/P2B-LOCAL-PLAN-ARM-WHOLE.tsv \
+            | tee out/p2b-local-plan-arm-336/WHOLE-DIFF.log
+          grep -Fq 'P2B_WHOLE_RASTER_META_EXACT=336' out/p2b-local-plan-arm-336/WHOLE-DIFF.log
+          grep -Fq 'P2B_WHOLE_RASTER_DIRECT_WIDTH_EXACT=144' out/p2b-local-plan-arm-336/WHOLE-DIFF.log
+          grep -Fq 'P2B_WHOLE_RASTER_ALL_EXACT=336' out/p2b-local-plan-arm-336/WHOLE-DIFF.log
+          grep -Fq 'P2B_WHOLE_RASTER_MISMATCH_COUNT=0' out/p2b-local-plan-arm-336/WHOLE-DIFF.log
+          grep -Fq 'P2B_WHOLE_RASTER_DIFF_RESULT=PASS' out/p2b-local-plan-arm-336/WHOLE-DIFF.log
+
+      - name: Run local-plan ARM complex-width differential
+        shell: bash
+        run: |
+          set -euo pipefail
+          SYSROOT=/opt/miyoo/arm-miyoo-linux-uclibcgnueabi/sysroot
+          qemu-arm -L "$SYSROOT" /tmp/p2b-local-plan-width-arm \
+            /tmp/p2b-font.ttf /tmp/P2B-LOCAL-PLAN-WHOLE.tsv /tmp/P2B-LOCAL-PLAN-ARM-WIDTH.tsv \
+            | tee out/p2b-local-plan-arm-336/ARM-WIDTH.log
+          grep -Fq 'P2B_ARM_COMPLEX_WIDTH_CASES=192' out/p2b-local-plan-arm-336/ARM-WIDTH.log
+          grep -Fq 'P2B_ARM_COMPLEX_WIDTH_RTL_CASES=72' out/p2b-local-plan-arm-336/ARM-WIDTH.log
+          python3 tests/p2b/diagnostic/compare_p2b_jdk8_complex_width.py \
+            /tmp/P2B-JDK8-WHOLE-ORACLE.tsv /tmp/P2B-LOCAL-PLAN-ARM-WIDTH.tsv \
+            | tee out/p2b-local-plan-arm-336/WIDTH-DIFF.log
+          grep -Fq 'P2B_COMPLEX_WIDTH_META_EXACT=192' out/p2b-local-plan-arm-336/WIDTH-DIFF.log
+          grep -Fq 'P2B_COMPLEX_WIDTH_WIDTH_EXACT=192' out/p2b-local-plan-arm-336/WIDTH-DIFF.log
+          grep -Fq 'P2B_COMPLEX_WIDTH_MISMATCH_COUNT=0' out/p2b-local-plan-arm-336/WIDTH-DIFF.log
+          grep -Fq 'P2B_COMPLEX_WIDTH_DIFF_RESULT=PASS' out/p2b-local-plan-arm-336/WIDTH-DIFF.log
+          cat > out/p2b-local-plan-arm-336/STATUS.txt <<'EOF'
+          P2B_PLANNER_EXISTING_336_PLAN_SOURCE=LOCAL_SOURCE_DERIVED_JDK8
+          P2B_PLANNER_EXISTING_336_RASTER=PASS_336
+          P2B_PLANNER_EXISTING_336_DIRECT_WIDTH=PASS_144
+          P2B_PLANNER_EXISTING_336_COMPLEX_WIDTH=PASS_192
+          P2B_PLANNER_EXISTING_336_TOTAL_WIDTH=PASS_336
+          P2B_PLANNER_EXISTING_336_RTL=PASS_72
+          P2B_JDK8_PLANNER_EXISTING_336_REGRESSION=PASS
+          P2B_COMBINED_LOCAL_PLANNER_ARM_BACKEND_336=PASS
+          P2B_PROTECTED_JAMVM_GLIBJ_EXECUTION_COMPATIBILITY=NOT_YET_PROVEN
+          P2B_RUNTIME_PATCH=FORBIDDEN
+          P2B_RUNTIME_CANDIDATE_BRANCH=DO_NOT_CREATE
+          P2B_DEVICE_PACKAGE=FORBIDDEN
+          DEVICE_TEST=NOT_REQUESTED
+          STABLE=NO
+          EOF
+          cat out/p2b-local-plan-arm-336/STATUS.txt
+
+      - name: Cleanup generated sources font binaries objects and enforce evidence-only artifact
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/jdk8u /tmp/p2b-jdk-oracle-classes /tmp/p2b-local-planner
+          rm -rf /tmp/p2b-local-plan-ft-obj /tmp/p2b-local-plan-le-obj
+          rm -f /tmp/p2b-font.ttf /tmp/miyoomini-freej2me.zip
+          rm -f /tmp/P2B-JDK8-WHOLE-ORACLE.tsv /tmp/P2B-LOCAL-PLAN-WHOLE.tsv
+          rm -f /tmp/P2B-LOCAL-PLAN-ARM-WHOLE.tsv /tmp/P2B-LOCAL-PLAN-ARM-WIDTH.tsv
+          rm -f /tmp/libp2b-local-plan-ft.a /tmp/libp2b-local-plan-le.a
+          rm -f /tmp/p2b-local-plan-whole-arm /tmp/p2b-local-plan-width-arm
+          if find out/p2b-local-plan-arm-336 -type f | grep -Ei '\.(class|java|ttf|otf|jar|zip|so|a|o|icu|tsv|tar|gz)$'; then
+            echo 'P2B_LOCAL_PLAN_ARM_336_EVIDENCE_LEAK=FAIL'
+            exit 1
+          fi
+          echo 'P2B_LOCAL_PLAN_ARM_336_EVIDENCE_LEAK=NO' | tee out/p2b-local-plan-arm-336/CLEANUP.txt
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: RG35XX-P2B-LOCAL-PLAN-ARM-BACKEND-336-${{ github.sha }}
+          path: out/p2b-local-plan-arm-336/
+          if-no-files-found: error
