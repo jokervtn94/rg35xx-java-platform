@@ -1,182 +1,194 @@
-# FreeJ2ME for Original RG35XX — Aweigit Canonical Port
+# FreeJ2ME for Original RG35XX — Miyoo/Aweigit Platform Port
 
-This repository ports the proven `aweigit/freej2me-miyoomini` FreeJ2ME implementation to the **original Anbernic RG35XX / GarlicOS-class environment** while preserving device-proven RG35XX hardware/runtime contracts.
+This repository ports the proven `aweigit/freej2me-miyoomini` FreeJ2ME implementation to the **original Anbernic RG35XX / GarlicOS-class environment** while preserving the accepted RG35XX hardware/runtime contracts and the pinned Miyoo/Aweigit J2ME behavior.
 
-## Current accepted baseline
-
-The branch `rg35xx-aweigit-r1-stable` is now the **A8 production reference baseline** for future RG35XX development.
+The project follows a strict **Miyoo-first, platform-first** reconstruction process:
 
 ```text
-BASELINE=A8
-BRANCH=rg35xx-aweigit-r1-stable
-A8_CI_COMMIT=80113f50e5db59e372f02722e3ff362263490b2c
-A8_DEVICE_ACCEPTANCE=PASS
-STATUS=DEVICE-PASS
+MIYOO BUILD FIRST
+        ↓
+FREEJ2ME / CANONICAL SOURCE FOR SEMANTIC REFERENCE
+        ↓
+RG35XX BOUNDARY ONLY WHERE REQUIRED
+        ↓
+MODULE DIFFERENTIAL / REGRESSION GATES
+        ↓
+ORIGINAL RG35XX PHYSICAL ACCEPTANCE
 ```
 
-The A8 baseline is the accepted A7+A1P5 runtime boundary consolidated into the production launcher/package path. The original RG35XX device test confirmed the selected parent regression scope with Vua Cướp Biển and God of War.
+## Official repository baseline
 
-This does **not** claim universal compatibility with every J2ME game, codec or optional API.
-
-## What A8 achieved
-
-A8 is a **packaging/launcher consolidation**, not a runtime-semantic rewrite.
-
-It preserves:
-
-- canonical Aweigit J2ME implementation
-- protected JamVM/glibj
-- accepted A6 graphics/input/PERF-A1/ClipTranslate behavior
-- A7 Java 6 media compatibility
-- SDL1_mixer native audio backend
-- accepted A1P5 cold-start audio-route prime
-- accepted runtime/native identity hashes
-
-The production launcher accepts the selected external JAR as argument 1 and performs the established identity/audio gates before launching the game.
-
-Production layout:
+As of **2026-10-03**, the official accepted runtime lineage in this repository is the physically accepted **P2A Image Decode** checkpoint:
 
 ```text
-Roms/APPS/RG35XX-AWEIGIT-R1.sh
-Roms/APPS/RG35XX-AWEIGIT-R1/
-  freej2me-rg35xx.jar
-  librg35xx_input.so
-  librg35xx_video.so
-  libaudio.so
-  a7-a1p5-rw-silence-prime.s32le
-  data/
+OFFICIAL_REPOSITORY_BASELINE=P2A_IMAGE_DECODE_ACCEPTED
+OFFICIAL_ACCEPTED_RUNTIME_COMMIT=5a8bfdf12d42e49d5d4aa8260601799c904e6441
+CANONICAL_AWEIGIT_PIN=ca11dfe8ea1cc273d92460f9a83bbf192023fa63
+P1A_GRAPHICS_MODULE_PHYSICAL_ACCEPTANCE=PASS
+P2A_IMAGE_DECODE_MODULE_PHYSICAL_ACCEPTANCE=PASS
+CURRENT_PHASE=P2
+CURRENT_MODULE=P2B_FONT_TEXT
+RG35XX_PLATFORM_BASELINE_DEVICE_PASS=NO
+STABLE=NO
 ```
 
-Commercial game JARs remain external test inputs and are not part of the production runtime package.
+`main` is the official repository/tracking branch for accepted work. **Official does not mean full-platform stable.** The locked phase order requires P0–P7 to pass before P8 baseline promotion may set `RG35XX_PLATFORM_BASELINE_DEVICE_PASS=YES`.
 
-## Real-device acceptance
+The exact accepted P2A device record is in:
 
-A8 passed the required original-RG35XX acceptance scope.
+- `docs/P2A-IMAGE-DECODE-PHYSICAL-ACCEPTANCE-20261003.md`
 
-### Automated / CI
+The accepted P1A graphics record is in:
 
-- A8 production package: PASS
-- package manifest verification: PASS
-- runtime identity verification: PASS
-- protected JamVM/glibj: PASS
-- A1P5 zero-PCM pre-Java prime: PASS
-- Vua Cướp Biển regression: PASS
-- God of War regression: PASS
-- PERF-A1/runtime execution: PASS
-- normal exit: PASS
+- `docs/P1A-GRAPHICS-PHYSICAL-ACCEPTANCE-20261002.md`
 
-### Physical RG35XX confirmation
+## Current progress
 
-The operator confirmed:
+| Phase / module | Status | Accepted scope / next requirement |
+|---|---|---|
+| P0 — Exact Golden authority | `PASS` | Accepted A8/Golden identities and physical evidence retained as authority. A9 is not a production parent. |
+| P1 / P1A — Core 2D Graphics | `PASS` | Host/module gates and one original-RG35XX graphics module physical acceptance completed. |
+| P2A — Image Decode | `PASS` | 150 fixtures × 3 public frontends = 450/450 device decode cases PASS; protected hashes preserved. |
+| P2B — Font/Text | `NOT_TESTED` runtime | Audit/design prerequisites are closed; owner-scoped runtime candidate R1 is the next engineering unit. No P2B physical acceptance yet. |
+| Remaining P2 frontend/input/resolution contract | `NOT_TESTED` | Must be completed at the appropriate module boundary after P2B. |
+| P3 — Runtime service modules | `NOT_TESTED` | Platform-first module acceptance still required even though historical Golden behavior remains protected evidence. |
+| P4 — Deferred capabilities | `NOT_TESTED` | M3G/Mascot/LWJGL/OpenGL require explicit capability decisions; no blind re-enable. |
+| P5 — Generic installer/platform | `NOT_TESTED` | One generic FreeJ2ME-RG35XX installer/launcher, no game-name runtime logic. |
+| P6 — Full platform exerciser | `NOT_TESTED` | Full declared platform contract suite. |
+| P7 — Tier-0 physical regression | `NOT_TESTED` | Vua Cướp Biển + God of War, including protected audible GoW audio expectation. |
+| P8 — Baseline promotion | `NOT_TESTED` | Only after P0–P7 pass. |
+| P9 — Compatibility updates | `NOT_TESTED` | Not authorized before P8. |
 
-- Vua Cướp Biển displays correctly.
-- Vua Cướp Biển controls work.
-- Vua Cướp Biển gameplay is normal.
-- Vua Cướp Biển does not hang.
-- God of War displays correctly.
-- God of War controls work.
-- God of War gameplay is normal.
-- God of War does not hang.
-- God of War audio is audible and normal.
+For the exact handoff state and per-stage history, read **`TASKLOG.md` first**.
 
-Therefore:
+## Current P2B Font/Text work
+
+P2B is currently beyond the initial audit stage but has **not** been accepted as runtime code.
+
+Current trace points:
 
 ```text
-A8_BUILD=PASS
-A8_DEVICE=PASS
-A8_PRODUCTION_BASELINE=YES
-FULL_PLATFORM_STABLE=NO
+P2B_AUDIT_BRANCH=audit/p2b-font-text-post-layout-r2
+P2B_AUDIT_HEAD=8d3dc24f847380c699e18b6efd4bd9183884ac2c
+P2B_CANDIDATE_BRANCH=module/p2b-font-text-candidate-r1
+P2B_CANDIDATE_HEAD=3fad06899232b7307fc6249f1a4dfe35c830ec3b
+P2B_CANDIDATE_PARENT=5a8bfdf12d42e49d5d4aa8260601799c904e6441
+P2B_RUNTIME_CANDIDATE=NOT_TESTED
+P2B_PHYSICAL_TEST=NOT_TESTED
 ```
 
-## Milestones
+Audit evidence has already established, for the declared scopes:
 
-### A4 — Smoke
-Established the basic original-RG35XX execution chain: runtime boot, LCD presentation, physical input and normal exit.
+- exact JDK8u504-compatible ARM `charWidth` / `canDisplay` behavior for all 196,608 BMP code-unit cases;
+- simple-string metric behavior;
+- simple `drawString` source path and the existing 144-case raster corpus;
+- JDK8 bundled LayoutEngine behavior for the existing 192-case non-simple corpus;
+- the minimum RG35XX owner-scoped interface/file boundary;
+- the exact MiSans runtime asset identity and an embedded-software provisioning contract with attribution/license requirements.
 
-### A5 — Core integration
-Integrated the canonical Aweigit J2ME implementation with the RG35XX adapter and exercised the core graphics/game-layer functionality required for the production path.
+These audit results authorize the **next candidate engineering unit**; they do not constitute runtime/module/device acceptance.
 
-### A6 — Real-game regression
-Reached DEVICE-PASS for the selected parent corpus and established the graphics/input/PERF-A1/ClipTranslate baseline.
+## Accepted RG35XX runtime contracts
 
-### A7 — Audio / Media
-Established the RG35XX-native SDL1_mixer path, Java 6 media compatibility and the accepted cold-start audio-route prime. WAV and MIDI parent regression passed.
+The port preserves the pinned Miyoo/Aweigit implementation and applies the smallest RG35XX boundary changes required by evidence. Protected or accepted owners include, within their tested scopes:
 
-### A8 — Production Consolidation
-Converted the accepted A7+A1P5 device-proven boundary into the production launcher/package layout without changing accepted runtime semantics. CI passed and the consolidated build passed physical RG35XX testing.
+- canonical Aweigit J2ME source pin;
+- protected JamVM/glibj runtime;
+- original RG35XX SDL1/fbcon presentation path;
+- accepted Raw2D/Core2D graphics behavior;
+- input mapping/lifecycle boundary;
+- PERF-A1 presenter behavior;
+- PNG/alpha/drawRegion and P2A image-decode behavior;
+- Java 6 media compatibility path;
+- SDL1_mixer audio backend and accepted audio-route prime.
 
-Detailed A8 notes and preserved A1P5 references are in `packaging/a8/README.md` and `packaging/a8/reference/`.
+Protected runtime identities include:
 
-## Protected components
+```text
+JAMVM_SHA256=eea1b97cebfaca67b69ed365e966d80cdac22d8ff245c7a556137cfb2898ea34
+GLIBJ_SHA256=d7abe888d2980329434c30f18c0eec124be1f02284bf9ed28e88d7242a1f2bea
+INPUT_NATIVE_SHA256=69a8aeb3940bfbc234f3a562a7ae4bcaea10b50f8a8f2c38ad229a5430930f6d
+VIDEO_NATIVE_SHA256=c6687c0a43b24b425af0727c928afb5414da811ecbcbbe3538928470abe8bd0d
+AUDIO_NATIVE_SHA256=4522157846c33c150a85c50b4bed6f68351f1c62d54b8cd7805cbb97c5727644
+```
 
-The following remain locked unless a new reproducible parent integration/regression failure directly identifies them as the owner:
+Do not reopen a protected subsystem merely because a new game fails. Reproduce the failure, compare with the pinned Miyoo/canonical behavior, identify the RG35XX boundary owner, and apply only the smallest evidence-driven delta.
 
-- canonical Aweigit pin
-- protected JamVM/glibj runtime
-- A6 graphics/rendering chain
-- input mapping/lifecycle
-- PERF-A1 presenter
-- PNG/alpha/drawRegion
-- ClipTranslate
-- A7 Java 6 media compatibility path
-- SDL1_mixer backend
-- accepted RG35XX audio-route prime
+## Historical A8 / A9 interpretation
 
-Do not reopen a protected subsystem merely because a new game fails. First reproduce the failure, compare against canonical Aweigit behavior, identify the RG35XX boundary and make the smallest evidence-driven adapter change.
+The earlier A8 runtime remains important **Golden authority and protected physical evidence**. It is not discarded.
 
-## Development rules
+However, the current project has moved to the locked platform-first reconstruction sequence. Therefore:
 
-Development is **integration-first**. A successful build is not a device pass. Only evidence from an original RG35XX can promote a candidate to DEVICE-PASS.
+```text
+A8_GOLDEN_EVIDENCE=PRESERVED
+A9_PARENT=NO
+GAME_SPECIFIC_PRODUCTION_PATCH=NO
+NEW_TIER1_FIX_BEFORE_P8=NO
+```
+
+A9 experiments remain diagnostic/history only and must not become a new production parent.
+
+## Development and acceptance rules
+
+A successful build or CI run is not a device pass. Physical claims require evidence from an **original RG35XX** at the defined module/platform gate.
 
 Required workflow:
 
 ```text
-canonical behavior
--> RG35XX device contract
--> integration evidence
--> failure owner
--> smallest adapter delta
--> parent integration/regression test
--> physical RG35XX acceptance
--> stable promotion
+pinned Miyoo behavior
+-> canonical/JDK semantic reference where required
+-> original RG35XX hardware contract
+-> exact missing contract / failure owner
+-> smallest owner-scoped adapter delta
+-> host differential + parent regression
+-> one module integration gate
+-> original-RG35XX physical module acceptance
+-> later full-platform promotion only after P0-P7
 ```
 
-Micro-tests are diagnostic tools only after a parent integration or real-game regression exposes a reproducible failure. Do not resume historical DP/VC/Golden patch chains as production development; those builds remain evidence/reference only.
+Commercial game JARs remain external test inputs and are never bundled into production runtime logic or used as game-name-specific switches.
 
-## Runtime protection
+## Collaboration with ChatGPT
 
-```text
-JamVM SHA256:
-eea1b97cebfaca67b69ed365e966d80cdac22d8ff245c7a556137cfb2898ea34
+This port is being completed by the repository owner/operator **in collaboration with ChatGPT by OpenAI as an engineering assistant**.
 
-glibj SHA256:
-d7abe888d2980329434c30f18c0eec124be1f02284bf9ed28e88d7242a1f2bea
-```
+ChatGPT is used to help with:
 
-Do not replace these components merely to simplify development or compilation.
+- source and ancestry audits;
+- canonical/Miyoo/OpenJDK contract tracing;
+- differential-test and module-gate design;
+- evidence review and failure-owner classification;
+- GitHub integration/documentation;
+- checkpoint and tasklog maintenance for continuity across chats.
+
+The human operator remains the authority for project decisions and performs/confirms physical-device observations on the original RG35XX. ChatGPT assistance does **not** replace the required physical acceptance gates.
+
+## New-chat handoff
+
+Before continuing this project in a new chat:
+
+1. Read `TASKLOG.md`.
+2. Read `docs/ACCEPTED-BASELINE.md`.
+3. Apply the four locked project rule documents supplied with the project.
+4. Verify the exact accepted parent before changing runtime code.
+5. Continue only the `NEXT_LEGAL_ACTION` recorded in `TASKLOG.md` unless the user explicitly changes the plan.
+6. Never use A9 or a game-specific experimental branch as a production parent.
 
 ## Canonical source
 
 ```text
 Repository: aweigit/freej2me-miyoomini
 Pinned commit: ca11dfe8ea1cc273d92460f9a83bbf192023fa63
-Role: CANONICAL_J2ME_IMPLEMENTATION
+Role: CANONICAL_MIYOO_J2ME_IMPLEMENTATION
 ```
 
 Do not automatically follow newer upstream commits without an explicit audit/migration decision.
 
 ## Status vocabulary
 
-- `BUILD-PASS` — compilation/package gates passed; no hardware claim.
-- `DEVICE-PASS` — tested successfully on original RG35XX within the stated scope.
-- `ACCEPTED` — retained as the reference implementation for that tested scope.
-- `STABLE` — the branch used as the production development baseline.
-- `FAIL` — includes hang or hard reset during the tested scenario.
+Project status records use the locked vocabulary:
 
-## Current direction
+`PASS`, `FAIL`, `PARTIAL`, `NOT_TESTED`, `NEEDS_REPRO`, `REJECTED`, `ARCHIVED_DIAGNOSTIC`.
 
-**A8 is now the production reference baseline.**
-
-Future work should branch from `rg35xx-aweigit-r1-stable`, preserve accepted identities/contracts, and add compatibility only through evidence-driven real-game regression.
-
-The project intentionally does **not** claim `FULL_PLATFORM_STABLE` yet. Networking, SMS/payment, 3D/M3G/Mascot and untested MMAPI formats remain outside the currently accepted scope.
+Any use of “stable” or “device pass” must identify its exact scope.
