@@ -8,6 +8,7 @@ on:
       - '.github/workflows/p2a-image-decode-candidate.yml'
       - 'scripts/stage-p2a-image-decode.py'
       - 'scripts/build-p2a-image-decode-candidate.sh'
+      - 'scripts/build-p2a-image-decode-candidate-v2.sh'
       - 'tests/p2a/RG35XXP2AImageDecodeDifferentialGate.java'
   workflow_dispatch:
 
@@ -39,7 +40,7 @@ jobs:
           git merge-base --is-ancestor "$PARENT" HEAD
           [ "$(git merge-base "$PARENT" HEAD)" = "$PARENT" ]
           changed="$(git diff --name-only "$PARENT"..HEAD | LC_ALL=C sort)"
-          expected=$'.github/workflows/p2a-image-decode-candidate.yml\nscripts/build-p2a-image-decode-candidate.sh\nscripts/stage-p2a-image-decode.py\ntests/p2a/RG35XXP2AImageDecodeDifferentialGate.java'
+          expected=$'.github/workflows/p2a-image-decode-candidate.yml\nscripts/build-p2a-image-decode-candidate-v2.sh\nscripts/build-p2a-image-decode-candidate.sh\nscripts/stage-p2a-image-decode.py\ntests/p2a/RG35XXP2AImageDecodeDifferentialGate.java'
           [ "$changed" = "$expected" ] || { echo "P2A_IMAGE_BRANCH_SCOPE_FAIL=$changed" >&2; exit 1; }
           ! git diff --name-only "$PARENT"..HEAD | grep -E '^(adapter/|native/|upstream/)'
           if git log --format=%H "$PARENT"..HEAD | grep -Eq '82d166c2ff2c5832c794c3064274dff67b4a32ae|f83507c7b48f4fdb90199d0c4784c516e4c88ac5'; then
@@ -79,8 +80,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          chmod +x scripts/build-p2a-image-decode-candidate.sh scripts/stage-p2a-image-decode.py
-          JAVA8="$JAVA_HOME" bash scripts/build-p2a-image-decode-candidate.sh | tee /tmp/p2a-image.log
+          chmod +x scripts/build-p2a-image-decode-candidate.sh scripts/build-p2a-image-decode-candidate-v2.sh scripts/stage-p2a-image-decode.py
+          JAVA8="$JAVA_HOME" bash scripts/build-p2a-image-decode-candidate-v2.sh | tee /tmp/p2a-image.log
           grep -q '^P2A_IMAGE_BUILD=PASS$' /tmp/p2a-image.log
           grep -q '^P2A_IMAGE_HOST_MODULE_GATE=PASS$' /tmp/p2a-image.log
           ID=out/p2a-image-decode-candidate/P2A-IMAGE-DECODE-IDENTITY.txt
