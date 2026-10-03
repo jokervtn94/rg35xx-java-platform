@@ -7,26 +7,39 @@ fail(){ echo "P2B_EXERCISER_BUILD_FAIL=$*" >&2; exit 1; }
 JAVA8="${JAVA8:-${JAVA_HOME:-}}"
 [ -n "$JAVA8" ] || fail "JAVA8/JAVA_HOME not set"
 for t in javac java jar; do [ -x "$JAVA8/bin/$t" ] || fail "$t missing"; done
+for t in curl unzip sha256sum; do command -v "$t" >/dev/null 2>&1 || fail "$t missing"; done
 
 OUT="$ROOT/out/p2b-font-text-candidate-r1"
 PLATFORM="$OUT/freej2me-rg35xx.jar"
-FONT="$ROOT/build/a3/p2b-font-text-r1/font.ttf"
 SRC="$ROOT/tests/p2b/exerciser/RG35XXP2BFontTextExerciser.java"
 BUILD="$ROOT/build/p2b-font-text-exerciser"
 RES="$BUILD/resources"
 EXPECTED="$RES/p2b/expected.tsv"
 JAROUT="$OUT/RG35XX-Platform-Exerciser-P2B-FontText.jar"
 IDENTITY="$OUT/P2B-FONT-TEXT-EXERCISER-IDENTITY.txt"
+FONT_URL="https://github.com/aweigit/freej2me-miyoomini/releases/download/2.0/miyoomini-freej2me.zip"
+FONT_ZIP="$BUILD/miyoomini-freej2me.zip"
+FONT="$BUILD/font.ttf"
 FONT_SHA=1a5f4112daaa9473747c6834041646cc9b2c338cb40ab5dbb2f0161f8968ca10
 FONT_SIZE=8092724
 
 [ -f "$PLATFORM" ] || fail "P2B candidate platform jar missing"
-[ -f "$FONT" ] || fail "exact staged font missing"
 [ -f "$SRC" ] || fail "exerciser source missing"
-[ "$(sha256sum "$FONT" | awk '{print $1}')" = "$FONT_SHA" ] || fail "font sha"
-[ "$(wc -c < "$FONT" | tr -d ' ')" = "$FONT_SIZE" ] || fail "font size"
 rm -rf "$BUILD"
 mkdir -p "$BUILD/classes" "$BUILD/host" "$RES/p2b"
+
+# Candidate R1 deliberately removes its temporary font material after its own
+# gates. The independent physical exerciser therefore materializes the exact
+# locked Miyoo release asset in its own ephemeral build directory instead of
+# depending on candidate-build leftovers.
+curl -fL --retry 3 --retry-delay 2 "$FONT_URL" -o "$FONT_ZIP"
+ENTRY="$(unzip -Z1 "$FONT_ZIP" | grep -E '(^|/)JAVA/font\.ttf$|(^|/)font\.ttf$')"
+[ "$(printf '%s\n' "$ENTRY" | sed '/^$/d' | wc -l | tr -d ' ')" = 1 ] || fail "font entry ambiguity: $ENTRY"
+unzip -p "$FONT_ZIP" "$ENTRY" > "$FONT"
+[ "$(sha256sum "$FONT" | awk '{print $1}')" = "$FONT_SHA" ] || fail "font sha"
+[ "$(wc -c < "$FONT" | tr -d ' ')" = "$FONT_SIZE" ] || fail "font size"
+echo "P2B_EXERCISER_FONT_ENTRY=$ENTRY"
+echo P2B_EXERCISER_FONT_ASSET_IDENTITY=PASS
 
 cat > "$BUILD/P2BExpectedGenerator.java" <<'JAVA'
 import java.awt.Color;
@@ -118,6 +131,13 @@ JAVA
 EXPECTED_SHA="$(sha256sum "$EXPECTED" | awk '{print $1}')"
 echo P2B_EXERCISER_EXPECTED_TABLE_SHA256="$EXPECTED_SHA"
 
+# Font bytes are required only to derive the host-side expected table. Remove
+# them immediately; the physical package builder independently provisions the
+# same hash-locked asset together with its license/NOTICE contract.
+rm -f "$FONT" "$FONT_ZIP"
+[ ! -e "$FONT" ] && [ ! -e "$FONT_ZIP" ] || fail "ephemeral font cleanup"
+echo P2B_EXERCISER_FONT_EPHEMERAL_CLEANUP=PASS
+
 "$JAVA8/bin/javac" -encoding UTF-8 -source 1.6 -target 1.6 \
   -bootclasspath "$JAVA8/jre/lib/rt.jar" -classpath "$PLATFORM" \
   -d "$BUILD/classes" "$SRC"
@@ -174,8 +194,11 @@ MODULE=P2B_FONT_TEXT
 ARTIFACT=RG35XX-Platform-Exerciser-P2B-FontText.jar
 SOURCE=tests/p2b/exerciser/RG35XXP2BFontTextExerciser.java
 CANONICAL_EXPECTED_SOURCE=PINNED_JDK8_AWT
+FONT_RELEASE_URL=$FONT_URL
+EXPECTED_FONT_ENTRY=JAVA/font.ttf
 EXPECTED_FONT_SHA256=$FONT_SHA
 EXPECTED_FONT_SIZE=$FONT_SIZE
+FONT_EPHEMERAL_BUILD_ONLY=YES
 EXPECTED_TABLE_SHA256=$EXPECTED_SHA
 METRIC_AND_RASTER_CASE_COUNT=360
 SIZE_SET=SMALL,MEDIUM,LARGE
