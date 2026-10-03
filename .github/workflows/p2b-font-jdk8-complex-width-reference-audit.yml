@@ -19,12 +19,18 @@ jobs:
       BASE: 77a36526e0f6d875c57c7e9a973e0c1a05573721
       EXPECTED_FONT_SHA256: 1a5f4112daaa9473747c6834041646cc9b2c338cb40ab5dbb2f0161f8968ca10
       EXPECTED_FONT_SIZE: '8092724'
+      JDK8U_TAG: jdk8u504-b01
+      JDK8U_COMMIT: 4efe36434f44bafb854e602ccbbe1b5696fce1a2
+      FONT_BLOB: 68a5728a10760a0511b157e86a791b19cdf1e3d9
+      FONT2D_BLOB: e6eef8b68726e4709156ae287e2e0171426462be
+      FDM_BLOB: d843c16cd5f598624567e648a83d7f2d14759ca9
+      TEXTLINE_BLOB: 9efcdc32de2f3f75f73669e7468f9ec8787e8cdf
+      COREMETRICS_BLOB: a27ded2da47cea92f7a3e9df8067a672801b180f
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: recursive
-
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -46,11 +52,40 @@ jobs:
           echo 'P2B_COMPLEX_WIDTH_REFERENCE_SCOPE=PASS'
           echo 'P2B_RUNTIME_DELTA=NONE'
 
-      - name: Materialize exact Miyoo MiSans for diagnostics
+      - name: Pin exact JDK8 complex-width sources
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p out
+          rm -rf /tmp/jdk8u
+          git clone --filter=blob:none --no-checkout https://github.com/adoptium/jdk8u.git /tmp/jdk8u
+          git -C /tmp/jdk8u fetch --depth 1 origin tag "$JDK8U_TAG"
+          git -C /tmp/jdk8u checkout --detach "$JDK8U_TAG"
+          test "$(git -C /tmp/jdk8u rev-parse HEAD)" = "$JDK8U_COMMIT"
+          test "$(git -C /tmp/jdk8u rev-parse HEAD:jdk/src/share/classes/java/awt/Font.java)" = "$FONT_BLOB"
+          test "$(git -C /tmp/jdk8u rev-parse HEAD:jdk/src/share/classes/sun/font/Font2D.java)" = "$FONT2D_BLOB"
+          test "$(git -C /tmp/jdk8u rev-parse HEAD:jdk/src/share/classes/sun/font/FontDesignMetrics.java)" = "$FDM_BLOB"
+          test "$(git -C /tmp/jdk8u rev-parse HEAD:jdk/src/share/classes/java/awt/font/TextLine.java)" = "$TEXTLINE_BLOB"
+          test "$(git -C /tmp/jdk8u rev-parse HEAD:jdk/src/share/classes/sun/font/CoreMetrics.java)" = "$COREMETRICS_BLOB"
+          grep -F 'width = new TextLayout(str, font, frc).getAdvance();' /tmp/jdk8u/jdk/src/share/classes/sun/font/FontDesignMetrics.java
+          grep -F 'return (int) (0.5 + width);' /tmp/jdk8u/jdk/src/share/classes/sun/font/FontDesignMetrics.java
+          grep -F 'return getFont2D().getItalicAngle(this, identityTx, aa, fm);' /tmp/jdk8u/jdk/src/share/classes/java/awt/Font.java
+          grep -F 'x += d;' /tmp/jdk8u/jdk/src/share/classes/java/awt/font/TextLine.java
+          grep -F 'advance = x;' /tmp/jdk8u/jdk/src/share/classes/java/awt/font/TextLine.java
+          {
+            echo "P2B_JDK8U_COMMIT=$JDK8U_COMMIT"
+            echo "P2B_FONT_BLOB=$FONT_BLOB"
+            echo "P2B_FONT2D_BLOB=$FONT2D_BLOB"
+            echo "P2B_FDM_BLOB=$FDM_BLOB"
+            echo "P2B_TEXTLINE_BLOB=$TEXTLINE_BLOB"
+            echo "P2B_COREMETRICS_BLOB=$COREMETRICS_BLOB"
+            echo 'P2B_COMPLEX_WIDTH_REFERENCE_SOURCE_PROVENANCE=PASS'
+          } | tee out/P2B-COMPLEX-WIDTH-REFERENCE-PROVENANCE.txt
+
+      - name: Materialize exact Miyoo MiSans for diagnostics
+        shell: bash
+        run: |
+          set -euo pipefail
           URL='https://github.com/aweigit/freej2me-miyoomini/releases/download/2.0/miyoomini-freej2me.zip'
           curl -fL --retry 3 --retry-delay 2 "$URL" -o /tmp/miyoomini-freej2me.zip
           ENTRY=$(unzip -Z1 /tmp/miyoomini-freej2me.zip | grep -Ei '(^|/)font\.ttf$')
@@ -77,18 +112,19 @@ jobs:
             grep '^P2B_JDK8_COMPLEX_WIDTH_CASES=' out/P2B-JDK8-COMPLEX-WIDTH-REFERENCE.log
             grep '^P2B_JDK8_COMPLEX_WIDTH_PADDED_CASES=' out/P2B-JDK8-COMPLEX-WIDTH-REFERENCE.log
             grep '^P2B_JDK8_COMPLEX_WIDTH_COMPONENT_ADV_EXACT_CASES=' out/P2B-JDK8-COMPLEX-WIDTH-REFERENCE.log
+            grep '^P2B_JDK8_COMPLEX_WIDTH_GV_END_EXACT_CASES=' out/P2B-JDK8-COMPLEX-WIDTH-REFERENCE.log
             grep '^P2B_JDK8_COMPLEX_WIDTH_ROUNDING_EXACT_CASES=' out/P2B-JDK8-COMPLEX-WIDTH-REFERENCE.log
             echo 'P2B_RUNTIME_PATCH=FORBIDDEN'
             echo 'DEVICE_TEST=NOT_REQUESTED'
             echo 'STABLE=NO'
           } | tee out/P2B-COMPLEX-WIDTH-REFERENCE-STATUS.txt
 
-      - name: Remove font and classes before evidence upload
+      - name: Remove font source and classes before evidence upload
         if: always()
         shell: bash
         run: |
           set -euo pipefail
-          rm -rf /tmp/p2b-complex-width-classes
+          rm -rf /tmp/jdk8u /tmp/p2b-complex-width-classes
           rm -f /tmp/p2b-font.ttf /tmp/miyoomini-freej2me.zip
           if find out -type f | grep -Ei '\.(ttf|otf|class|jar|so|a|o)$'; then
             echo 'P2B_COMPLEX_WIDTH_REFERENCE_BYTE_LEAK=FAIL'; exit 1
@@ -100,6 +136,7 @@ jobs:
         with:
           name: RG35XX-P2B-JDK8-COMPLEX-WIDTH-REFERENCE-${{ github.sha }}
           path: |
+            out/P2B-COMPLEX-WIDTH-REFERENCE-PROVENANCE.txt
             out/P2B-COMPLEX-WIDTH-REFERENCE-FONT-IDENTITY.txt
             out/P2B-JDK8-COMPLEX-WIDTH-REFERENCE.log
             out/P2B-COMPLEX-WIDTH-REFERENCE-STATUS.txt
