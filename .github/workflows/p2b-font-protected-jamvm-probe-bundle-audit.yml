@@ -1,0 +1,383 @@
+name: P2B Font Protected JamVM Planner Probe Bundle Audit
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - audit/p2b-font-text
+    paths:
+      - '.github/workflows/p2b-font-protected-jamvm-probe-bundle-audit.yml'
+      - 'tests/p2b/diagnostic/p2b_protected_jamvm_planner_probe.sh'
+      - 'tests/p2b/diagnostic/RG35XXP2BLocalComponentPlanDiagnostic.java'
+      - 'tests/p2b/diagnostic/RG35XXP2BJdkTextLayoutExpandedPlanReference.java'
+      - 'tests/p2b/diagnostic/stage_jdk8_text_planner_audit.py'
+
+permissions:
+  contents: read
+
+jobs:
+  p2b-protected-jamvm-probe-bundle:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    env:
+      BASE: 77a36526e0f6d875c57c7e9a973e0c1a05573721
+      JDK8U_TAG: jdk8u504-b01
+      JDK8U_COMMIT: 4efe36434f44bafb854e602ccbbe1b5696fce1a2
+      EXPECTED_FONT_SHA256: 1a5f4112daaa9473747c6834041646cc9b2c338cb40ab5dbb2f0161f8968ca10
+      EXPECTED_FONT_SIZE: '8092724'
+      EXPECTED_JAMVM_SHA256: eea1b97cebfaca67b69ed365e966d80cdac22d8ff245c7a556137cfb2898ea34
+      EXPECTED_GLIBJ_SHA256: d7abe888d2980329434c30f18c0eec124be1f02284bf9ed28e88d7242a1f2bea
+      REFERENCE_DIAG_BLOB: 8504c92128b47b3d153a1cd0daadcc5bb66a1aef
+      LOCAL_DIAG_BLOB: 28758efc104151ad636903c7db11b8ab7bf38b93
+      STAGE_HELPER_BLOB: f4b0284b94e0223d5211f071cb80d97f2cf16b4b
+      DEVICE_PROBE_BLOB: 48b348330d32b598d46203d585de77ce383aeba1
+      BIDI_BLOB: 3d0e1381adb1cb11cbd45d2f8e09c4830aa1fba8
+      BIDIBASE_BLOB: 6485bea94e69f1cb3f054360fb5caad461a60ef8
+      BIDILINE_BLOB: 1d54867ad42b486857693e63a3cf15fbe99354e9
+      BIDIRUN_BLOB: 07519db3934eb47a566ad0e597611bcfa8ed2b67
+      UBIDIPROPS_BLOB: c7ac9aeac61a3abcf6f9fc28105585ff3110f61f
+      ICUDATA_BLOB: 20c21a583d6689356e1d3c65aecfd37aca223521
+      ICUBINARY_BLOB: 20984d3b8fbd9d3523a9de7a9df05caff0e9be55
+      TRIE_BLOB: 0430bf5e955db100512d6f366b509b97bd07f51d
+      CHARTRIE_BLOB: 9726e8932f6ddeacf7ff4f0f3faf08d2b908777f
+      UTF16_BLOB: 934eecca8ff9aaf6f4ac8f80fe33cc5285a895e1
+      UCHAR_BLOB: bad507e2ee03b22e1c72680c4b60ca0787fd30b3
+      UCHARPROP_BLOB: 0149140feab974541f5ca1e56027b864aa9e803d
+      SCRIPT_BLOB: 155ab07d93cacf854c19187e020a66ef63921e52
+      SCRIPTRUNDATA_BLOB: e72c85624242ce7c486d78dbf800c91facb2cfbf
+      SCRIPTRUN_BLOB: e719fc335605f957f6bd713da226700aba15b8c9
+      BIDIUTILS_BLOB: 41d6acd02b95656b3644e669443b3230b950eb08
+      UNICODEDATA_BLOB: 3ed5585528adace2cf0627b8125708b9afff6cf4
+      UBIDI_RESOURCE_BLOB: 3c545bd7a450e407f4755effb75f68886faa43e5
+      UBIDI_RESOURCE_SIZE: '19924'
+      UBIDI_RESOURCE_SHA256: 38b96789a88870d20c0eb1392cb8fc2bd58e2c31cfff3326bea1e00a52ec9889
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Verify audit-only ancestry, scope and repository inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git merge-base HEAD "$BASE")" = "$BASE"
+          git diff --name-only "$BASE"...HEAD | tee /tmp/p2b-probe-bundle-files.txt
+          if grep -Ev '^(docs/P2B-[^/]+\.md|tests/p2b/diagnostic/[^/]+|\.github/workflows/p2b-font-[^/]+-audit\.yml)$' /tmp/p2b-probe-bundle-files.txt | grep -q .; then
+            echo 'P2B_PROBE_BUNDLE_AUDIT_SCOPE=FAIL'
+            exit 1
+          fi
+          if git diff --name-only "$BASE"...HEAD | grep -E '^(adapter/|native/|upstream/|packaging/|runtime/|patches/|scripts/stage-|scripts/build-)'; then
+            echo 'P2B_RUNTIME_DELTA=FAIL'
+            exit 1
+          fi
+          test "$(git -C upstream/freej2me-miyoomini rev-parse HEAD)" = ca11dfe8ea1cc273d92460f9a83bbf192023fa63
+          test "$(git hash-object tests/p2b/diagnostic/RG35XXP2BJdkTextLayoutExpandedPlanReference.java)" = "$REFERENCE_DIAG_BLOB"
+          test "$(git hash-object tests/p2b/diagnostic/RG35XXP2BLocalComponentPlanDiagnostic.java)" = "$LOCAL_DIAG_BLOB"
+          test "$(git hash-object tests/p2b/diagnostic/stage_jdk8_text_planner_audit.py)" = "$STAGE_HELPER_BLOB"
+          test "$(git hash-object tests/p2b/diagnostic/p2b_protected_jamvm_planner_probe.sh)" = "$DEVICE_PROBE_BLOB"
+          mkdir -p out/p2b-protected-jamvm-probe-bundle
+          {
+            echo 'P2B_PROBE_BUNDLE_AUDIT_SCOPE=PASS'
+            echo 'P2B_RUNTIME_DELTA=NONE'
+            echo 'P2B_PROTECTED_JAMVM_GLIBJ_CHANGE=NO'
+            echo 'P2B_RUNTIME_CANDIDATE_BRANCH=DO_NOT_CREATE_IN_THIS_GATE'
+          } | tee out/p2b-protected-jamvm-probe-bundle/SCOPE.txt
+
+      - name: Pin exact JDK8 planner sources and resources
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/jdk8u
+          git clone --filter=blob:none --no-checkout https://github.com/adoptium/jdk8u.git /tmp/jdk8u
+          git -C /tmp/jdk8u fetch --depth 1 origin tag "$JDK8U_TAG"
+          git -C /tmp/jdk8u checkout --detach "$JDK8U_TAG"
+          test "$(git -C /tmp/jdk8u rev-parse HEAD)" = "$JDK8U_COMMIT"
+          check_blob(){ test "$(git -C /tmp/jdk8u rev-parse HEAD:"$1")" = "$2"; }
+          check_blob jdk/src/share/classes/java/text/Bidi.java "$BIDI_BLOB"
+          check_blob jdk/src/share/classes/sun/text/bidi/BidiBase.java "$BIDIBASE_BLOB"
+          check_blob jdk/src/share/classes/sun/text/bidi/BidiLine.java "$BIDILINE_BLOB"
+          check_blob jdk/src/share/classes/sun/text/bidi/BidiRun.java "$BIDIRUN_BLOB"
+          check_blob jdk/src/share/classes/sun/text/normalizer/UBiDiProps.java "$UBIDIPROPS_BLOB"
+          check_blob jdk/src/share/classes/sun/text/normalizer/ICUData.java "$ICUDATA_BLOB"
+          check_blob jdk/src/share/classes/sun/text/normalizer/ICUBinary.java "$ICUBINARY_BLOB"
+          check_blob jdk/src/share/classes/sun/text/normalizer/Trie.java "$TRIE_BLOB"
+          check_blob jdk/src/share/classes/sun/text/normalizer/CharTrie.java "$CHARTRIE_BLOB"
+          check_blob jdk/src/share/classes/sun/text/normalizer/UTF16.java "$UTF16_BLOB"
+          check_blob jdk/src/share/classes/sun/text/normalizer/UCharacter.java "$UCHAR_BLOB"
+          check_blob jdk/src/share/classes/sun/text/normalizer/UCharacterProperty.java "$UCHARPROP_BLOB"
+          check_blob jdk/src/share/classes/sun/font/Script.java "$SCRIPT_BLOB"
+          check_blob jdk/src/share/classes/sun/font/ScriptRunData.java "$SCRIPTRUNDATA_BLOB"
+          check_blob jdk/src/share/classes/sun/font/ScriptRun.java "$SCRIPTRUN_BLOB"
+          check_blob jdk/src/share/classes/sun/font/BidiUtils.java "$BIDIUTILS_BLOB"
+          check_blob jdk/make/data/unicodedata/UnicodeData.txt "$UNICODEDATA_BLOB"
+          check_blob jdk/src/share/classes/sun/text/resources/ubidi.icu "$UBIDI_RESOURCE_BLOB"
+          test "$(wc -c </tmp/jdk8u/jdk/src/share/classes/sun/text/resources/ubidi.icu | tr -d ' ')" = "$UBIDI_RESOURCE_SIZE"
+          test "$(sha256sum /tmp/jdk8u/jdk/src/share/classes/sun/text/resources/ubidi.icu | awk '{print $1}')" = "$UBIDI_RESOURCE_SHA256"
+          {
+            echo "OPENJDK8_TAG=$JDK8U_TAG"
+            echo "OPENJDK8_COMMIT=$JDK8U_COMMIT"
+            echo "UNICODEDATA_BLOB=$UNICODEDATA_BLOB"
+            echo "UBIDI_RESOURCE_SHA256=$UBIDI_RESOURCE_SHA256"
+            echo 'P2B_PROBE_BUNDLE_SOURCE_PROVENANCE=PASS'
+          } | tee out/p2b-protected-jamvm-probe-bundle/PROVENANCE.txt
+
+      - name: Generate exact JDK8 expanded planner reference
+        shell: bash
+        run: |
+          set -euo pipefail
+          BUNDLE=out/p2b-protected-jamvm-probe-bundle/bundle
+          mkdir -p "$BUNDLE" /tmp/p2b-ref-classes
+          URL='https://github.com/aweigit/freej2me-miyoomini/releases/download/2.0/miyoomini-freej2me.zip'
+          curl -fL --retry 3 --retry-delay 2 "$URL" -o /tmp/miyoomini-freej2me.zip
+          ENTRY=$(unzip -Z1 /tmp/miyoomini-freej2me.zip | grep -Ei '(^|/)font\.ttf$')
+          test "$(printf '%s\n' "$ENTRY" | wc -l | tr -d ' ')" = 1
+          unzip -p /tmp/miyoomini-freej2me.zip "$ENTRY" > /tmp/p2b-font.ttf
+          test "$(sha256sum /tmp/p2b-font.ttf | awk '{print $1}')" = "$EXPECTED_FONT_SHA256"
+          test "$(wc -c </tmp/p2b-font.ttf | tr -d ' ')" = "$EXPECTED_FONT_SIZE"
+          "$JAVA_HOME/bin/javac" -encoding UTF-8 -source 1.6 -target 1.6 \
+            -d /tmp/p2b-ref-classes \
+            tests/p2b/diagnostic/RG35XXP2BJdkTextLayoutExpandedPlanReference.java
+          "$JAVA_HOME/bin/java" -Djava.awt.headless=true -cp /tmp/p2b-ref-classes \
+            RG35XXP2BJdkTextLayoutExpandedPlanReference /tmp/p2b-font.ttf \
+            "$BUNDLE/P2B-PLANNER-REFERENCE.tsv" \
+            | tee out/p2b-protected-jamvm-probe-bundle/REFERENCE.log
+          grep -Fq 'P2B_JDK8_EXPANDED_PLAN_CASES=24' out/p2b-protected-jamvm-probe-bundle/REFERENCE.log
+          grep -Fq 'P2B_JDK8_EXPANDED_PLAN_TOTAL_COMPONENTS=52' out/p2b-protected-jamvm-probe-bundle/REFERENCE.log
+          grep -Fq 'P2B_JDK8_EXPANDED_PLAN_SCRIPT_RUNS=65' out/p2b-protected-jamvm-probe-bundle/REFERENCE.log
+          grep -Fq 'P2B_JDK8_EXPANDED_PLAN_REFERENCE_RESULT=PASS' out/p2b-protected-jamvm-probe-bundle/REFERENCE.log
+          echo 'P2B_PROBE_BUNDLE_REFERENCE=PASS' | tee out/p2b-protected-jamvm-probe-bundle/REFERENCE-STATUS.txt
+
+      - name: Stage Java6 planner closure and build protected-JamVM probe JAR
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT=/tmp/p2b-probe-planner
+          BUNDLE=out/p2b-protected-jamvm-probe-bundle/bundle
+          rm -rf "$ROOT"
+          mkdir -p "$ROOT"
+          python3 tests/p2b/diagnostic/stage_jdk8_text_planner_audit.py /tmp/jdk8u "$ROOT" \
+            | tee out/p2b-protected-jamvm-probe-bundle/PLANNER-STAGE.log
+          grep -Fq 'P2B_TEXT_PLANNER_STAGE=PASS' out/p2b-protected-jamvm-probe-bundle/PLANNER-STAGE.log
+
+          MARK="$ROOT/src/org/recompile/rg35xx/p2b/jdk8/mark/Jdk8MarkClassifier.java"
+          mkdir -p "$(dirname "$MARK")"
+          python3 - /tmp/jdk8u/jdk/make/data/unicodedata/UnicodeData.txt "$MARK" <<'PY'
+          from pathlib import Path
+          import sys
+          src=Path(sys.argv[1]); dst=Path(sys.argv[2]); cats={'Mn','Mc','Me'}
+          marks=set(); pending=None
+          for raw in src.read_text(encoding='utf-8').splitlines():
+              if not raw or raw.startswith('#'):
+                  continue
+              f=raw.split(';')
+              if len(f) < 3:
+                  raise SystemExit('P2B_MARK_CLASSIFIER_BAD_UNICODEDATA_ROW')
+              cp=int(f[0],16); name=f[1]; cat=f[2]
+              if name.endswith(', First>'):
+                  if pending is not None:
+                      raise SystemExit('P2B_MARK_CLASSIFIER_NESTED_FIRST')
+                  pending=(cp,cat)
+                  continue
+              if name.endswith(', Last>'):
+                  if pending is None or pending[1] != cat or pending[0] > cp:
+                      raise SystemExit('P2B_MARK_CLASSIFIER_BAD_LAST')
+                  st,pcat=pending
+                  if pcat in cats:
+                      marks.update(range(st,cp+1))
+                  pending=None
+                  continue
+              if pending is not None:
+                  raise SystemExit('P2B_MARK_CLASSIFIER_UNTERMINATED_FIRST')
+              if cat in cats:
+                  marks.add(cp)
+          if pending is not None:
+              raise SystemExit('P2B_MARK_CLASSIFIER_UNTERMINATED_RANGE')
+          vals=sorted(marks); ranges=[]
+          if vals:
+              st=pr=vals[0]
+              for cp in vals[1:]:
+                  if cp == pr+1:
+                      pr=cp
+                  else:
+                      ranges.append((st,pr)); st=pr=cp
+              ranges.append((st,pr))
+          out=[]
+          out.append('package org.recompile.rg35xx.p2b.jdk8.mark;')
+          out.append('public final class Jdk8MarkClassifier {')
+          out.append('  private static final int[] RANGES = new int[] {')
+          for st,en in ranges:
+              out.append('    0x%X,0x%X,' % (st,en))
+          out.append('  };')
+          out.append('  private Jdk8MarkClassifier() { }')
+          out.append('  public static boolean isEngineMark(int cp) {')
+          out.append('    int lo=0,hi=RANGES.length/2-1;')
+          out.append('    while(lo<=hi){int m=(lo+hi)>>>1,st=RANGES[m*2],en=RANGES[m*2+1]; if(cp<st)hi=m-1; else if(cp>en)lo=m+1; else return true;}')
+          out.append('    return false;')
+          out.append('  }')
+          out.append('}')
+          dst.write_text('\n'.join(out)+'\n',encoding='utf-8')
+          print('P2B_MARK_CLASSIFIER_CODEPOINTS='+str(len(vals)))
+          print('P2B_MARK_CLASSIFIER_RANGES='+str(len(ranges)))
+          print('P2B_MARK_CLASSIFIER_SOURCE=JDK8_UNICODEDATA_MN_MC_ME')
+          print('P2B_MARK_CLASSIFIER_GENERATION=PASS')
+          PY
+
+          mkdir -p "$ROOT/diag"
+          cp tests/p2b/diagnostic/RG35XXP2BLocalComponentPlanDiagnostic.java "$ROOT/diag/"
+          sed -i 's/org\.recompile\.rg35xx\.p2b\.jdk8\.script\.ScriptRun/org.recompile.rg35xx.p2b.jdk8.font.ScriptRun/' \
+            "$ROOT/diag/RG35XXP2BLocalComponentPlanDiagnostic.java"
+          grep -Fq 'import org.recompile.rg35xx.p2b.jdk8.font.ScriptRun;' \
+            "$ROOT/diag/RG35XXP2BLocalComponentPlanDiagnostic.java"
+
+          CLASSES="$ROOT/classes"
+          mkdir -p "$CLASSES/sun/text/resources"
+          cp /tmp/jdk8u/jdk/src/share/classes/sun/text/resources/ubidi.icu \
+            "$CLASSES/sun/text/resources/ubidi.icu"
+          find "$ROOT/src" -name '*.java' -print | sort > "$ROOT/sources.list"
+          printf '%s\n' "$ROOT/diag/RG35XXP2BLocalComponentPlanDiagnostic.java" >> "$ROOT/sources.list"
+          "$JAVA_HOME/bin/javac" -encoding UTF-8 -source 1.6 -target 1.6 \
+            -bootclasspath "$JAVA_HOME/jre/lib/rt.jar" -d "$CLASSES" @"$ROOT/sources.list"
+
+          python3 - "$CLASSES" <<'PY'
+          from pathlib import Path
+          import sys
+          root=Path(sys.argv[1]); bad=[]; majors=set(); count=0
+          for p in root.rglob('*.class'):
+              b=p.read_bytes()
+              if len(b)<8 or b[:4] != b'\xca\xfe\xba\xbe':
+                  raise SystemExit('P2B_PROBE_CLASSFILE_INVALID '+str(p))
+              major=int.from_bytes(b[6:8],'big'); majors.add(major); count+=1
+              if major>50: bad.append((str(p),major))
+          if count==0 or bad or majors != {50}:
+              raise SystemExit('P2B_PROBE_JAVA6_GATE_FAIL count=%d majors=%r bad=%r' % (count,sorted(majors),bad))
+          print('P2B_PROBE_CLASS_COUNT='+str(count))
+          print('P2B_PROBE_CLASS_MAJORS=50')
+          print('P2B_PROBE_JAVA6_GATE=PASS')
+          PY
+
+          (cd "$CLASSES" && "$JAVA_HOME/bin/jar" cf "$GITHUB_WORKSPACE/$BUNDLE/P2B-PROTECTED-JAMVM-PLANNER-PROBE.jar" .)
+          "$JAVA_HOME/bin/jar" tf "$BUNDLE/P2B-PROTECTED-JAMVM-PLANNER-PROBE.jar" \
+            | tee out/p2b-protected-jamvm-probe-bundle/JAR-CONTENTS.txt
+          grep -Fxq 'RG35XXP2BLocalComponentPlanDiagnostic.class' out/p2b-protected-jamvm-probe-bundle/JAR-CONTENTS.txt
+          grep -Fxq 'sun/text/resources/ubidi.icu' out/p2b-protected-jamvm-probe-bundle/JAR-CONTENTS.txt
+          if grep -Ei '(^|/)(font\.ttf|glibj\.zip|jamvm)$' out/p2b-protected-jamvm-probe-bundle/JAR-CONTENTS.txt; then
+            echo 'P2B_PROBE_JAR_FORBIDDEN_PAYLOAD=FAIL'
+            exit 1
+          fi
+          echo 'P2B_PROBE_JAR_BUILD=PASS' | tee out/p2b-protected-jamvm-probe-bundle/JAR-STATUS.txt
+
+      - name: Run host self-test and assemble hash-locked device bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          BUNDLE=out/p2b-protected-jamvm-probe-bundle/bundle
+          "$JAVA_HOME/bin/java" -cp "$BUNDLE/P2B-PROTECTED-JAMVM-PLANNER-PROBE.jar" \
+            RG35XXP2BLocalComponentPlanDiagnostic "$BUNDLE/P2B-PLANNER-REFERENCE.tsv" \
+            | tee out/p2b-protected-jamvm-probe-bundle/HOST-SELFTEST.log
+          for marker in \
+            'P2B_LOCAL_COMPONENT_PLAN_BOOT=PASS' \
+            'P2B_LOCAL_COMPONENT_PLAN_CASES=24' \
+            'P2B_LOCAL_COMPONENT_PLAN_TOTAL_COMPONENTS=52' \
+            'P2B_LOCAL_COMPONENT_PLAN_SCRIPT_RUNS=65' \
+            'P2B_LOCAL_COMPONENT_PLAN_MISMATCH_COUNT=0' \
+            'P2B_LOCAL_COMPONENT_PLAN_DIFFERENTIAL=PASS' \
+            'P2B_PLANNER_FULL_LAYOUT_PLAN=PASS_FOR_EXPANDED_CORPUS'
+          do
+            grep -Fq "$marker" out/p2b-protected-jamvm-probe-bundle/HOST-SELFTEST.log
+          done
+
+          cp tests/p2b/diagnostic/p2b_protected_jamvm_planner_probe.sh \
+            "$BUNDLE/p2b_protected_jamvm_planner_probe.sh"
+          cat > "$BUNDLE/BUNDLE-IDENTITY.txt" <<EOF
+          PROJECT=RG35XX-AWEIGIT-R1
+          STAGE=P2B-PROTECTED-JAMVM-PLANNER-COMPATIBILITY
+          SOURCE_COMMIT=$GITHUB_SHA
+          P2B_PARENT=$BASE
+          AWEIGIT_PIN=ca11dfe8ea1cc273d92460f9a83bbf192023fa63
+          OPENJDK8_TAG=$JDK8U_TAG
+          OPENJDK8_COMMIT=$JDK8U_COMMIT
+          EXPECTED_JAMVM_SHA256=$EXPECTED_JAMVM_SHA256
+          EXPECTED_GLIBJ_SHA256=$EXPECTED_GLIBJ_SHA256
+          EXPECTED_FONT_SHA256=$EXPECTED_FONT_SHA256
+          FONT_BYTES_INCLUDED=NO
+          PROTECTED_RUNTIME_BYTES_INCLUDED=NO
+          RUNTIME_DELTA=NONE
+          RUNTIME_PATCH=FORBIDDEN
+          PLATFORM_DEVICE_PASS=NOT_TESTED
+          EOF
+          cat > "$BUNDLE/README-FIRST.txt" <<'EOF'
+          P2B protected JamVM planner compatibility probe bundle.
+          Audit/module probe only; this is not a runtime candidate and not a platform DEVICE-PASS package.
+
+          Copy this directory to the original RG35XX without replacing JamVM or glibj.zip.
+          From this directory run:
+            sh p2b_protected_jamvm_planner_probe.sh
+
+          The probe fail-closes unless the protected JamVM/glibj hashes, bundle hashes,
+          planner execution, and exact 24-case / 52-component / 65-ScriptRun differential markers pass.
+          EOF
+          cat > "$BUNDLE/CI-STATUS.txt" <<'EOF'
+          P2B_PROBE_BUNDLE_HOST_SELFTEST=PASS
+          P2B_PROBE_BUNDLE_JAVA6_GATE=PASS
+          P2B_RUNTIME_DELTA=NONE
+          P2B_PROTECTED_JAMVM_GLIBJ_CHANGE=NO
+          P2B_PROTECTED_JAMVM_PLANNER_COMPATIBILITY=NOT_TESTED
+          P2B_MODULE_DEVICE_GATE=NOT_TESTED
+          DEVICE_TEST=NOT_REQUESTED
+          PLATFORM_DEVICE_PASS=NOT_TESTED
+          RUNTIME_PATCH=FORBIDDEN
+          RUNTIME_CANDIDATE_BRANCH=DO_NOT_CREATE
+          EOF
+
+          (
+            cd "$BUNDLE"
+            sha256sum \
+              P2B-PROTECTED-JAMVM-PLANNER-PROBE.jar \
+              P2B-PLANNER-REFERENCE.tsv \
+              p2b_protected_jamvm_planner_probe.sh \
+              BUNDLE-IDENTITY.txt \
+              README-FIRST.txt \
+              CI-STATUS.txt > PROBE-SHA256SUMS.txt
+            sha256sum -c PROBE-SHA256SUMS.txt
+          ) | tee out/p2b-protected-jamvm-probe-bundle/BUNDLE-HASH-CHECK.log
+
+          if find "$BUNDLE" -type f \( -iname '*.ttf' -o -iname '*.otf' -o -name 'glibj.zip' -o -name 'jamvm' \) | grep -q .; then
+            echo 'P2B_PROBE_BUNDLE_FORBIDDEN_BYTES=FAIL'
+            exit 1
+          fi
+          rm -f /tmp/p2b-font.ttf /tmp/miyoomini-freej2me.zip
+          test ! -e /tmp/p2b-font.ttf
+          test ! -e /tmp/miyoomini-freej2me.zip
+          {
+            echo 'P2B_PROBE_BUNDLE_HOST_SELFTEST=PASS'
+            echo 'P2B_PROBE_BUNDLE_IDENTITY=PASS'
+            echo 'P2B_FONT_BYTE_LEAK=NO'
+            echo 'P2B_PROTECTED_RUNTIME_BYTE_LEAK=NO'
+            echo 'P2B_PROTECTED_JAMVM_PLANNER_COMPATIBILITY=NOT_TESTED'
+            echo 'P2B_MODULE_DEVICE_GATE=NOT_TESTED'
+            echo 'DEVICE_TEST=NOT_REQUESTED'
+            echo 'PLATFORM_DEVICE_PASS=NOT_TESTED'
+            echo 'P2B_RUNTIME_DELTA=NONE'
+            echo 'RUNTIME_PATCH=FORBIDDEN'
+            echo 'RUNTIME_CANDIDATE_BRANCH=DO_NOT_CREATE'
+          } | tee out/p2b-protected-jamvm-probe-bundle/STATUS.txt
+
+      - name: Upload audit-only protected JamVM probe bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: p2b-protected-jamvm-planner-probe-${{ github.sha }}
+          path: |
+            out/p2b-protected-jamvm-probe-bundle/bundle
+            out/p2b-protected-jamvm-probe-bundle/STATUS.txt
+            out/p2b-protected-jamvm-probe-bundle/PROVENANCE.txt
+            out/p2b-protected-jamvm-probe-bundle/HOST-SELFTEST.log
+            out/p2b-protected-jamvm-probe-bundle/BUNDLE-HASH-CHECK.log
+          if-no-files-found: error
+          retention-days: 14
