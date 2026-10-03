@@ -48,6 +48,7 @@ public final class RG35XXP2CInputFrontendExerciser extends MIDlet {
         private int stage;
         private int pressedCode;
         private boolean pressed;
+        private boolean chordSelectPressed;
         private boolean pointerPressedSeen;
         private boolean finished;
         private boolean overall = true;
@@ -106,6 +107,17 @@ public final class RG35XXP2CInputFrontendExerciser extends MIDlet {
                 return;
             }
             if (isChordStage()) {
+                int expected = chordReleaseCode();
+                if (chordSelectPressed) {
+                    fail("unexpected chord key press stage=" + stage + " code=" + keyCode);
+                    return;
+                }
+                if (keyCode != expected) {
+                    fail("chord SELECT-first stage=" + stage + " expected=" + expected + " actual=" + keyCode);
+                    return;
+                }
+                chordSelectPressed = true;
+                System.out.println("P2C_EXERCISER_CHORD_SELECT_PRESS=PASS STAGE=" + stage);
                 return;
             }
             if (phase == 2 && stage == 17) {
@@ -128,7 +140,16 @@ public final class RG35XXP2CInputFrontendExerciser extends MIDlet {
             if (finished) return;
             if (isChordStage()) {
                 int expected = chordReleaseCode();
-                if (keyCode == expected) passStep("HOTKEY_" + stage);
+                if (!chordSelectPressed) {
+                    fail("chord release without SELECT press stage=" + stage + " code=" + keyCode);
+                    return;
+                }
+                if (keyCode != expected) {
+                    fail("chord release stage=" + stage + " expected=" + expected + " actual=" + keyCode);
+                    return;
+                }
+                chordSelectPressed = false;
+                passStep("HOTKEY_" + stage);
                 return;
             }
             if (phase == 2 && stage == 17) return;
@@ -245,7 +266,7 @@ public final class RG35XXP2CInputFrontendExerciser extends MIDlet {
                 if (stage >= 0 && stage < names.length && names[stage].length() > 0) return names[stage];
             } else if (phase == 3) {
                 String[] names = {"FALLBACK_A", "FALLBACK_Y", "FALLBACK_X", "FALLBACK_B", "FALLBACK_L2", "FALLBACK_R2"};
-                if (stage >= 0 && stage < names.length) return names[stage];
+                if (stage >= 0 && stage < names.length && names[stage].length() > 0) return names[stage];
             }
             return "STEP_" + stage;
         }
@@ -323,7 +344,7 @@ public final class RG35XXP2CInputFrontendExerciser extends MIDlet {
         }
 
         private String prompt2() {
-            if (isChordStage()) return "Hold SELECT, tap partner, release";
+            if (isChordStage()) return "SELECT first, then partner";
             if (phase == 2 && stage == 17) return "Expect pointer at 6,6";
             if (phase == 2 && (stage == 20 || stage == 22 || stage == 24)) return "Observe screen orientation too";
             return "Release each tested control";
