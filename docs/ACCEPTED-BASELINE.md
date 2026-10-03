@@ -1,141 +1,244 @@
-# RG35XX Aweigit Port — Accepted Baseline Ledger
+# RG35XX FreeJ2ME Port — Accepted Baseline Ledger
 
-Lock date: 2026-09-25
+Lock date: **2026-10-03**
 
-## Reference baseline
+This ledger records the latest **physically accepted runtime lineage** and separates it from audit/candidate work that is not yet accepted.
+
+## Official accepted runtime baseline
 
 ```text
-REFERENCE_BRANCH=rg35xx-aweigit-r1-stable
-ACCEPTED_SOURCE_BRANCH=rg35xx-aweigit-r1-a7-audio-media
-ACCEPTED_SOURCE_CHECKPOINT=5b7a8e88bd32a735a1342715e718eecf8cf10fad
+OFFICIAL_REPOSITORY_BRANCH=main
+OFFICIAL_ACCEPTED_RUNTIME_SCOPE=P2A_IMAGE_DECODE
+OFFICIAL_ACCEPTED_RUNTIME_COMMIT=5a8bfdf12d42e49d5d4aa8260601799c904e6441
+P1A_ACCEPTED_CHECKPOINT=f502ea692518fa1e3b529718f44aaf459f90f49c
 CANONICAL_AWEIGIT_PIN=ca11dfe8ea1cc273d92460f9a83bbf192023fa63
-A7_ACCEPTED_RUNTIME_BASE=YES
-FULL_PLATFORM_STABLE=NO
+CURRENT_PHASE=P2
+CURRENT_MODULE=P2B_FONT_TEXT
+RG35XX_PLATFORM_BASELINE_DEVICE_PASS=NO
+STABLE=NO
 ```
 
-The stable reference branch is a preservation point for the currently accepted RG35XX implementation. Feature work should branch from it rather than modifying it casually.
+`main` is the official repository/tracking branch after promotion of the accepted P2A lineage. This does **not** mean P8 full-platform promotion has occurred.
 
-## Accepted identities recorded by device acceptance
+The locked platform-first rule permits full baseline promotion only after P0–P7 have passed.
+
+## Authority and ancestry
+
+The accepted authority chain remains:
 
 ```text
-A6_PARENT_SEMANTIC_SHA256=53f229dbf14621a2a27a7249cb1355b1a2367bebc51a761959d3bd54985565d6
-A7_PLATFORM_JAR_SHA256=057567d454ac94d4d1d08ad8fc84ef22515c00418d28057aa70e74b4042d336c
-A7_PLATFORM_SEMANTIC_SHA256=7cd3a4a29d4238e0d2464a213db48ba555bdf3c590aa77fe60c68b480bdc4adf
+PINNED MIYOO/AWEIGIT SOURCE
+        ↓
+A8 / GOLDEN PHYSICAL EVIDENCE AND PROTECTED IDENTITIES
+        ↓
+PLATFORM-FIRST RECONSTRUCTION
+        ↓
+P1A GRAPHICS PHYSICAL MODULE ACCEPTANCE
+        ↓
+P2A IMAGE DECODE PHYSICAL MODULE ACCEPTANCE
+        ↓
+P2B FONT/TEXT — CURRENT WORK
+```
+
+Hard ancestry locks:
+
+```text
+A9_PARENT=NO
+GAME_SPECIFIC_CODE=NO
+NEW_TIER1_FIX_BEFORE_P8=NO
+```
+
+A9 and game-specific experimental branches remain diagnostic/history only.
+
+## P0 — Golden authority
+
+```text
+P0_GOLDEN_AUTHORITY=PASS
+```
+
+Historical A8 physical acceptance, protected component identities, Tier-0 evidence and exact Golden reconstruction records remain authoritative. Platform-first work must preserve them unless exact evidence formally reassigns an owner.
+
+## P1 / P1A — Core 2D Graphics
+
+Accepted original-RG35XX checkpoint:
+
+```text
+P1A_ACCEPTANCE_COMMIT=f502ea692518fa1e3b529718f44aaf459f90f49c
+P1A_CANDIDATE_HEAD=7c0ae595fa05dd3c23157c241cc641e8d43411d5
+P1A_PACKAGE=RG35XX-P1A-GRAPHICS-PHYSICAL-R2
+P1A_GRAPHICS_HOST_MODULE_GATE=PASS
+P1A_GRAPHICS_MODULE_PHYSICAL_ACCEPTANCE=PASS
+P1A_GRAPHICS_PROTECTED_HASHES=PASS
+P1A_GRAPHICS_NORMAL_EXIT=PASS
+```
+
+Physical evidence included the one P1A graphics exerciser on original RG35XX, all declared programmatic graphics checks, protected-hash preservation, the visible `P1A GRAPHICS PASS` result and normal return to GarlicOS.
+
+Evidence record:
+
+- `docs/P1A-GRAPHICS-PHYSICAL-ACCEPTANCE-20261002.md`
+
+## P2A — Image Decode
+
+Accepted original-RG35XX checkpoint:
+
+```text
+P2A_ACCEPTANCE_COMMIT=5a8bfdf12d42e49d5d4aa8260601799c904e6441
+P2A_CANDIDATE_HEAD=77a36526e0f6d875c57c7e9a973e0c1a05573721
+P2A_EXACT_RUNTIME_PARENT=7c0ae595fa05dd3c23157c241cc641e8d43411d5
+P2A_IMAGE_DECODE_HOST_MODULE_GATE=PASS
+P2A_IMAGE_DECODE_PHYSICAL_MODULE_GATE=PASS
+P2A_IMAGE_DECODE_MODULE_PHYSICAL_ACCEPTANCE=PASS
+```
+
+Device evidence:
+
+```text
+P2A_EXERCISER_FIXTURE_COUNT=150
+P2A_EXERCISER_FRONTEND_COUNT=3
+P2A_EXERCISER_DECODE_COUNT=450
+P2A_EXERCISER_FAILURE_COUNT=0
+P2A_EXERCISER_RESULT=PASS
+P2A_NORMAL_EXIT=PASS
+```
+
+The three public decode frontends were byte-array, input-stream and resource-name. Human observation confirmed the visible PASS result and normal GarlicOS return.
+
+Accepted P2A candidate platform JAR:
+
+```text
+P2A_PLATFORM_JAR_SHA256=11a524c67edc631c2391573add4bcc21ea0e4d95d187fb4b34bffde01cf46b9b
+```
+
+Evidence record:
+
+- `docs/P2A-IMAGE-DECODE-PHYSICAL-ACCEPTANCE-20261003.md`
+
+## Protected runtime identities
+
+The accepted device lineage preserves:
+
+```text
+JAMVM_SHA256=eea1b97cebfaca67b69ed365e966d80cdac22d8ff245c7a556137cfb2898ea34
+GLIBJ_SHA256=d7abe888d2980329434c30f18c0eec124be1f02284bf9ed28e88d7242a1f2bea
 INPUT_NATIVE_SHA256=69a8aeb3940bfbc234f3a562a7ae4bcaea10b50f8a8f2c38ad229a5430930f6d
 VIDEO_NATIVE_SHA256=c6687c0a43b24b425af0727c928afb5414da811ecbcbbe3538928470abe8bd0d
 AUDIO_NATIVE_SHA256=4522157846c33c150a85c50b4bed6f68351f1c62d54b8cd7805cbb97c5727644
-JAMVM_SHA256=eea1b97cebfaca67b69ed365e966d80cdac22d8ff245c7a556137cfb2898ea34
-GLIBJ_SHA256=d7abe888d2980329434c30f18c0eec124be1f02284bf9ed28e88d7242a1f2bea
 ```
 
-Raw JAR hashes may differ after reproducible rebuilds because ZIP/JAR timestamps can change. Semantic identity is therefore important when determining whether the Java platform behavior changed.
+These owners must not be changed during P2B unless separate evidence explicitly proves one of them owns a P2B failure.
 
-## Device-proven milestone chain
+## P2B — Font/Text current handoff
 
-### Foundation
+P2B is **not part of the accepted runtime baseline yet**.
 
-- Aweigit canonical implementation pinned rather than independently redesigning J2ME semantics.
-- RG35XX-specific behavior isolated in adapter/package/launcher boundaries where possible.
-- original RG35XX SDL1/fbcon display path retained.
-- protected JamVM/glibj runtime retained.
-
-### Core graphics and input
-
-Accepted device path includes Canvas/GameCanvas, physical controller input, core 2D rendering, image transparency, Sprite/TiledLayer-related integration, raw primitives required by the selected corpus, and normal exit.
-
-### A6 selected real-game corpus
-
-`Vua-Cuop-Bien-240x320.jar`
+Latest audit/design checkpoint:
 
 ```text
-SHA256=220ac0e6a2ab61318aa3d2e20057e2231991a21d7ca15148ed3c57534b941578
-RESULT=DEVICE-PASS
+P2B_AUDIT_BRANCH=audit/p2b-font-text-post-layout-r2
+P2B_AUDIT_HEAD=8d3dc24f847380c699e18b6efd4bd9183884ac2c
 ```
 
-`God-of-War-Betrayal_J2ME_EN_v148.jar`
+Current implementation-candidate branch:
 
 ```text
-SHA256=e256ca47cde2b27735a4f4d3d826003ac5bbc723f91629bd5d093d948c1f9a98
-RESULT=DEVICE-PASS
+P2B_CANDIDATE_BRANCH=module/p2b-font-text-candidate-r1
+P2B_CANDIDATE_HEAD=3fad06899232b7307fc6249f1a4dfe35c830ec3b
+P2B_CANDIDATE_PARENT=5a8bfdf12d42e49d5d4aa8260601799c904e6441
+P2B_RUNTIME_CANDIDATE=NOT_TESTED
+P2B_PHYSICAL_TEST=NOT_TESTED
 ```
 
-The God of War regression isolated and accepted the `PlatformGraphics.translate()` clip correction. The resulting path displayed Kratos, monsters and background correctly while preserving input, gameplay, RMS where exercised and normal exit.
-
-### A7 Audio/Media
-
-The RG35XX adapter gained a native SDL1_mixer backend compatible with the device's ARMv5TE soft-float environment. Canonical media behavior was retained rather than replacing the MMAPI state machine with a separate RG35XX design.
-
-A Java 6 compatibility boundary was required for the protected JamVM/glibj environment. Subsequent device evidence showed that Java/SDL media execution could reach the correct ALSA PCM device while remaining silent on a cold route.
-
-A direct PCM A/B test and a cold Java-only test isolated the missing owner to device audio-route priming. The accepted launcher-boundary workaround is:
+Audit/design evidence already closed for its declared scopes:
 
 ```text
-PRE-JAVA
-  aplay
-  RW_INTERLEAVED
-  hw:0,0
-  S32_LE
-  44100 Hz
-  stereo
-  ~350 ms zero PCM
-  close
-THEN
-  accepted Java + SDL1_mixer runtime
+P2B_FONT_ASSET_IDENTITY=PASS
+P2B_JDK8_SEMANTIC_REFERENCE=PASS
+P2B_JDK8U504_FREETYPE_ARM_EXHAUSTIVE_CHARWIDTH=PASS
+P2B_JDK8U504_FREETYPE_ARM_EXHAUSTIVE_CANDISPLAY=PASS
+P2B_SIMPLE_STRING_METRIC_PATH=PASS
+P2B_SIMPLE_DRAWSTRING_SOURCE_PATH=PASS
+P2B_SIMPLE_STRING_DRAW_RASTER=PASS
+P2B_COMPLEX_LAYOUT_EXISTING_CORPUS=PASS
+P2B_MINIMUM_OWNER_SCOPED_RUNTIME_INTERFACE=PASS
+P2B_FILES_ALLOWED_TO_CHANGE=PASS
+P2B_MINIMUM_REQUIRED_DELTA=PASS
+P2B_FONT_PROVISIONING_PACKAGING_CONTRACT=PASS
 ```
 
-No audible marker tone, GPIO mutation, `amixer` mutation or `alsactl restore` is part of the accepted solution.
+Scope details matter:
 
-A7 direct testing then passed audible WAV, WAV pause/resume, audible MIDI, MIDI END_OF_MEDIA, protected hashes and normal exit. The A7 candidate subsequently passed Vua Cướp Biển and God of War parent regression.
+- exhaustive `charWidth` / `canDisplay`: exact 196,608/196,608 BMP code-unit cases;
+- simple raster: existing 144-case simple-string corpus;
+- complex layout: existing 192-case non-simple corpus;
+- font asset: exact Aweigit 2.0 MiSans runtime identity, embedded-software provisioning only, with required attribution/license handling.
 
-## Protected accepted owners
+These are audit/design gates, not runtime/device acceptance.
 
-Do not modify these without new parent-level regression evidence pointing back to them:
+### P2B minimum owner scope
+
+The authorized design keeps Miyoo/MIDP semantics in their existing owners and replaces only the unavailable provisional RG35XX Raw2D backing.
+
+Allowed future runtime scope is limited to the documented P2B owner boundary, including:
+
+- `adapter/java/org/recompile/rg35xx/RG35XXCore2D.java` font/text backing section;
+- owner-scoped P2B staging/build files;
+- a new owner-scoped font native backend/glue if required;
+- Raw2D-only staged deltas in `Font.java` and `PlatformGraphics.java` while preserving their public/Miyoo semantics.
+
+Forbidden P2B changes include the canonical gitlink/pin, JamVM, glibj, protected input/video/audio natives, P1A non-text graphics semantics, P2A image semantics, RMS, MMAPI, lifecycle and game-specific logic.
+
+## Required P2B acceptance sequence
+
+Before any P2B physical package may be considered accepted, the runtime candidate must pass in order:
 
 ```text
-AWEIGIT_CANONICAL_PIN
-JAMVM_GLIBJ
-A6_GRAPHICS
-A6_INPUT
-PERF_A1
-PNG_ALPHA_DRAWREGION
-CLIPTRANSLATE
-A7_JAVA6_MEDIA_COMPAT
-A7_SDL1_MIXER_BACKEND
-A1P5_AUDIO_ROUTE_PRIME
+P2B_CANONICAL_DIFF_VERIFIED=PASS
+P2B_OWNER_SCOPE_VERIFIED=PASS
+P2B_JAVA6_GATE=PASS
+P2B_HOST_FONT_METRICS_GATE=PASS
+P2B_HOST_SIMPLE_RASTER_GATE=PASS
+P2B_HOST_COMPLEX_LAYOUT_GATE=PASS
+P1A_GRAPHICS_PARENT_REGRESSION=PASS
+P2A_IMAGE_PARENT_REGRESSION=PASS
+P2B_MODULE_GATE=PASS
 ```
 
-## What DEVICE-PASS means here
+Only after those gates may one original-RG35XX P2B physical module package be built and tested.
 
-The designation applies only to the tested integration scope and selected game corpus. It does not prove universal J2ME compatibility.
+## Remaining platform phases
 
-Currently deferred or outside the accepted scope include:
+Current platform state:
 
 ```text
-3D / M3G / Mascot
-NETWORK
-SMS
-PAYMENT
-untested MMAPI codecs/formats
-all untested commercial games
+P0=PASS
+P1=PASS
+P2=PARTIAL
+P3=NOT_TESTED
+P4=NOT_TESTED
+P5=NOT_TESTED
+P6=NOT_TESTED
+P7=NOT_TESTED
+P8=NOT_TESTED
+P9=NOT_TESTED
 ```
 
-## Rules for the next stage
+P2 remains `PARTIAL` because P2B and the remaining frontend/input/resolution contract have not received their required runtime/module/physical acceptance.
 
-1. Branch future development from `rg35xx-aweigit-r1-stable`.
-2. Preserve the accepted baseline as a rollback/reference point.
-3. Do not replay DP-R1..DP-R11, VC or Golden patch chains.
-4. Prefer one evidence-rich integration package over repeated micro-tests.
-5. BUILD-PASS is never DEVICE-PASS.
-6. A hang or hard reset is FAIL.
-7. When a new regression appears, identify canonical behavior, RG35XX contract and failure owner before editing code.
-8. Apply the smallest adapter delta and rerun the parent integration/regression test.
-9. Commercial game JARs remain external test inputs and must never be bundled.
-10. Do not declare the whole platform STABLE until broader repeated real-device regression justifies that status.
+P9 work is not authorized before P8.
 
-## Next planned stage
+## Human + ChatGPT collaboration record
 
-```text
-A8 = PACKAGE / LAUNCHER CONSOLIDATION + GENERAL REAL-GAME SANITY
-```
+The repository owner/operator is completing this project with **ChatGPT by OpenAI as an engineering assistant**. ChatGPT assists with source/ancestry auditing, contract reconstruction, differential-test design, evidence review, GitHub/documentation work and checkpoint/tasklog continuity.
 
-A8 should consolidate the accepted A1P5 audio prime into the production launcher, correct diagnostic/logging order where needed, preserve accepted runtime identities and use a consolidated original-RG35XX integration test before expanding the game corpus.
+Original-RG35XX physical observations and project decisions remain human-controlled. No ChatGPT analysis substitutes for a required physical device gate.
+
+## New-chat rule
+
+For every new chat:
+
+1. Read `TASKLOG.md` first.
+2. Treat this ledger and the locked rule files as authority.
+3. Verify exact parent/branch identity before changing runtime code.
+4. Continue the recorded `NEXT_LEGAL_ACTION` rather than reopening accepted owners.
+5. Never parent production work from A9 or from a game-specific experimental branch.
