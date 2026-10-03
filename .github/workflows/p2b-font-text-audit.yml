@@ -7,7 +7,7 @@ on:
       - audit/p2b-font-text
     paths:
       - '.github/workflows/p2b-font-text-audit.yml'
-      - 'docs/P2B-FONT-TEXT-AUDIT-v1.md'
+      - 'docs/P2B-*.md'
       - 'tests/p2b/diagnostic/**'
 
 permissions:
@@ -39,7 +39,7 @@ jobs:
           BASE=77a36526e0f6d875c57c7e9a973e0c1a05573721
           test "$(git merge-base HEAD "$BASE")" = "$BASE"
           git diff --name-only "$BASE"...HEAD | tee /tmp/p2b-files.txt
-          if grep -Ev '^(docs/P2B-FONT-TEXT-AUDIT-v1\.md|tests/p2b/diagnostic/[^/]+|\.github/workflows/p2b-font-[^/]+-audit\.yml)$' /tmp/p2b-files.txt | grep -q .; then
+          if grep -Ev '^(docs/P2B-[^/]+\.md|tests/p2b/diagnostic/[^/]+|\.github/workflows/p2b-font-[^/]+-audit\.yml)$' /tmp/p2b-files.txt | grep -q .; then
             echo 'P2B_AUDIT_SCOPE=FAIL'
             exit 1
           fi
