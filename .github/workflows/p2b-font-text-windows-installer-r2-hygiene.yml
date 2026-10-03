@@ -65,7 +65,8 @@ jobs:
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/${R1_ARTIFACT_ID}/zip" \
             -o /tmp/p2b-r1-artifact.zip
           unzip -q /tmp/p2b-r1-artifact.zip -d /tmp/p2b-r1-artifact
-          R1=/tmp/p2b-r1-artifact/RG35XX-P2B-FONT-TEXT-PHYSICAL-R1.zip
+          R1="$(find /tmp/p2b-r1-artifact -type f -name 'RG35XX-P2B-FONT-TEXT-PHYSICAL-R1.zip' -print -quit)"
+          test -n "$R1"
           test -f "$R1"
           test "$(sha256sum "$R1" | awk '{print $1}')" = "$R1_PACKAGE_SHA256"
           echo "R1=$R1" >> "$GITHUB_ENV"
