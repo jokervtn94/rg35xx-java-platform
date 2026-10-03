@@ -75,12 +75,13 @@ jobs:
             echo 'P2B_JDK8_HOST_FREETYPE_PROVENANCE=DIAGNOSTIC_ONLY'
           } | tee out/P2B-JDK8-HOST-FREETYPE-PROVENANCE.txt
 
-      - name: Install qemu and exact pinned Miyoo toolchain
+      - name: Install qemu, host FreeType headers, and exact pinned Miyoo toolchain
         shell: bash
         run: |
           set -euo pipefail
           sudo apt-get update >/dev/null
-          sudo apt-get install -y --no-install-recommends qemu-user >/dev/null
+          sudo apt-get install -y --no-install-recommends qemu-user libfreetype6-dev pkg-config >/dev/null
+          pkg-config --modversion freetype2 | tee out/P2B-HOST-FREETYPE-PKGCONFIG-VERSION.txt
           docker pull "$TOOLCHAIN_IMAGE"
           cid=$(docker create "$TOOLCHAIN_IMAGE" true)
           trap 'docker rm -f "$cid" >/dev/null 2>&1 || true' EXIT
@@ -126,6 +127,53 @@ jobs:
           grep -F 'P2B_JDK_RASTER_FP_CASES=144' out/P2B-JDK8-RASTER-FP.log
           grep -F 'P2B_JDK_RASTER_FP_RESULT=PASS' out/P2B-JDK8-RASTER-FP.log
 
+      - name: Trace native libraries actually loaded by JDK8 AWT font path
+        shell: bash
+        run: |
+          set -euo pipefail
+          LD_DEBUG=libs java -Djava.awt.headless=true -cp out/classes \
+            RG35XXP2BJdkRasterFingerprintDiagnostic out/font.ttf \
+            > out/P2B-JDK8-LDDEBUG-STDOUT.log 2> out/P2B-JDK8-LDDEBUG.log
+          grep -F 'P2B_JDK_RASTER_FP_RESULT=PASS' out/P2B-JDK8-LDDEBUG-STDOUT.log
+          grep -Ei 'freetype|fontmanager|awt_headless|libawt|libjava' out/P2B-JDK8-LDDEBUG.log \
+            | tee out/P2B-JDK8-LDDEBUG-FONT-LIBS.txt || true
+          {
+            echo 'P2B_JDK8_LDDEBUG_TRACE=PASS'
+            if grep -qi 'libfreetype' out/P2B-JDK8-LDDEBUG-FONT-LIBS.txt; then
+              echo 'P2B_JDK8_LDDEBUG_FREETYPE=SEEN'
+            else
+              echo 'P2B_JDK8_LDDEBUG_FREETYPE=NOT_SEEN'
+            fi
+            if grep -qi 'fontmanager' out/P2B-JDK8-LDDEBUG-FONT-LIBS.txt; then
+              echo 'P2B_JDK8_LDDEBUG_FONTMANAGER=SEEN'
+            else
+              echo 'P2B_JDK8_LDDEBUG_FONTMANAGER=NOT_SEEN'
+            fi
+          } | tee out/P2B-JDK8-LDDEBUG-STATUS.txt
+
+      - name: Build and run host native probe with identical scaler policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          cc -O2 $(pkg-config --cflags freetype2) \
+            tests/p2b/diagnostic/p2b_freetype_jdk8_scaler_arm.c \
+            $(pkg-config --libs freetype2) -lm -o out/p2b-freetype-jdk8-scaler-host
+          file out/p2b-freetype-jdk8-scaler-host | tee out/P2B-JDK8-FT-SCALER-HOST-FILE.txt
+          ldd out/p2b-freetype-jdk8-scaler-host | tee out/P2B-JDK8-FT-SCALER-HOST-LDD.txt
+          out/p2b-freetype-jdk8-scaler-host out/font.ttf \
+            | tee out/P2B-JDK8-FT-SCALER-HOST.log
+          grep -F 'P2B_FT_LIBRARY_VERSION=' out/P2B-JDK8-FT-SCALER-HOST.log
+          grep -F 'P2B_FT_JDK8_SCALER_CASES=144' out/P2B-JDK8-FT-SCALER-HOST.log
+          grep -F 'P2B_FT_JDK8_SCALER_RESULT=PASS' out/P2B-JDK8-FT-SCALER-HOST.log
+          python3 tests/p2b/diagnostic/compare_p2b_jdk8_scaler_raster.py \
+            out/P2B-JDK8-RASTER-FP.log out/P2B-JDK8-FT-SCALER-HOST.log \
+            | tee out/P2B-JDK8-FT-SCALER-HOST-DIFFERENTIAL.txt
+          grep -F 'P2B_JDK8_FT_SCALER_DIFF_PARSE=PASS' out/P2B-JDK8-FT-SCALER-HOST-DIFFERENTIAL.txt
+          grep -F 'P2B_JDK8_FT_SCALER_JDK_CASES=144' out/P2B-JDK8-FT-SCALER-HOST-DIFFERENTIAL.txt
+          grep -F 'P2B_JDK8_FT_SCALER_ARM_CASES=144' out/P2B-JDK8-FT-SCALER-HOST-DIFFERENTIAL.txt
+          grep -F 'P2B_JDK8_FT_SCALER_DIFF_RESULT=PASS' out/P2B-JDK8-FT-SCALER-HOST-DIFFERENTIAL.txt
+          grep -F 'P2B_RUNTIME_PATCH=FORBIDDEN' out/P2B-JDK8-FT-SCALER-HOST-DIFFERENTIAL.txt
+
       - name: Build and run ARM probe matching OpenJDK8 FreetypeFontScaler policy
         shell: bash
         run: |
@@ -140,6 +188,7 @@ jobs:
           file out/p2b-freetype-jdk8-scaler-arm | tee out/P2B-JDK8-FT-SCALER-FILE.txt
           qemu-arm -L "$SYSROOT" out/p2b-freetype-jdk8-scaler-arm out/font.ttf \
             | tee out/P2B-JDK8-FT-SCALER.log
+          grep -F 'P2B_FT_LIBRARY_VERSION=' out/P2B-JDK8-FT-SCALER.log
           grep -F 'P2B_FT_JDK8_INTERPRETER=35' out/P2B-JDK8-FT-SCALER.log
           grep -F 'P2B_FT_JDK8_AA=OFF' out/P2B-JDK8-FT-SCALER.log
           grep -F 'P2B_FT_JDK8_FM=OFF' out/P2B-JDK8-FT-SCALER.log
@@ -164,11 +213,12 @@ jobs:
           grep -F 'P2B_JDK8_FT_SCALER_DIFF_RESULT=PASS' out/P2B-JDK8-FT-SCALER-DIFFERENTIAL.txt
           grep -F 'P2B_RUNTIME_PATCH=FORBIDDEN' out/P2B-JDK8-FT-SCALER-DIFFERENTIAL.txt
 
-      - name: Remove font and executable before evidence upload
+      - name: Remove font and executables before evidence upload
         shell: bash
         run: |
           set -euo pipefail
-          rm -f out/font.ttf out/miyoomini-freej2me.zip out/p2b-freetype-jdk8-scaler-arm
+          rm -f out/font.ttf out/miyoomini-freej2me.zip \
+            out/p2b-freetype-jdk8-scaler-arm out/p2b-freetype-jdk8-scaler-host
           if find out -type f | grep -Ei '\.(ttf|otf)$'; then echo 'P2B_FONT_BYTE_LEAK=FAIL'; exit 1; fi
           {
             echo 'P2B_FONT_BYTE_LEAK=NO'
@@ -186,9 +236,17 @@ jobs:
             out/P2B-JDK8-HOST-FONT-LIB-CANDIDATES.txt
             out/P2B-JDK8-FONTMANAGER-LDD.txt
             out/P2B-JDK8-HOST-FREETYPE-PROVENANCE.txt
+            out/P2B-HOST-FREETYPE-PKGCONFIG-VERSION.txt
             out/P2B-JDK8-FT-LIB-SHA256.txt
             out/P2B-JDK8-SCALER-CONTEXT.log
             out/P2B-JDK8-RASTER-FP.log
+            out/P2B-JDK8-LDDEBUG.log
+            out/P2B-JDK8-LDDEBUG-FONT-LIBS.txt
+            out/P2B-JDK8-LDDEBUG-STATUS.txt
+            out/P2B-JDK8-FT-SCALER-HOST.log
+            out/P2B-JDK8-FT-SCALER-HOST-DIFFERENTIAL.txt
+            out/P2B-JDK8-FT-SCALER-HOST-FILE.txt
+            out/P2B-JDK8-FT-SCALER-HOST-LDD.txt
             out/P2B-JDK8-FT-SCALER.log
             out/P2B-JDK8-FT-SCALER-DIFFERENTIAL.txt
             out/P2B-JDK8-FT-SCALER-FILE.txt
