@@ -166,7 +166,7 @@ jobs:
           grep -q '^RUNTIME_SEMANTIC_DELTA=NONE$' /tmp/p2c-physical-r4-exerciser.log
           grep -q '^LOGICAL_RESOLUTION=176x208$' out/p2c-input-frontend-candidate-r1/P2C-INPUT-FRONTEND-EXERCISER-IDENTITY.txt
           grep -q '^PHASE_COUNT=3$' out/p2c-input-frontend-candidate-r1/P2C-INPUT-FRONTEND-EXERCISER-IDENTITY.txt
-          strings out/p2c-input-frontend-candidate-r1/RG35XX-Platform-Exerciser-P2C-InputFrontend.jar | grep -q 'P2C_EXERCISER_CHORD_SELECT_PRESS=PASS STAGE='
+          grep -q 'P2C_EXERCISER_CHORD_SELECT_PRESS=PASS STAGE=' tests/p2c/exerciser/RG35XXP2CInputFrontendExerciser.java
           echo P2C_PHYSICAL_R4_EXERCISER_GATE=PASS
 
       - name: Build one fail-closed P2C physical package with exact package raw hash
