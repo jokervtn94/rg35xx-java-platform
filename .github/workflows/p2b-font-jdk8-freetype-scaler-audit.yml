@@ -51,31 +51,28 @@ jobs:
           echo 'P2B_JDK8_FT_AUDIT_SCOPE=PASS'
           echo 'P2B_RUNTIME_DELTA=NONE'
 
-      - name: Record exact JDK8 reference runtime and host FreeType provenance
+      - name: Record exact JDK8 reference runtime and host font-library candidates
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p out
           java -version 2>&1 | tee out/P2B-JDK8-VERSION.txt
-          FM=$(find "$JAVA_HOME" -type f -name libfontmanager.so -print -quit)
-          test -n "$FM"
+          find "$JAVA_HOME" \( -name 'libfontmanager.so' -o -name 'libfreetype.so*' \) -print \
+            | tee out/P2B-JDK8-HOST-FONT-LIB-CANDIDATES.txt
+          FM=$(find "$JAVA_HOME" -name libfontmanager.so -print -quit || true)
           {
-            echo "P2B_JDK8_FONTMANAGER=$FM"
-            ldd "$FM"
-          } | tee out/P2B-JDK8-FONTMANAGER-LDD.txt
-          FT=$(ldd "$FM" | awk '/libfreetype\.so/{print $3; exit}')
-          {
-            if test -n "$FT" && test -f "$FT"; then
-              REAL_FT=$(readlink -f "$FT")
-              echo "P2B_JDK8_HOST_FREETYPE_PATH=$REAL_FT"
-              sha256sum "$REAL_FT" | sed 's/^/P2B_JDK8_HOST_FREETYPE_SHA256=/'
-              dpkg-query -S "$REAL_FT" 2>/dev/null | sed 's/^/P2B_JDK8_HOST_FREETYPE_PACKAGE_OWNER=/' || true
-              dpkg-query -W -f='P2B_JDK8_HOST_FREETYPE_PACKAGE_VERSION=${Version}\n' libfreetype6 2>/dev/null || true
-              echo 'P2B_JDK8_HOST_FREETYPE_DYNAMIC=YES'
+            if test -n "$FM" && test -e "$FM"; then
+              echo "P2B_JDK8_FONTMANAGER=$FM"
+              ldd "$FM" || true
             else
-              echo 'P2B_JDK8_HOST_FREETYPE_PATH=UNRESOLVED_FROM_LDD'
-              echo 'P2B_JDK8_HOST_FREETYPE_DYNAMIC=NO_OR_UNRESOLVED'
+              echo 'P2B_JDK8_FONTMANAGER=UNRESOLVED_IN_JAVA_HOME'
             fi
+          } | tee out/P2B-JDK8-FONTMANAGER-LDD.txt
+          {
+            dpkg-query -W -f='P2B_HOST_FREETYPE_PACKAGE_VERSION=${Version}\n' libfreetype6 2>/dev/null || \
+              echo 'P2B_HOST_FREETYPE_PACKAGE_VERSION=UNRESOLVED'
+            ldconfig -p 2>/dev/null | grep 'libfreetype\.so' || true
+            echo 'P2B_JDK8_HOST_FREETYPE_PROVENANCE=DIAGNOSTIC_ONLY'
           } | tee out/P2B-JDK8-HOST-FREETYPE-PROVENANCE.txt
 
       - name: Install qemu and exact pinned Miyoo toolchain
@@ -186,6 +183,7 @@ jobs:
           name: RG35XX-P2B-JDK8-FT-SCALER-${{ github.sha }}
           path: |
             out/P2B-JDK8-VERSION.txt
+            out/P2B-JDK8-HOST-FONT-LIB-CANDIDATES.txt
             out/P2B-JDK8-FONTMANAGER-LDD.txt
             out/P2B-JDK8-HOST-FREETYPE-PROVENANCE.txt
             out/P2B-JDK8-FT-LIB-SHA256.txt
