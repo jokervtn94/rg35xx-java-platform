@@ -7,6 +7,7 @@ import org.recompile.rg35xx.p2b.jdk8.text.Bidi;
 import org.recompile.rg35xx.p2b.jdk8.font.BidiUtils;
 import org.recompile.rg35xx.p2b.jdk8.script.ScriptRun;
 import org.recompile.rg35xx.p2b.jdk8.mark.Jdk8MarkClassifier;
+import org.recompile.rg35xx.p2b.jdk8.normalizer.UTF16;
 
 /**
  * Audit-only local reconstruction of the JDK8 TextLayout fast-path planner.
@@ -62,10 +63,13 @@ public final class RG35XXP2BLocalComponentPlanDiagnostic {
 
     private static boolean engineMark(char[] chars,int start,int limit) {
         // Exact semantic dependency of JDK8 GlyphLayout.EngineRecord.init: Mn/Me/Mc.
+        // Supplementary assembly uses the same source-derived JDK8 UTF16 closure as Bidi,
+        // so this planner has no hidden dependency on the host/protected java.lang.Character data.
         for(int i=start;i<limit;i++) {
             int cp=chars[i];
-            if(Character.isHighSurrogate((char)cp) && i<limit-1 && Character.isLowSurrogate(chars[i+1])) {
-                cp=Character.toCodePoint((char)cp,chars[++i]);
+            if(UTF16.isLeadSurrogate((char)cp) && i<limit-1 && UTF16.isTrailSurrogate(chars[i+1])) {
+                cp=UTF16.charAt(chars,start,limit,i-start);
+                i++;
             }
             if(Jdk8MarkClassifier.isEngineMark(cp)) return true;
         }
