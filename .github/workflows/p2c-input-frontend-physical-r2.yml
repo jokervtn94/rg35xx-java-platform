@@ -1,16 +1,16 @@
-name: P2C Input Frontend Physical Package R3
+name: P2C Input Frontend Physical Package R4
 
 on:
   push:
     branches:
-      - physical-test/p2c-input-frontend-20261003-r3
+      - physical-test/p2c-input-frontend-20261004-r4
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  p2c-input-frontend-physical-r3:
+  p2c-input-frontend-physical-r4:
     runs-on: ubuntu-22.04
     timeout-minutes: 240
     env:
@@ -26,7 +26,7 @@ jobs:
       EXPECTED_AUDIO: 4522157846c33c150a85c50b4bed6f68351f1c62d54b8cd7805cbb97c5727644
 
     steps:
-      - name: Checkout physical R3 branch and canonical submodule
+      - name: Checkout physical R4 branch and canonical submodule
         uses: actions/checkout@v4
         with:
           submodules: recursive
@@ -48,12 +48,12 @@ jobs:
           test "$(git -C upstream/freej2me-miyoomini rev-parse HEAD)" = "$CANONICAL_AWEIGIT"
           changed="$(git diff --name-only "$HOST_MODULE_CHECKPOINT"..HEAD | LC_ALL=C sort)"
           expected=$'.github/workflows/p2c-input-frontend-physical-r1.yml\n.github/workflows/p2c-input-frontend-physical-r2.yml\nscripts/build-p2c-input-frontend-exerciser.sh\nscripts/build-p2c-input-frontend-physical-package-v2.sh\nscripts/build-p2c-input-frontend-physical-package-v3.sh\nscripts/build-p2c-input-frontend-physical-package.sh\nscripts/p2c-semantic-jar-digest.py\ntests/p2c/exerciser/RG35XXP2CInputFrontendExerciser.java'
-          test "$changed" = "$expected" || { echo "P2C_PHYSICAL_R3_SCOPE_FAIL=$changed"; exit 1; }
+          test "$changed" = "$expected" || { echo "P2C_PHYSICAL_R4_SCOPE_FAIL=$changed"; exit 1; }
           ! git diff --name-only "$HOST_MODULE_CHECKPOINT"..HEAD | grep -E '^(adapter/|upstream/|packaging/|scripts/stage-|scripts/build-a[0-9])'
           test -z "$(git -C upstream/freej2me-miyoomini status --porcelain --untracked-files=no)"
-          echo P2C_PHYSICAL_R3_EXACT_CHECKPOINT=PASS
-          echo P2C_PHYSICAL_R3_RUNTIME_SEMANTIC_DELTA=NONE
-          echo P2C_PHYSICAL_R3_REPOSITORY_SCOPE=PASS
+          echo P2C_PHYSICAL_R4_EXACT_CHECKPOINT=PASS
+          echo P2C_PHYSICAL_R4_RUNTIME_SEMANTIC_DELTA=NONE
+          echo P2C_PHYSICAL_R4_REPOSITORY_SCOPE=PASS
           echo GAME_SPECIFIC_CODE=NO
           echo A9_PARENT=NO
 
@@ -77,7 +77,7 @@ jobs:
           docker run --rm -v "$GITHUB_WORKSPACE:/work" -w /work "$TOOLCHAIN_IMAGE" \
             bash -lc 'git config --global --add safe.directory /work/upstream/freej2me-miyoomini && ./scripts/build-a3.sh native'
           bash ./scripts/build-a5-core2d-java.sh
-          echo P2C_PHYSICAL_R3_PROTECTED_PARENT_CHAIN=PASS
+          echo P2C_PHYSICAL_R4_PROTECTED_PARENT_CHAIN=PASS
 
       - name: Install exact pinned Miyoo ARMv5 uClibC toolchain
         shell: bash
@@ -89,14 +89,14 @@ jobs:
           sudo docker cp "$cid:/opt/miyoo" /opt/miyoo
           sudo chown -R "$(id -u):$(id -g)" /opt/miyoo
           test -x /opt/miyoo/bin/arm-miyoo-linux-uclibcgnueabi-gcc
-          echo P2C_PHYSICAL_R3_PINNED_TOOLCHAIN=PASS
+          echo P2C_PHYSICAL_R4_PINNED_TOOLCHAIN=PASS
 
       - name: Rebuild and semantic-gate exact P2C host/module candidate
         shell: bash
         run: |
           set -euo pipefail
           chmod +x scripts/build-p2c-input-frontend-candidate.sh scripts/build-p2c-input-frontend-candidate-v2.sh scripts/build-p2b-font-text-candidate.sh scripts/build-p2b-font-text-candidate-v2.sh
-          JAVA8="$JAVA_HOME" bash scripts/build-p2c-input-frontend-candidate-v2.sh | tee /tmp/p2c-physical-r2-host-module.log
+          JAVA8="$JAVA_HOME" bash scripts/build-p2c-input-frontend-candidate-v2.sh | tee /tmp/p2c-physical-r4-host-module.log
           for marker in \
             P2C_CANONICAL_DIFF_VERIFIED=PASS \
             P2C_OWNER_SCOPE_VERIFIED=PASS \
@@ -112,7 +112,7 @@ jobs:
             P2C_FINAL_OUTPUT_HASH_GATE=PASS \
             P2C_PHYSICAL_TEST=NOT_TESTED \
             RG35XX_PLATFORM_BASELINE_DEVICE_PASS=NO \
-            STABLE=NO; do grep -q "^${marker}$" /tmp/p2c-physical-r2-host-module.log; done
+            STABLE=NO; do grep -q "^${marker}$" /tmp/p2c-physical-r4-host-module.log; done
           OUT=out/p2c-input-frontend-candidate-r1
           ID="$OUT/P2C-INPUT-FRONTEND-IDENTITY.txt"
           JAR="$OUT/freej2me-rg35xx.jar"
@@ -127,9 +127,9 @@ jobs:
           test "$(sha256sum "$OUT/librg35xx_font.so" | awk '{print $1}')" = "$EXPECTED_FONT"
           test "$(sha256sum "$OUT/librg35xx_video.so" | awk '{print $1}')" = "$EXPECTED_VIDEO"
           (cd "$OUT" && sha256sum -c SHA256SUMS.txt)
-          echo "P2C_PHYSICAL_R3_REBUILT_RAW_JAR_SHA256=$RAW"
-          echo "P2C_PHYSICAL_R3_SEMANTIC_JAR_SHA256=$SEM"
-          echo P2C_PHYSICAL_R3_HOST_MODULE_REBUILD=PASS
+          echo "P2C_PHYSICAL_R4_REBUILT_RAW_JAR_SHA256=$RAW"
+          echo "P2C_PHYSICAL_R4_SEMANTIC_JAR_SHA256=$SEM"
+          echo P2C_PHYSICAL_R4_HOST_MODULE_REBUILD=PASS
 
       - name: Rebuild exact protected A7 audio dependency
         shell: bash
@@ -150,34 +150,35 @@ jobs:
           '
           sudo chown -R "$(id -u):$(id -g)" out/p2c-protected-audio
           test "$(sha256sum out/p2c-protected-audio/libaudio.so | awk '{print $1}')" = "$EXPECTED_AUDIO"
-          echo P2C_PHYSICAL_R3_PROTECTED_AUDIO_DEPENDENCY_GATE=PASS
+          echo P2C_PHYSICAL_R4_PROTECTED_AUDIO_DEPENDENCY_GATE=PASS
 
       - name: Build public-MIDP physical exerciser
         shell: bash
         run: |
           set -euo pipefail
           chmod +x scripts/build-p2c-input-frontend-exerciser.sh
-          JAVA8="$JAVA_HOME" bash scripts/build-p2c-input-frontend-exerciser.sh | tee /tmp/p2c-physical-r2-exerciser.log
-          grep -q '^P2C_EXERCISER_PLATFORM_SEMANTIC_GATE=PASS$' /tmp/p2c-physical-r2-exerciser.log
-          grep -q '^P2C_EXERCISER_BUILD=PASS$' /tmp/p2c-physical-r2-exerciser.log
-          grep -q '^P2C_EXERCISER_JAVA6_GATE=PASS$' /tmp/p2c-physical-r2-exerciser.log
-          grep -q '^P2C_EXERCISER_PUBLIC_MIDP_ONLY=YES$' /tmp/p2c-physical-r2-exerciser.log
-          grep -q '^P2C_EXERCISER_DIRECT_BACKEND_CALL=NO$' /tmp/p2c-physical-r2-exerciser.log
-          grep -q '^RUNTIME_SEMANTIC_DELTA=NONE$' /tmp/p2c-physical-r2-exerciser.log
+          JAVA8="$JAVA_HOME" bash scripts/build-p2c-input-frontend-exerciser.sh | tee /tmp/p2c-physical-r4-exerciser.log
+          grep -q '^P2C_EXERCISER_PLATFORM_SEMANTIC_GATE=PASS$' /tmp/p2c-physical-r4-exerciser.log
+          grep -q '^P2C_EXERCISER_BUILD=PASS$' /tmp/p2c-physical-r4-exerciser.log
+          grep -q '^P2C_EXERCISER_JAVA6_GATE=PASS$' /tmp/p2c-physical-r4-exerciser.log
+          grep -q '^P2C_EXERCISER_PUBLIC_MIDP_ONLY=YES$' /tmp/p2c-physical-r4-exerciser.log
+          grep -q '^P2C_EXERCISER_DIRECT_BACKEND_CALL=NO$' /tmp/p2c-physical-r4-exerciser.log
+          grep -q '^RUNTIME_SEMANTIC_DELTA=NONE$' /tmp/p2c-physical-r4-exerciser.log
           grep -q '^LOGICAL_RESOLUTION=176x208$' out/p2c-input-frontend-candidate-r1/P2C-INPUT-FRONTEND-EXERCISER-IDENTITY.txt
           grep -q '^PHASE_COUNT=3$' out/p2c-input-frontend-candidate-r1/P2C-INPUT-FRONTEND-EXERCISER-IDENTITY.txt
-          echo P2C_PHYSICAL_R3_EXERCISER_GATE=PASS
+          strings out/p2c-input-frontend-candidate-r1/RG35XX-Platform-Exerciser-P2C-InputFrontend.jar | grep -q 'P2C_EXERCISER_CHORD_SELECT_PRESS=PASS STAGE='
+          echo P2C_PHYSICAL_R4_EXERCISER_GATE=PASS
 
       - name: Build one fail-closed P2C physical package with exact package raw hash
         shell: bash
         run: |
           set -euo pipefail
           chmod +x scripts/build-p2c-input-frontend-physical-package.sh scripts/build-p2c-input-frontend-physical-package-v2.sh scripts/build-p2c-input-frontend-physical-package-v3.sh
-          bash scripts/build-p2c-input-frontend-physical-package-v3.sh | tee /tmp/p2c-physical-r2-package.log
-          grep -q '^P2C_PHYSICAL_V3_SEMANTIC_JAR_PATCH=PASS$' /tmp/p2c-physical-r2-package.log
-          grep -q '^P2C_PHYSICAL_V2_REDIRECT_PATCH=PASS$' /tmp/p2c-physical-r2-package.log
-          grep -q '^P2C_PHYSICAL_V3_SEMANTIC_JAR_GATE=PASS$' /tmp/p2c-physical-r2-package.log
-          grep -q '^P2C_PHYSICAL_PACKAGE_BUILD=PASS$' /tmp/p2c-physical-r2-package.log
+          bash scripts/build-p2c-input-frontend-physical-package-v3.sh | tee /tmp/p2c-physical-r4-package.log
+          grep -q '^P2C_PHYSICAL_V3_SEMANTIC_JAR_PATCH=PASS$' /tmp/p2c-physical-r4-package.log
+          grep -q '^P2C_PHYSICAL_V2_REDIRECT_PATCH=PASS$' /tmp/p2c-physical-r4-package.log
+          grep -q '^P2C_PHYSICAL_V3_SEMANTIC_JAR_GATE=PASS$' /tmp/p2c-physical-r4-package.log
+          grep -q '^P2C_PHYSICAL_PACKAGE_BUILD=PASS$' /tmp/p2c-physical-r4-package.log
           OUT=out/p2c-input-frontend-candidate-r1
           ID="$OUT/P2C-PHYSICAL-PACKAGE-IDENTITY.txt"
           grep -q '^HOST_MODULE_GATE=PASS$' "$ID"
@@ -196,32 +197,32 @@ jobs:
           ZIP="$OUT/RG35XX-P2C-INPUT-FRONTEND-PHYSICAL-R1.zip"
           test -f "$ZIP"
           test "$(find "$OUT" -maxdepth 1 -type f -name 'RG35XX-P2C-INPUT-FRONTEND-PHYSICAL-*.zip' | wc -l | tr -d ' ')" = 1
-          rm -rf /tmp/p2c-r2-zipcheck && mkdir -p /tmp/p2c-r2-zipcheck
-          unzip -q "$ZIP" -d /tmp/p2c-r2-zipcheck
-          LAUNCH=/tmp/p2c-r2-zipcheck/RG35XX-P2C-INPUT-FRONTEND-PHYSICAL-R1/SD/Roms/APPS/RG35XX-P2C-INPUT-FRONTEND.sh
-          PAYLOAD=/tmp/p2c-r2-zipcheck/RG35XX-P2C-INPUT-FRONTEND-PHYSICAL-R1/SD/Roms/APPS/RG35XX-P2C-INPUT-FRONTEND
+          rm -rf /tmp/p2c-r4-zipcheck && mkdir -p /tmp/p2c-r4-zipcheck
+          unzip -q "$ZIP" -d /tmp/p2c-r4-zipcheck
+          LAUNCH=/tmp/p2c-r4-zipcheck/RG35XX-P2C-INPUT-FRONTEND-PHYSICAL-R1/SD/Roms/APPS/RG35XX-P2C-INPUT-FRONTEND.sh
+          PAYLOAD=/tmp/p2c-r4-zipcheck/RG35XX-P2C-INPUT-FRONTEND-PHYSICAL-R1/SD/Roms/APPS/RG35XX-P2C-INPUT-FRONTEND
           test -f "$LAUNCH"
           test -f "$PAYLOAD/freej2me-rg35xx.jar"
           test "$RAW" = "$(sha256sum "$PAYLOAD/freej2me-rg35xx.jar" | awk '{print $1}')"
           grep -q "^EXPECTED_PLATFORM=$RAW$" "$LAUNCH"
           ! grep -q '__P2C_PLATFORM_RAW_SHA256__\|__P2C_EXERCISER_SHA256__' "$LAUNCH"
           (cd "$PAYLOAD" && sha256sum -c PAYLOAD-SHA256SUMS.txt)
-          echo P2C_PHYSICAL_R3_EXACT_PACKAGE_RAW_JAR_GATE=PASS
-          echo P2C_PHYSICAL_R3_ONE_PACKAGE_GATE=PASS
+          echo P2C_PHYSICAL_R4_EXACT_PACKAGE_RAW_JAR_GATE=PASS
+          echo P2C_PHYSICAL_R4_ONE_PACKAGE_GATE=PASS
           echo P2C_PHYSICAL_TEST=NOT_TESTED
           echo RG35XX_PLATFORM_BASELINE_DEVICE_PASS=NO
           echo STABLE=NO
 
-      - name: Upload one P2C physical R3 package and gate evidence
+      - name: Upload one P2C physical R4 package and gate evidence
         uses: actions/upload-artifact@v4
         with:
-          name: RG35XX-P2C-INPUT-FRONTEND-PHYSICAL-R3-${{ github.sha }}
+          name: RG35XX-P2C-INPUT-FRONTEND-PHYSICAL-R4-${{ github.sha }}
           path: |
             out/p2c-input-frontend-candidate-r1/RG35XX-P2C-INPUT-FRONTEND-PHYSICAL-R1.zip
             out/p2c-input-frontend-candidate-r1/P2C-PHYSICAL-PACKAGE-IDENTITY.txt
             out/p2c-input-frontend-candidate-r1/P2C-INPUT-FRONTEND-IDENTITY.txt
             out/p2c-input-frontend-candidate-r1/P2C-INPUT-FRONTEND-EXERCISER-IDENTITY.txt
-            /tmp/p2c-physical-r2-host-module.log
-            /tmp/p2c-physical-r2-exerciser.log
-            /tmp/p2c-physical-r2-package.log
+            /tmp/p2c-physical-r4-host-module.log
+            /tmp/p2c-physical-r4-exerciser.log
+            /tmp/p2c-physical-r4-package.log
           if-no-files-found: error
