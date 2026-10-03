@@ -1,0 +1,130 @@
+name: P2B Font JDK8 TextLayout Components Audit
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - audit/p2b-font-text
+    paths:
+      - '.github/workflows/p2b-font-jdk8-textlayout-components-audit.yml'
+      - 'tests/p2b/diagnostic/RG35XXP2BJdkTextLayoutComponentDiagnostic.java'
+
+permissions:
+  contents: read
+
+jobs:
+  p2b-jdk8-textlayout-components:
+    runs-on: ubuntu-latest
+    env:
+      BASE: 77a36526e0f6d875c57c7e9a973e0c1a05573721
+      EXPECTED_FONT_SHA256: 1a5f4112daaa9473747c6834041646cc9b2c338cb40ab5dbb2f0161f8968ca10
+      EXPECTED_FONT_SIZE: '8092724'
+      JDK8U_TAG: jdk8u504-b01
+      JDK8U_COMMIT: 4efe36434f44bafb854e602ccbbe1b5696fce1a2
+      JDK8_GLYPHLIST_BLOB: 6cc39ada49575486e1bc772fa1aead296ea5ae88
+      JDK8_GLYPHLISTPIPE_BLOB: 0b107b0befae2be6651d84a03c54d8784127c4f0
+      JDK8_TEXTLINE_BLOB: 9efcdc32de2f3f75f73669e7468f9ec8787e8cdf
+      JDK8_EXTLABEL_BLOB: 433170b4e3a6fe47cf31315e2ff7581d2a114e3f
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Verify audit-only ancestry and scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git merge-base HEAD "$BASE")" = "$BASE"
+          git diff --name-only "$BASE"...HEAD | tee /tmp/p2b-textlayout-components-files.txt
+          if grep -Ev '^(docs/P2B-[^/]+\.md|tests/p2b/diagnostic/[^/]+|\.github/workflows/p2b-font-[^/]+-audit\.yml)$' /tmp/p2b-textlayout-components-files.txt | grep -q .; then
+            echo 'P2B_TEXTLAYOUT_COMPONENT_AUDIT_SCOPE=FAIL'; exit 1
+          fi
+          if git diff --name-only "$BASE"...HEAD | grep -E '^(adapter/|native/|upstream/|packaging/|scripts/stage-|scripts/build-)'; then
+            echo 'P2B_RUNTIME_DELTA=FAIL'; exit 1
+          fi
+          test "$(git -C upstream/freej2me-miyoomini rev-parse HEAD)" = ca11dfe8ea1cc273d92460f9a83bbf192023fa63
+          echo 'P2B_TEXTLAYOUT_COMPONENT_AUDIT_SCOPE=PASS'
+          echo 'P2B_RUNTIME_DELTA=NONE'
+
+      - name: Pin exact JDK8 draw/layout sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          rm -rf /tmp/jdk8u
+          git clone --filter=blob:none --no-checkout https://github.com/adoptium/jdk8u.git /tmp/jdk8u
+          git -C /tmp/jdk8u fetch --depth 1 origin tag "$JDK8U_TAG"
+          git -C /tmp/jdk8u checkout --detach "$JDK8U_TAG"
+          test "$(git -C /tmp/jdk8u rev-parse HEAD)" = "$JDK8U_COMMIT"
+          test "$(git -C /tmp/jdk8u rev-parse HEAD:jdk/src/share/classes/sun/font/GlyphList.java)" = "$JDK8_GLYPHLIST_BLOB"
+          test "$(git -C /tmp/jdk8u rev-parse HEAD:jdk/src/share/classes/sun/java2d/pipe/GlyphListPipe.java)" = "$JDK8_GLYPHLISTPIPE_BLOB"
+          test "$(git -C /tmp/jdk8u rev-parse HEAD:jdk/src/share/classes/java/awt/font/TextLine.java)" = "$JDK8_TEXTLINE_BLOB"
+          test "$(git -C /tmp/jdk8u rev-parse HEAD:jdk/src/share/classes/sun/font/ExtendedTextSourceLabel.java)" = "$JDK8_EXTLABEL_BLOB"
+          {
+            echo "P2B_JDK8U_COMMIT=$JDK8U_COMMIT"
+            echo "P2B_JDK8_GLYPHLIST_BLOB=$JDK8_GLYPHLIST_BLOB"
+            echo "P2B_JDK8_GLYPHLISTPIPE_BLOB=$JDK8_GLYPHLISTPIPE_BLOB"
+            echo "P2B_JDK8_TEXTLINE_BLOB=$JDK8_TEXTLINE_BLOB"
+            echo "P2B_JDK8_EXTLABEL_BLOB=$JDK8_EXTLABEL_BLOB"
+            echo 'P2B_TEXTLAYOUT_COMPONENT_SOURCE_PROVENANCE=PASS'
+          } | tee out/P2B-TEXTLAYOUT-COMPONENT-SOURCE-PROVENANCE.txt
+
+      - name: Materialize exact Miyoo MiSans for diagnostics
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL='https://github.com/aweigit/freej2me-miyoomini/releases/download/2.0/miyoomini-freej2me.zip'
+          curl -fL --retry 3 --retry-delay 2 "$URL" -o /tmp/miyoomini-freej2me.zip
+          ENTRY=$(unzip -Z1 /tmp/miyoomini-freej2me.zip | grep -Ei '(^|/)font\.ttf$')
+          test "$(printf '%s\n' "$ENTRY" | wc -l | tr -d ' ')" = 1
+          unzip -p /tmp/miyoomini-freej2me.zip "$ENTRY" > /tmp/p2b-font.ttf
+          test "$(sha256sum /tmp/p2b-font.ttf | awk '{print $1}')" = "$EXPECTED_FONT_SHA256"
+          test "$(wc -c < /tmp/p2b-font.ttf | tr -d ' ')" = "$EXPECTED_FONT_SIZE"
+          echo 'P2B_TEXTLAYOUT_COMPONENT_FONT_IDENTITY=PASS' | tee out/P2B-TEXTLAYOUT-COMPONENT-FONT-IDENTITY.txt
+
+      - name: Run exact JDK8 TextLayout component decomposition
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/p2b-textlayout-classes && mkdir -p /tmp/p2b-textlayout-classes
+          javac -encoding UTF-8 -source 1.6 -target 1.6 -d /tmp/p2b-textlayout-classes \
+            tests/p2b/diagnostic/RG35XXP2BJdkTextLayoutComponentDiagnostic.java
+          java -Djava.awt.headless=true -cp /tmp/p2b-textlayout-classes \
+            RG35XXP2BJdkTextLayoutComponentDiagnostic /tmp/p2b-font.ttf \
+            | tee out/P2B-JDK8-TEXTLAYOUT-COMPONENTS.log
+          grep -F 'P2B_JDK8_TEXTLAYOUT_COMPONENT_CASES=24' out/P2B-JDK8-TEXTLAYOUT-COMPONENTS.log
+          grep -F 'P2B_JDK8_TEXTLAYOUT_COMPONENT_RESULT=PASS' out/P2B-JDK8-TEXTLAYOUT-COMPONENTS.log
+          echo 'P2B_RUNTIME_PATCH=FORBIDDEN' | tee out/P2B-TEXTLAYOUT-COMPONENT-STATUS.txt
+          echo 'DEVICE_TEST=NOT_REQUESTED' >> out/P2B-TEXTLAYOUT-COMPONENT-STATUS.txt
+          echo 'RG35XX_PLATFORM_BASELINE_DEVICE_PASS=NO' >> out/P2B-TEXTLAYOUT-COMPONENT-STATUS.txt
+          echo 'STABLE=NO' >> out/P2B-TEXTLAYOUT-COMPONENT-STATUS.txt
+
+      - name: Remove font/source before evidence upload
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/jdk8u /tmp/p2b-textlayout-classes
+          rm -f /tmp/p2b-font.ttf /tmp/miyoomini-freej2me.zip
+          if find out -type f | grep -Ei '\.(ttf|otf|class|jar)$'; then
+            echo 'P2B_TEXTLAYOUT_COMPONENT_BYTE_LEAK=FAIL'; exit 1
+          fi
+          echo 'P2B_TEXTLAYOUT_COMPONENT_BYTE_LEAK=NO' | tee out/P2B-TEXTLAYOUT-COMPONENT-CLEANUP.txt
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: RG35XX-P2B-JDK8-TEXTLAYOUT-COMPONENTS-${{ github.sha }}
+          path: |
+            out/P2B-TEXTLAYOUT-COMPONENT-SOURCE-PROVENANCE.txt
+            out/P2B-TEXTLAYOUT-COMPONENT-FONT-IDENTITY.txt
+            out/P2B-JDK8-TEXTLAYOUT-COMPONENTS.log
+            out/P2B-TEXTLAYOUT-COMPONENT-STATUS.txt
+            out/P2B-TEXTLAYOUT-COMPONENT-CLEANUP.txt
