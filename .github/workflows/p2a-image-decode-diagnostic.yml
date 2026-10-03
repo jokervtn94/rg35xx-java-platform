@@ -10,6 +10,7 @@ on:
       - 'tests/p2/RG35XXP2APngSemanticsR2Diagnostic.java'
       - 'tests/p2/RG35XXP2AGrayTransferR3Diagnostic.java'
       - 'tests/p2/RG35XXP2ASampleScalingR4Diagnostic.java'
+      - 'tests/p2/RG35XXP2ATransparencyR5Diagnostic.java'
       - 'docs/P2-IMAGE-FONT-FRONTEND-CONTRACT-AUDIT-v1.md'
   workflow_dispatch:
 
@@ -41,7 +42,7 @@ jobs:
           git merge-base --is-ancestor "$PARENT" HEAD
           [ "$(git merge-base "$PARENT" HEAD)" = "$PARENT" ]
           changed="$(git diff --name-only "$PARENT"..HEAD | LC_ALL=C sort)"
-          expected=$'.github/workflows/p2a-image-decode-diagnostic.yml\ndocs/P2-IMAGE-FONT-FRONTEND-CONTRACT-AUDIT-v1.md\ntests/p2/RG35XXP2AGrayTransferR3Diagnostic.java\ntests/p2/RG35XXP2APngFormatDiagnostic.java\ntests/p2/RG35XXP2APngSemanticsR2Diagnostic.java\ntests/p2/RG35XXP2ASampleScalingR4Diagnostic.java'
+          expected=$'.github/workflows/p2a-image-decode-diagnostic.yml\ndocs/P2-IMAGE-FONT-FRONTEND-CONTRACT-AUDIT-v1.md\ntests/p2/RG35XXP2AGrayTransferR3Diagnostic.java\ntests/p2/RG35XXP2APngFormatDiagnostic.java\ntests/p2/RG35XXP2APngSemanticsR2Diagnostic.java\ntests/p2/RG35XXP2ASampleScalingR4Diagnostic.java\ntests/p2/RG35XXP2ATransparencyR5Diagnostic.java'
           [ "$changed" = "$expected" ] || { echo "P2_AUDIT_SCOPE_FAIL=$changed" >&2; exit 1; }
           ! git diff --name-only "$PARENT"..HEAD | grep -E '^(adapter/|native/|upstream/|scripts/stage-|scripts/build-)'
           echo P2_AUDIT_RUNTIME_DELTA=NONE
@@ -89,8 +90,9 @@ jobs:
             tests/p2/RG35XXP2APngFormatDiagnostic.java \
             tests/p2/RG35XXP2APngSemanticsR2Diagnostic.java \
             tests/p2/RG35XXP2AGrayTransferR3Diagnostic.java \
-            tests/p2/RG35XXP2ASampleScalingR4Diagnostic.java
-          for cls in RG35XXP2APngFormatDiagnostic RG35XXP2APngSemanticsR2Diagnostic RG35XXP2AGrayTransferR3Diagnostic RG35XXP2ASampleScalingR4Diagnostic; do
+            tests/p2/RG35XXP2ASampleScalingR4Diagnostic.java \
+            tests/p2/RG35XXP2ATransparencyR5Diagnostic.java
+          for cls in RG35XXP2APngFormatDiagnostic RG35XXP2APngSemanticsR2Diagnostic RG35XXP2AGrayTransferR3Diagnostic RG35XXP2ASampleScalingR4Diagnostic RG35XXP2ATransparencyR5Diagnostic; do
             major=$(od -An -t u1 -j 7 -N 1 "build/p2a-png-diagnostic/org/recompile/rg35xx/p2/${cls}.class" | tr -d ' ')
             [ "$major" = 50 ]
           done
@@ -168,6 +170,19 @@ jobs:
           grep -q '^P2A_R4_RUNTIME_CHANGE=NO$' P2A-PNG-R4-DIAGNOSTIC.txt
           echo P2A_PNG_R4_SAMPLE_SCALE_GATE=PASS
 
+      - name: Run R5 all-depth non-indexed tRNS observation
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$JAVA_HOME/bin/java" -Djava.awt.headless=true \
+            -cp build/p2a-png-diagnostic \
+            org.recompile.rg35xx.p2.RG35XXP2ATransparencyR5Diagnostic | tee P2A-PNG-R5-DIAGNOSTIC.txt
+          grep -q '^P2A_R5_CASE_COUNT=14$' P2A-PNG-R5-DIAGNOSTIC.txt
+          grep -q '^P2A_R5_CANONICAL_PASS_COUNT=14$' P2A-PNG-R5-DIAGNOSTIC.txt
+          grep -q '^P2A_R5_DIAGNOSTIC=PASS_EVIDENCE_ONLY$' P2A-PNG-R5-DIAGNOSTIC.txt
+          grep -q '^P2A_R5_RUNTIME_CHANGE=NO$' P2A-PNG-R5-DIAGNOSTIC.txt
+          echo P2A_PNG_R5_TRNS_OBSERVATION_GATE=PASS
+
       - name: Upload P2A diagnostic evidence
         uses: actions/upload-artifact@v4
         with:
@@ -177,4 +192,5 @@ jobs:
             P2A-PNG-R2-DIAGNOSTIC.txt
             P2A-PNG-R3-DIAGNOSTIC.txt
             P2A-PNG-R4-DIAGNOSTIC.txt
+            P2A-PNG-R5-DIAGNOSTIC.txt
           if-no-files-found: error
