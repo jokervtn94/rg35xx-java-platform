@@ -25,7 +25,7 @@ jobs:
           PARENT=aa7f84dac5ff24b5fd30fc6158ca3be0327675a0
           test "$(git merge-base "$PARENT" HEAD)" = "$PARENT"
           git diff --name-only "$PARENT"..HEAD | tee /tmp/p2c-files.txt
-          if grep -Ev '^(docs/P2C-INPUT-FRONTEND-CONTRACT-AUDIT-20261003\.md|diagnostics/p2c/|scripts/build-p2c-input-capability-diagnostic\.sh|\.github/workflows/p2c-input-capability-diagnostic\.yml)$' /tmp/p2c-files.txt | grep -q .; then
+          if grep -Ev '^(docs/P2C-INPUT-FRONTEND-CONTRACT-AUDIT-20261003\.md|diagnostics/p2c/.*|scripts/build-p2c-input-capability-diagnostic\.sh|\.github/workflows/p2c-input-capability-diagnostic\.yml)$' /tmp/p2c-files.txt | grep -q .; then
             echo 'P2C_DIAGNOSTIC_SCOPE=FAIL'
             exit 1
           fi
