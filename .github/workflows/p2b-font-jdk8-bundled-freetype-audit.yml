@@ -1,0 +1,182 @@
+name: P2B Font JDK8 Bundled FreeType Audit
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - audit/p2b-font-text
+    paths:
+      - '.github/workflows/p2b-font-jdk8-bundled-freetype-audit.yml'
+      - 'tests/p2b/diagnostic/RG35XXP2BJdkRasterFingerprintDiagnostic.java'
+      - 'tests/p2b/diagnostic/p2b_freetype_jdk8_scaler_arm.c'
+      - 'tests/p2b/diagnostic/compare_p2b_jdk8_scaler_raster.py'
+
+permissions:
+  contents: read
+
+jobs:
+  p2b-jdk8-bundled-freetype:
+    runs-on: ubuntu-latest
+    env:
+      BASE: 77a36526e0f6d875c57c7e9a973e0c1a05573721
+      EXPECTED_FONT_SHA256: 1a5f4112daaa9473747c6834041646cc9b2c338cb40ab5dbb2f0161f8968ca10
+      EXPECTED_FONT_SIZE: '8092724'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Verify audit-only ancestry and scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git merge-base HEAD "$BASE")" = "$BASE"
+          git diff --name-only "$BASE"...HEAD | tee /tmp/p2b-jdk8-bundled-ft-files.txt
+          if grep -Ev '^(docs/P2B-[^/]+\.md|tests/p2b/diagnostic/[^/]+|\.github/workflows/p2b-font-[^/]+-audit\.yml)$' /tmp/p2b-jdk8-bundled-ft-files.txt | grep -q .; then
+            echo 'P2B_JDK8_BUNDLED_FT_AUDIT_SCOPE=FAIL'; exit 1
+          fi
+          if git diff --name-only "$BASE"...HEAD | grep -E '^(adapter/|native/|upstream/|packaging/|scripts/stage-|scripts/build-)'; then
+            echo 'P2B_RUNTIME_DELTA=FAIL'; exit 1
+          fi
+          test "$(git -C upstream/freej2me-miyoomini rev-parse HEAD)" = ca11dfe8ea1cc273d92460f9a83bbf192023fa63
+          echo 'P2B_JDK8_BUNDLED_FT_AUDIT_SCOPE=PASS'
+          echo 'P2B_RUNTIME_DELTA=NONE'
+
+      - name: Install host headers for ABI declarations only
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update >/dev/null
+          sudo apt-get install -y --no-install-recommends libfreetype6-dev pkg-config binutils >/dev/null
+          mkdir -p out
+          pkg-config --modversion freetype2 | tee out/P2B-JDK8-BUNDLED-FT-HEADER-VERSION.txt
+          java -version 2>&1 | tee out/P2B-JDK8-BUNDLED-FT-JAVA-VERSION.txt
+
+      - name: Materialize exact Miyoo MiSans for diagnostics
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL='https://github.com/aweigit/freej2me-miyoomini/releases/download/2.0/miyoomini-freej2me.zip'
+          curl -fL --retry 3 --retry-delay 2 "$URL" -o out/miyoomini-freej2me.zip
+          ENTRY=$(unzip -Z1 out/miyoomini-freej2me.zip | grep -Ei '(^|/)font\.ttf$')
+          test "$(printf '%s\n' "$ENTRY" | wc -l | tr -d ' ')" = 1
+          unzip -p out/miyoomini-freej2me.zip "$ENTRY" > out/font.ttf
+          test "$(sha256sum out/font.ttf | awk '{print $1}')" = "$EXPECTED_FONT_SHA256"
+          test "$(wc -c < out/font.ttf | tr -d ' ')" = "$EXPECTED_FONT_SIZE"
+          echo 'P2B_JDK8_BUNDLED_FT_FONT_IDENTITY=PASS'
+
+      - name: Fingerprint exact JDK8 AWT raster reference
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out/classes
+          javac -encoding UTF-8 -source 1.6 -target 1.6 -d out/classes \
+            tests/p2b/diagnostic/RG35XXP2BJdkRasterFingerprintDiagnostic.java
+          java -Djava.awt.headless=true -cp out/classes RG35XXP2BJdkRasterFingerprintDiagnostic out/font.ttf \
+            | tee out/P2B-JDK8-BUNDLED-FT-JAVA-RASTER.log
+          grep -F 'P2B_JDK_RASTER_FP_CASES=144' out/P2B-JDK8-BUNDLED-FT-JAVA-RASTER.log
+          grep -F 'P2B_JDK_RASTER_FP_RESULT=PASS' out/P2B-JDK8-BUNDLED-FT-JAVA-RASTER.log
+
+      - name: Resolve and hash exact bundled JDK8 font libraries
+        shell: bash
+        run: |
+          set -euo pipefail
+          JAVA_BIN=$(readlink -f "$(command -v java)")
+          JDK_ROOT=$(cd "$(dirname "$JAVA_BIN")/.." && pwd -P)
+          JDK_FT=$(find "$JDK_ROOT" -type f -name 'libfreetype.so' -print -quit)
+          JDK_FM=$(find "$JDK_ROOT" -type f -name 'libfontmanager.so' -print -quit)
+          test -n "$JDK_FT" && test -f "$JDK_FT"
+          test -n "$JDK_FM" && test -f "$JDK_FM"
+          {
+            echo "P2B_JDK8_REAL_JAVA=$JAVA_BIN"
+            echo "P2B_JDK8_REAL_ROOT=$JDK_ROOT"
+            echo "P2B_JDK8_BUNDLED_FREETYPE=$JDK_FT"
+            echo "P2B_JDK8_BUNDLED_FONTMANAGER=$JDK_FM"
+            sha256sum "$JDK_FT"
+            sha256sum "$JDK_FM"
+            file "$JDK_FT"
+            file "$JDK_FM"
+            readelf -d "$JDK_FT" | grep -E 'SONAME|NEEDED' || true
+            readelf -d "$JDK_FM" | grep -E 'SONAME|NEEDED' || true
+          } | tee out/P2B-JDK8-BUNDLED-FT-PROVENANCE.txt
+          printf '%s\n' "$JDK_FT" > /tmp/p2b-jdk8-ft-path
+          printf '%s\n' "$JDK_FM" > /tmp/p2b-jdk8-fm-path
+          echo 'P2B_JDK8_BUNDLED_FT_PROVENANCE=PASS'
+
+      - name: Build same scaler probe and force exact bundled JDK8 FreeType at runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          JDK_FT=$(cat /tmp/p2b-jdk8-ft-path)
+          cc -O2 $(pkg-config --cflags freetype2) \
+            tests/p2b/diagnostic/p2b_freetype_jdk8_scaler_arm.c \
+            $(pkg-config --libs freetype2) -lm \
+            -o out/p2b-freetype-jdk8-scaler-bundled
+          NEEDED=$(readelf -d out/p2b-freetype-jdk8-scaler-bundled \
+            | sed -n 's/.*Shared library: \[\(libfreetype[^]]*\)\].*/\1/p' | head -n1)
+          test -n "$NEEDED"
+          rm -rf /tmp/p2b-jdk8-ft-runtime
+          mkdir -p /tmp/p2b-jdk8-ft-runtime
+          ln -s "$JDK_FT" "/tmp/p2b-jdk8-ft-runtime/$NEEDED"
+          {
+            echo "P2B_JDK8_BUNDLED_FT_NEEDED=$NEEDED"
+            echo "P2B_JDK8_BUNDLED_FT_FORCED_PATH=$JDK_FT"
+            LD_LIBRARY_PATH=/tmp/p2b-jdk8-ft-runtime ldd out/p2b-freetype-jdk8-scaler-bundled
+          } | tee out/P2B-JDK8-BUNDLED-FT-PROBE-LDD.txt
+          grep -F "/tmp/p2b-jdk8-ft-runtime/$NEEDED" out/P2B-JDK8-BUNDLED-FT-PROBE-LDD.txt
+          LD_LIBRARY_PATH=/tmp/p2b-jdk8-ft-runtime \
+            out/p2b-freetype-jdk8-scaler-bundled out/font.ttf \
+            | tee out/P2B-JDK8-BUNDLED-FT-PROBE.log
+          grep -F 'P2B_FT_LIBRARY_VERSION=' out/P2B-JDK8-BUNDLED-FT-PROBE.log
+          grep -F 'P2B_FT_JDK8_INTERPRETER=35' out/P2B-JDK8-BUNDLED-FT-PROBE.log
+          grep -F 'P2B_FT_JDK8_SCALER_CASES=144' out/P2B-JDK8-BUNDLED-FT-PROBE.log
+          grep -F 'P2B_FT_JDK8_SCALER_RESULT=PASS' out/P2B-JDK8-BUNDLED-FT-PROBE.log
+
+      - name: Compare bundled JDK8 FreeType probe with Java AWT
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tests/p2b/diagnostic/compare_p2b_jdk8_scaler_raster.py \
+            out/P2B-JDK8-BUNDLED-FT-JAVA-RASTER.log \
+            out/P2B-JDK8-BUNDLED-FT-PROBE.log \
+            | tee out/P2B-JDK8-BUNDLED-FT-DIFFERENTIAL.txt
+          grep -F 'P2B_JDK8_FT_SCALER_DIFF_PARSE=PASS' out/P2B-JDK8-BUNDLED-FT-DIFFERENTIAL.txt
+          grep -F 'P2B_JDK8_FT_SCALER_JDK_CASES=144' out/P2B-JDK8-BUNDLED-FT-DIFFERENTIAL.txt
+          grep -F 'P2B_JDK8_FT_SCALER_ARM_CASES=144' out/P2B-JDK8-BUNDLED-FT-DIFFERENTIAL.txt
+          grep -F 'P2B_JDK8_FT_SCALER_DIFF_RESULT=PASS' out/P2B-JDK8-BUNDLED-FT-DIFFERENTIAL.txt
+          grep -F 'P2B_RUNTIME_PATCH=FORBIDDEN' out/P2B-JDK8-BUNDLED-FT-DIFFERENTIAL.txt
+
+      - name: Remove font and executable before evidence upload
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f out/font.ttf out/miyoomini-freej2me.zip out/p2b-freetype-jdk8-scaler-bundled
+          rm -rf /tmp/p2b-jdk8-ft-runtime
+          if find out -type f | grep -Ei '\.(ttf|otf)$'; then echo 'P2B_FONT_BYTE_LEAK=FAIL'; exit 1; fi
+          {
+            echo 'P2B_FONT_BYTE_LEAK=NO'
+            echo 'P2B_RUNTIME_PATCH=FORBIDDEN'
+            echo 'DEVICE_TEST=NOT_REQUESTED'
+            echo 'RG35XX_PLATFORM_BASELINE_DEVICE_PASS=NO'
+            echo 'STABLE=NO'
+          } | tee out/P2B-JDK8-BUNDLED-FT-STATUS.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RG35XX-P2B-JDK8-BUNDLED-FT-${{ github.sha }}
+          path: |
+            out/P2B-JDK8-BUNDLED-FT-HEADER-VERSION.txt
+            out/P2B-JDK8-BUNDLED-FT-JAVA-VERSION.txt
+            out/P2B-JDK8-BUNDLED-FT-JAVA-RASTER.log
+            out/P2B-JDK8-BUNDLED-FT-PROVENANCE.txt
+            out/P2B-JDK8-BUNDLED-FT-PROBE-LDD.txt
+            out/P2B-JDK8-BUNDLED-FT-PROBE.log
+            out/P2B-JDK8-BUNDLED-FT-DIFFERENTIAL.txt
+            out/P2B-JDK8-BUNDLED-FT-STATUS.txt
+          if-no-files-found: error
