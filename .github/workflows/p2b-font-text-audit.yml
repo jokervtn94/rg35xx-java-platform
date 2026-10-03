@@ -16,6 +16,9 @@ permissions:
 jobs:
   p2b-font-audit:
     runs-on: ubuntu-latest
+    env:
+      EXPECTED_FONT_SHA256: 1a5f4112daaa9473747c6834041646cc9b2c338cb40ab5dbb2f0161f8968ca10
+      EXPECTED_FONT_SIZE: '8092724'
     steps:
       - name: Checkout exact P2A runtime parent plus audit files
         uses: actions/checkout@v4
@@ -36,7 +39,7 @@ jobs:
           BASE=77a36526e0f6d875c57c7e9a973e0c1a05573721
           test "$(git merge-base HEAD "$BASE")" = "$BASE"
           git diff --name-only "$BASE"...HEAD | tee /tmp/p2b-files.txt
-          if grep -Ev '^(docs/P2B-FONT-TEXT-AUDIT-v1\.md|tests/p2b/diagnostic/[^/]+|\.github/workflows/p2b-font-text-audit\.yml)$' /tmp/p2b-files.txt | grep -q .; then
+          if grep -Ev '^(docs/P2B-FONT-TEXT-AUDIT-v1\.md|tests/p2b/diagnostic/[^/]+|\.github/workflows/p2b-font-[^/]+-audit\.yml)$' /tmp/p2b-files.txt | grep -q .; then
             echo 'P2B_AUDIT_SCOPE=FAIL'
             exit 1
           fi
@@ -71,7 +74,7 @@ jobs:
           echo "P2B_PINNED_SOURCE_TTF_COUNT=$TTF_COUNT"
           echo 'P2B_SOURCE_CONTRACT=PASS'
 
-      - name: Download official Miyoo release package and identify font asset
+      - name: Download official Miyoo release package and identify exact font asset
         shell: bash
         run: |
           set -euo pipefail
@@ -87,6 +90,8 @@ jobs:
           unzip -p "$ZIP" "$FONT_ENTRY" > out/font.ttf
           FONT_SHA=$(sha256sum out/font.ttf | awk '{print $1}')
           FONT_SIZE=$(wc -c < out/font.ttf | tr -d ' ')
+          test "$FONT_SHA" = "$EXPECTED_FONT_SHA256"
+          test "$FONT_SIZE" = "$EXPECTED_FONT_SIZE"
           {
             echo 'PROJECT=RG35XX-AWEIGIT-R1'
             echo 'MODULE=P2B_FONT_TEXT'
