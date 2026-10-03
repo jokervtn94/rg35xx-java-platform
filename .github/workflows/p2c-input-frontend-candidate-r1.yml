@@ -1,0 +1,131 @@
+name: P2C Input Frontend Candidate R1
+
+on:
+  push:
+    branches:
+      - module/p2c-input-frontend-candidate-r1
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  p2c-input-frontend-host-module:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 180
+    env:
+      EXACT_PARENT: aa7f84dac5ff24b5fd30fc6158ca3be0327675a0
+      CANONICAL_AWEIGIT: ca11dfe8ea1cc273d92460f9a83bbf192023fa63
+      TOOLCHAIN_IMAGE: docker.io/miyoocfw/toolchain-shared-uclibc@sha256:6f6761867b4e4dcc27c99bf25fb91b2910264165f27bdd40b1c17e6f98cf751e
+    steps:
+      - name: Checkout candidate and canonical submodule
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Set up JDK 8
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Verify exact parent and P2C repository scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git merge-base "$EXACT_PARENT" HEAD)" = "$EXACT_PARENT"
+          test "$(git -C upstream/freej2me-miyoomini rev-parse HEAD)" = "$CANONICAL_AWEIGIT"
+          git diff --name-only "$EXACT_PARENT"..HEAD | LC_ALL=C sort | tee /tmp/p2c-files.txt
+          if grep -Ev '^(adapter/native/rg35xx_input\.c|adapter/java/org/recompile/rg35xx/RG35XX(FrontendPolicy|KeyDispatcher|Launcher)\.java|docs/P2C-[^/]+\.md|tests/p2c/[^/]+\.(java|c)|scripts/build-p2c-input-frontend-candidate\.sh|\.github/workflows/p2c-input-frontend-candidate-r1\.yml)$' /tmp/p2c-files.txt | grep -q .; then
+            echo P2C_REPOSITORY_SCOPE=FAIL
+            exit 1
+          fi
+          ! git diff --name-only "$EXACT_PARENT"..HEAD | grep -E '^(upstream/|adapter/native/rg35xx_(video|audio|font)|adapter/java/(javax/microedition|org/recompile/mobile)/|scripts/stage-(p1|p2a|p2b|a[0-9])|scripts/build-a[0-9]|packaging/)'
+          test -z "$(git -C upstream/freej2me-miyoomini status --porcelain --untracked-files=no)"
+          grep -q 'axis2 = -32767' adapter/native/rg35xx_input.c
+          grep -q 'axis5 = -32767' adapter/native/rg35xx_input.c
+          grep -q 'set_bit(12, axis2 > 16000)' adapter/native/rg35xx_input.c
+          grep -q 'set_bit(13, axis5 > 16000)' adapter/native/rg35xx_input.c
+          ! grep -R -nE 'Vua|God of War|Bola|game[_ -]?name|A9' adapter/java/org/recompile/rg35xx/RG35XXFrontendPolicy.java adapter/java/org/recompile/rg35xx/RG35XXKeyDispatcher.java adapter/java/org/recompile/rg35xx/RG35XXLauncher.java adapter/native/rg35xx_input.c
+          echo P2C_EXACT_PARENT=PASS
+          echo P2C_REPOSITORY_SCOPE=PASS
+          echo GAME_SPECIFIC_CODE=NO
+          echo A9_PARENT=NO
+
+      - name: Install host build tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update >/dev/null
+          sudo apt-get install -y --no-install-recommends build-essential binutils file unzip curl python3 git >/dev/null
+
+      - name: Materialize protected pre-P2B build chain
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash ./scripts/build-a4-raw2d-java.sh
+          python3 ./scripts/stage-a6-rg35xx-video-perf-p1.py "$GITHUB_WORKSPACE"
+          python3 ./scripts/stage-a6-rg35xx-video-perf-p2.py "$GITHUB_WORKSPACE"
+          python3 ./scripts/stage-a6-rg35xx-video-perf-p3.py "$GITHUB_WORKSPACE"
+          python3 ./scripts/stage-a6-rg35xx-perf-a1-async-native.py "$GITHUB_WORKSPACE"
+          docker pull "$TOOLCHAIN_IMAGE"
+          docker run --rm -v "$GITHUB_WORKSPACE:/work" -w /work "$TOOLCHAIN_IMAGE" \
+            bash -lc 'git config --global --add safe.directory /work/upstream/freej2me-miyoomini && ./scripts/build-a3.sh native'
+          bash ./scripts/build-a5-core2d-java.sh
+          echo P2C_PROTECTED_PARENT_CHAIN=PASS
+
+      - name: Install exact pinned Miyoo ARMv5 uClibC toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          cid=$(docker create "$TOOLCHAIN_IMAGE" true)
+          trap 'docker rm -f "$cid" >/dev/null 2>&1 || true' EXIT
+          sudo rm -rf /opt/miyoo
+          sudo docker cp "$cid:/opt/miyoo" /opt/miyoo
+          sudo chown -R "$(id -u):$(id -g)" /opt/miyoo
+          test -x /opt/miyoo/bin/arm-miyoo-linux-uclibcgnueabi-gcc
+          echo P2C_PINNED_TOOLCHAIN=PASS
+
+      - name: Build and gate P2C Input Frontend candidate R1
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x scripts/build-p2c-input-frontend-candidate.sh scripts/build-p2b-font-text-candidate.sh scripts/build-p2b-font-text-candidate-v2.sh
+          JAVA8="$JAVA_HOME" bash scripts/build-p2c-input-frontend-candidate.sh | tee /tmp/p2c-r1.log
+          for marker in \
+            P2C_CANONICAL_DIFF_VERIFIED=PASS \
+            P2C_OWNER_SCOPE_VERIFIED=PASS \
+            P2C_JAVA6_GATE=PASS \
+            P2C_FRONTEND_HOST_GATE=PASS \
+            P2C_NATIVE_14_CONTROL_HOST_GATE=PASS \
+            P2C_ARM_INPUT_NATIVE_BUILD=PASS \
+            P2C_PARENT_ACCEPTED_CLASS_IDENTITY=PASS \
+            P2C_VIDEO_PARENT_IDENTITY=PASS \
+            P2C_FONT_PARENT_IDENTITY=PASS \
+            P2C_HOST_MODULE_GATE=PASS \
+            P2C_PHYSICAL_TEST=NOT_TESTED \
+            RG35XX_PLATFORM_BASELINE_DEVICE_PASS=NO \
+            STABLE=NO; do grep -q "^${marker}$" /tmp/p2c-r1.log; done
+          ID=out/p2c-input-frontend-candidate-r1/P2C-INPUT-FRONTEND-IDENTITY.txt
+          test -f "$ID"
+          grep -q '^P2C_HARDWARE_EVIDENCE=PASS_14_CONTROL_CALIBRATION$' "$ID"
+          grep -q '^P2C_L2_OWNER=JS0_AXIS2_BASELINE_-32767_PRESS_32767_BIT12$' "$ID"
+          grep -q '^P2C_R2_OWNER=JS0_AXIS5_BASELINE_-32767_PRESS_32767_BIT13$' "$ID"
+          grep -q '^P2C_HOST_MODULE_GATE=PASS$' "$ID"
+          grep -q '^PHYSICAL_TEST_LEVEL=MODULE$' "$ID"
+          grep -q '^P2C_PHYSICAL_TEST=NOT_TESTED$' "$ID"
+          grep -q '^GAME_SPECIFIC_CODE=NO$' "$ID"
+          grep -q '^A9_PARENT=NO$' "$ID"
+          echo P2C_R1_CI_GATE=PASS
+
+      - name: Upload P2C R1 candidate evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: RG35XX-P2C-INPUT-FRONTEND-R1-${{ github.sha }}
+          path: |
+            /tmp/p2c-r1.log
+            /tmp/p2c-files.txt
+            out/p2c-input-frontend-candidate-r1/
+          if-no-files-found: warn
