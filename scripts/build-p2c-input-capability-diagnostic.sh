@@ -17,8 +17,8 @@ mkdir -p "$OUTDIR"
 # Materialize the exact historical M1.3C source that is original-RG35XX
 # device-PASS for the 12-control onscreen raw-js0 calibration path.
 # Fail closed if repository history does not resolve to the locked blob.
-test "$(git -C "$ROOT" rev-parse "$HIST_COMMIT:$HIST_PATH")" = "$HIST_BLOB"
-git -C "$ROOT" show "$HIST_COMMIT:$HIST_PATH" > "$BASE"
+test "$(git -c safe.directory="$ROOT" -C "$ROOT" rev-parse "$HIST_COMMIT:$HIST_PATH")" = "$HIST_BLOB"
+git -c safe.directory="$ROOT" -C "$ROOT" show "$HIST_COMMIT:$HIST_PATH" > "$BASE"
 test -s "$BASE"
 
 # P2C diagnostic deliberately changes only the calibration inventory so
