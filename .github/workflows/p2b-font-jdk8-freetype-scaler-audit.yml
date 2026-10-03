@@ -10,7 +10,7 @@ on:
       - 'tests/p2b/diagnostic/RG35XXP2BJdkScalerContextDiagnostic.java'
       - 'tests/p2b/diagnostic/RG35XXP2BJdkRasterFingerprintDiagnostic.java'
       - 'tests/p2b/diagnostic/p2b_freetype_jdk8_scaler_arm.c'
-      - 'tests/p2b/diagnostic/compare_p2b_raster_variants.py'
+      - 'tests/p2b/diagnostic/compare_p2b_jdk8_scaler_raster.py'
       - 'docs/P2B-FONT-TEXT-EVIDENCE-SYNTHESIS-v1.md'
 
 permissions:
@@ -51,13 +51,32 @@ jobs:
           echo 'P2B_JDK8_FT_AUDIT_SCOPE=PASS'
           echo 'P2B_RUNTIME_DELTA=NONE'
 
-      - name: Record exact JDK8 reference runtime
+      - name: Record exact JDK8 reference runtime and host FreeType provenance
         shell: bash
         run: |
           set -euo pipefail
-          java -version 2>&1 | tee out-jdk-version.tmp
           mkdir -p out
-          mv out-jdk-version.tmp out/P2B-JDK8-VERSION.txt
+          java -version 2>&1 | tee out/P2B-JDK8-VERSION.txt
+          FM=$(find "$JAVA_HOME" -type f -name libfontmanager.so -print -quit)
+          test -n "$FM"
+          {
+            echo "P2B_JDK8_FONTMANAGER=$FM"
+            ldd "$FM"
+          } | tee out/P2B-JDK8-FONTMANAGER-LDD.txt
+          FT=$(ldd "$FM" | awk '/libfreetype\.so/{print $3; exit}')
+          {
+            if test -n "$FT" && test -f "$FT"; then
+              REAL_FT=$(readlink -f "$FT")
+              echo "P2B_JDK8_HOST_FREETYPE_PATH=$REAL_FT"
+              sha256sum "$REAL_FT" | sed 's/^/P2B_JDK8_HOST_FREETYPE_SHA256=/'
+              dpkg-query -S "$REAL_FT" 2>/dev/null | sed 's/^/P2B_JDK8_HOST_FREETYPE_PACKAGE_OWNER=/' || true
+              dpkg-query -W -f='P2B_JDK8_HOST_FREETYPE_PACKAGE_VERSION=${Version}\n' libfreetype6 2>/dev/null || true
+              echo 'P2B_JDK8_HOST_FREETYPE_DYNAMIC=YES'
+            else
+              echo 'P2B_JDK8_HOST_FREETYPE_PATH=UNRESOLVED_FROM_LDD'
+              echo 'P2B_JDK8_HOST_FREETYPE_DYNAMIC=NO_OR_UNRESOLVED'
+            fi
+          } | tee out/P2B-JDK8-HOST-FREETYPE-PROVENANCE.txt
 
       - name: Install qemu and exact pinned Miyoo toolchain
         shell: bash
@@ -131,17 +150,21 @@ jobs:
           grep -F 'P2B_FT_JDK8_SCALER_CASES=144' out/P2B-JDK8-FT-SCALER.log
           grep -F 'P2B_FT_JDK8_SCALER_RESULT=PASS' out/P2B-JDK8-FT-SCALER.log
 
-      - name: Compare exact JDK8 reference to source-matched ARM FreeType scaler
+      - name: Classify exact residual JDK8 versus ARM scaler raster differences
         shell: bash
         run: |
           set -euo pipefail
-          python3 tests/p2b/diagnostic/compare_p2b_raster_variants.py \
+          python3 tests/p2b/diagnostic/compare_p2b_jdk8_scaler_raster.py \
             out/P2B-JDK8-RASTER-FP.log out/P2B-JDK8-FT-SCALER.log \
             | tee out/P2B-JDK8-FT-SCALER-DIFFERENTIAL.txt
-          grep -F 'P2B_RASTER_DIFF_PARSE=PASS' out/P2B-JDK8-FT-SCALER-DIFFERENTIAL.txt
-          grep -F 'P2B_RASTER_JDK_CASES=144' out/P2B-JDK8-FT-SCALER-DIFFERENTIAL.txt
-          grep -F 'P2B_RASTER_VARIANT=JDK8SCALER CASES=144' out/P2B-JDK8-FT-SCALER-DIFFERENTIAL.txt
-          grep -F 'P2B_RASTER_DIFF_RESULT=PASS' out/P2B-JDK8-FT-SCALER-DIFFERENTIAL.txt
+          grep -F 'P2B_JDK8_FT_SCALER_DIFF_PARSE=PASS' out/P2B-JDK8-FT-SCALER-DIFFERENTIAL.txt
+          grep -F 'P2B_JDK8_FT_SCALER_JDK_CASES=144' out/P2B-JDK8-FT-SCALER-DIFFERENTIAL.txt
+          grep -F 'P2B_JDK8_FT_SCALER_ARM_CASES=144' out/P2B-JDK8-FT-SCALER-DIFFERENTIAL.txt
+          grep -F 'P2B_JDK8_FT_SCALER_WIDTH_EXACT=144' out/P2B-JDK8-FT-SCALER-DIFFERENTIAL.txt
+          grep -F 'P2B_JDK8_FT_SCALER_BOUNDS_EXACT=144' out/P2B-JDK8-FT-SCALER-DIFFERENTIAL.txt
+          grep -F 'P2B_JDK8_FT_SCALER_MISMATCH_DETAIL=PASS' out/P2B-JDK8-FT-SCALER-DIFFERENTIAL.txt
+          grep -F 'P2B_JDK8_FT_SCALER_CLASSIFICATION=LAYOUT_PLACEMENT_EXACT_RASTER_RESIDUAL' out/P2B-JDK8-FT-SCALER-DIFFERENTIAL.txt
+          grep -F 'P2B_JDK8_FT_SCALER_DIFF_RESULT=PASS' out/P2B-JDK8-FT-SCALER-DIFFERENTIAL.txt
           grep -F 'P2B_RUNTIME_PATCH=FORBIDDEN' out/P2B-JDK8-FT-SCALER-DIFFERENTIAL.txt
 
       - name: Remove font and executable before evidence upload
@@ -163,6 +186,8 @@ jobs:
           name: RG35XX-P2B-JDK8-FT-SCALER-${{ github.sha }}
           path: |
             out/P2B-JDK8-VERSION.txt
+            out/P2B-JDK8-FONTMANAGER-LDD.txt
+            out/P2B-JDK8-HOST-FREETYPE-PROVENANCE.txt
             out/P2B-JDK8-FT-LIB-SHA256.txt
             out/P2B-JDK8-SCALER-CONTEXT.log
             out/P2B-JDK8-RASTER-FP.log
