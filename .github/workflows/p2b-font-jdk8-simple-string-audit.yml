@@ -1,0 +1,157 @@
+name: P2B Font JDK8 Simple String Audit
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - audit/p2b-font-text
+    paths:
+      - '.github/workflows/p2b-font-jdk8-simple-string-audit.yml'
+      - 'tests/p2b/diagnostic/RG35XXP2BJdkSimpleStringContractDiagnostic.java'
+      - 'docs/P2B-FONT-TEXT-EVIDENCE-SYNTHESIS-v1.md'
+
+permissions:
+  contents: read
+
+jobs:
+  p2b-jdk8-simple-string:
+    runs-on: ubuntu-latest
+    env:
+      BASE: 77a36526e0f6d875c57c7e9a973e0c1a05573721
+      EXPECTED_FONT_SHA256: 1a5f4112daaa9473747c6834041646cc9b2c338cb40ab5dbb2f0161f8968ca10
+      EXPECTED_FONT_SIZE: '8092724'
+      JDK8U_TAG: jdk8u504-b01
+      JDK8U_COMMIT: 4efe36434f44bafb854e602ccbbe1b5696fce1a2
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Verify audit-only ancestry and scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git merge-base HEAD "$BASE")" = "$BASE"
+          git diff --name-only "$BASE"...HEAD | tee /tmp/p2b-simple-string-files.txt
+          if grep -Ev '^(docs/P2B-[^/]+\.md|tests/p2b/diagnostic/[^/]+|\.github/workflows/p2b-font-[^/]+-audit\.yml)$' /tmp/p2b-simple-string-files.txt | grep -q .; then
+            echo 'P2B_JDK8_SIMPLE_STRING_AUDIT_SCOPE=FAIL'; exit 1
+          fi
+          if git diff --name-only "$BASE"...HEAD | grep -E '^(adapter/|native/|upstream/|packaging/|scripts/stage-|scripts/build-)'; then
+            echo 'P2B_RUNTIME_DELTA=FAIL'; exit 1
+          fi
+          test "$(git -C upstream/freej2me-miyoomini rev-parse HEAD)" = ca11dfe8ea1cc273d92460f9a83bbf192023fa63
+          echo 'P2B_JDK8_SIMPLE_STRING_AUDIT_SCOPE=PASS'
+          echo 'P2B_RUNTIME_DELTA=NONE'
+
+      - name: Pin exact JDK8 source and verify simple-string split
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          rm -rf /tmp/jdk8u
+          git clone --filter=blob:none --no-checkout https://github.com/adoptium/jdk8u.git /tmp/jdk8u
+          git -C /tmp/jdk8u fetch --depth 1 origin tag "$JDK8U_TAG"
+          git -C /tmp/jdk8u checkout --detach "$JDK8U_TAG"
+          test "$(git -C /tmp/jdk8u rev-parse HEAD)" = "$JDK8U_COMMIT"
+          FDM=/tmp/jdk8u/jdk/src/share/classes/sun/font/FontDesignMetrics.java
+          FU=/tmp/jdk8u/jdk/src/share/classes/sun/font/FontUtilities.java
+          FTS=/tmp/jdk8u/jdk/src/share/native/sun/font/freetypeScaler.c
+          grep -F 'if (font.hasLayoutAttributes())' "$FDM"
+          grep -F 'width = new TextLayout(str, font, frc).getAdvance();' "$FDM"
+          grep -F 'else if (FontUtilities.isNonSimpleChar(ch))' "$FDM"
+          grep -F 'width += handleCharWidth(ch);' "$FDM"
+          grep -F 'return (int) (0.5 + width);' "$FDM"
+          grep -F 'public static boolean isNonSimpleChar(char ch)' "$FU"
+          grep -F 'isComplexCharCode(ch) ||' "$FU"
+          grep -F 'CharToGlyphMapper.HI_SURROGATE_START' "$FU"
+          grep -F '#define  FT26Dot6ToInt(x) (((int)(x)) >> 6)' "$FTS"
+          grep -F '(float) FT26Dot6ToInt(ftglyph->advance.x);' "$FTS"
+          {
+            echo "P2B_JDK8U_TAG=$JDK8U_TAG"
+            echo "P2B_JDK8U_COMMIT=$(git -C /tmp/jdk8u rev-parse HEAD)"
+            echo 'P2B_JDK8_SIMPLE_STRING_SOURCE_SPLIT=PASS'
+            echo 'P2B_JDK8_SIMPLE_STRING_FM_OFF_ADVANCE_RULE=INTEGER_26D6_SHIFT'
+          } | tee out/P2B-JDK8-SIMPLE-STRING-SOURCE.txt
+
+      - name: Materialize exact Miyoo MiSans for diagnostics
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out/classes
+          URL='https://github.com/aweigit/freej2me-miyoomini/releases/download/2.0/miyoomini-freej2me.zip'
+          curl -fL --retry 3 --retry-delay 2 "$URL" -o out/miyoomini-freej2me.zip
+          ENTRY=$(unzip -Z1 out/miyoomini-freej2me.zip | grep -Ei '(^|/)font\.ttf$')
+          test "$(printf '%s\n' "$ENTRY" | wc -l | tr -d ' ')" = 1
+          unzip -p out/miyoomini-freej2me.zip "$ENTRY" > out/font.ttf
+          test "$(sha256sum out/font.ttf | awk '{print $1}')" = "$EXPECTED_FONT_SHA256"
+          test "$(wc -c < out/font.ttf | tr -d ' ')" = "$EXPECTED_FONT_SIZE"
+          echo 'P2B_JDK8_SIMPLE_STRING_FONT_IDENTITY=PASS'
+
+      - name: Run exact JDK8 simple-string contract diagnostic
+        shell: bash
+        run: |
+          set -euo pipefail
+          java -version 2>&1 | tee out/P2B-JDK8-VERSION.txt
+          javac -encoding UTF-8 -source 1.6 -target 1.6 -d out/classes \
+            tests/p2b/diagnostic/RG35XXP2BJdkSimpleStringContractDiagnostic.java
+          java -Djava.awt.headless=true -cp out/classes \
+            RG35XXP2BJdkSimpleStringContractDiagnostic out/font.ttf \
+            | tee out/P2B-JDK8-SIMPLE-STRING.log
+          grep -F 'P2B_JDK_SIMPLE_STRING_CASES=336' out/P2B-JDK8-SIMPLE-STRING.log
+          grep -F 'P2B_JDK_SIMPLE_STRING_LAYOUT_ATTRIBUTE_CONTEXTS=0' out/P2B-JDK8-SIMPLE-STRING.log
+          grep -F 'P2B_JDK_SIMPLE_STRING_AA_CONTEXTS=0' out/P2B-JDK8-SIMPLE-STRING.log
+          grep -F 'P2B_JDK_SIMPLE_STRING_FM_CONTEXTS=0' out/P2B-JDK8-SIMPLE-STRING.log
+          grep -F 'P2B_JDK_SIMPLE_STRING_SIMPLE_MISMATCHES=0' out/P2B-JDK8-SIMPLE-STRING.log
+          grep -F 'P2B_JDK_SIMPLE_STRING_STRING_CHARS_MISMATCHES=0' out/P2B-JDK8-SIMPLE-STRING.log
+          grep -F 'P2B_JDK_SIMPLE_STRING_RESULT=PASS' out/P2B-JDK8-SIMPLE-STRING.log
+          grep -F 'P2B_RUNTIME_PATCH=FORBIDDEN' out/P2B-JDK8-SIMPLE-STRING.log
+
+      - name: Classify source-proven simple metric path
+        shell: bash
+        run: |
+          set -euo pipefail
+          simple=$(sed -n 's/^P2B_JDK_SIMPLE_STRING_SIMPLE_CASES=//p' out/P2B-JDK8-SIMPLE-STRING.log)
+          nonsimple=$(sed -n 's/^P2B_JDK_SIMPLE_STRING_NONSIMPLE_CASES=//p' out/P2B-JDK8-SIMPLE-STRING.log)
+          test -n "$simple"
+          test -n "$nonsimple"
+          {
+            echo "P2B_JDK8_SIMPLE_SAMPLE_CASES=$simple"
+            echo "P2B_JDK8_NONSIMPLE_SAMPLE_CASES=$nonsimple"
+            echo 'P2B_SIMPLE_STRING_METRIC_PATH=SOURCE_PROVEN_FOR_NO_LAYOUT_ATTRS_NONCOMPLEX_UTF16'
+            echo 'P2B_SIMPLE_STRING_DRAW_RASTER=NOT_PROVEN_BY_THIS_AUDIT'
+            echo 'P2B_COMPLEX_TEXTLAYOUT_PATH=REMAINS_PARTIAL'
+            echo 'P2B_RUNTIME_PATCH=FORBIDDEN'
+            echo 'DEVICE_TEST=NOT_REQUESTED'
+            echo 'RG35XX_PLATFORM_BASELINE_DEVICE_PASS=NO'
+            echo 'STABLE=NO'
+          } | tee out/P2B-JDK8-SIMPLE-STRING-STATUS.txt
+
+      - name: Remove font source checkout and classes before evidence upload
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/jdk8u out/classes
+          rm -f out/font.ttf out/miyoomini-freej2me.zip
+          if find out -type f | grep -Ei '\.(ttf|otf|class)$'; then
+            echo 'P2B_JDK8_SIMPLE_STRING_BYTE_LEAK=FAIL'; exit 1
+          fi
+          echo 'P2B_JDK8_SIMPLE_STRING_BYTE_LEAK=NO' | tee out/P2B-JDK8-SIMPLE-STRING-CLEANUP.txt
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: RG35XX-P2B-JDK8-SIMPLE-STRING-${{ github.sha }}
+          path: |
+            out/P2B-JDK8-SIMPLE-STRING-SOURCE.txt
+            out/P2B-JDK8-VERSION.txt
+            out/P2B-JDK8-SIMPLE-STRING.log
+            out/P2B-JDK8-SIMPLE-STRING-STATUS.txt
+            out/P2B-JDK8-SIMPLE-STRING-CLEANUP.txt
+          if-no-files-found: warn

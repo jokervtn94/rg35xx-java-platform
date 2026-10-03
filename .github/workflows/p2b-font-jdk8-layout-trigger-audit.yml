@@ -1,0 +1,150 @@
+name: P2B Font JDK8 Layout Trigger Audit
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - audit/p2b-font-text
+    paths:
+      - '.github/workflows/p2b-font-jdk8-layout-trigger-audit.yml'
+      - 'tests/p2b/diagnostic/RG35XXP2BJdkLayoutTriggerDiagnostic.java'
+
+permissions:
+  contents: read
+
+jobs:
+  p2b-jdk8-layout-trigger:
+    runs-on: ubuntu-latest
+    env:
+      BASE: 77a36526e0f6d875c57c7e9a973e0c1a05573721
+      EXPECTED_FONT_SHA256: 1a5f4112daaa9473747c6834041646cc9b2c338cb40ab5dbb2f0161f8968ca10
+      EXPECTED_FONT_SIZE: '8092724'
+      OPENJDK8U504_COMMIT: 4efe36434f44bafb854e602ccbbe1b5696fce1a2
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Verify audit-only ancestry and scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git merge-base HEAD "$BASE")" = "$BASE"
+          git diff --name-only "$BASE"...HEAD | tee /tmp/p2b-jdk8-layout-trigger-files.txt
+          if grep -Ev '^(docs/P2B-[^/]+\.md|tests/p2b/diagnostic/[^/]+|\.github/workflows/p2b-font-[^/]+-audit\.yml)$' /tmp/p2b-jdk8-layout-trigger-files.txt | grep -q .; then
+            echo 'P2B_JDK8_LAYOUT_TRIGGER_SCOPE=FAIL'; exit 1
+          fi
+          if git diff --name-only "$BASE"...HEAD | grep -E '^(adapter/|native/|upstream/|packaging/|scripts/stage-|scripts/build-)'; then
+            echo 'P2B_RUNTIME_DELTA=FAIL'; exit 1
+          fi
+          test "$(git -C upstream/freej2me-miyoomini rev-parse HEAD)" = ca11dfe8ea1cc273d92460f9a83bbf192023fa63
+          echo 'P2B_JDK8_LAYOUT_TRIGGER_SCOPE=PASS'
+          echo 'P2B_RUNTIME_DELTA=NONE'
+
+      - name: Verify exact OpenJDK8u504 source anchors
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out/source
+          for path in \
+            jdk/src/share/classes/sun/font/FontUtilities.java \
+            jdk/src/share/classes/sun/font/FontDesignMetrics.java \
+            jdk/src/share/classes/sun/font/TrueTypeGlyphMapper.java \
+            jdk/src/share/classes/sun/font/GlyphList.java \
+            jdk/src/share/classes/sun/java2d/pipe/GlyphListPipe.java \
+            jdk/src/share/classes/sun/java2d/SunGraphics2D.java; do
+            url="https://raw.githubusercontent.com/openjdk/jdk8u/${OPENJDK8U504_COMMIT}/${path}"
+            curl -fL --retry 3 --retry-delay 1 "$url" -o "out/source/$(basename "$path")"
+          done
+          grep -F 'public static final int MIN_LAYOUT_CHARCODE = 0x0300;' out/source/FontUtilities.java
+          grep -F 'public static final int MAX_LAYOUT_CHARCODE = 0x206F;' out/source/FontUtilities.java
+          grep -F 'isNonSimpleChar(ch)' out/source/FontDesignMetrics.java
+          grep -F 'new TextLayout(str, font, frc).getAdvance()' out/source/FontDesignMetrics.java
+          grep -F 'charsToGlyphsNS(int count, char[] unicodes, int[] glyphs)' out/source/TrueTypeGlyphMapper.java
+          grep -F 'FontUtilities.isComplexCharCode(code)' out/source/TrueTypeGlyphMapper.java
+          grep -F 'info.font2D.getMapper().charsToGlyphsNS' out/source/GlyphList.java
+          grep -F 'TextLayout tl = new TextLayout(s, sg2d.getFont(),' out/source/GlyphListPipe.java
+          grep -F 'if (font.hasLayoutAttributes())' out/source/SunGraphics2D.java
+          {
+            echo "P2B_JDK8_LAYOUT_TRIGGER_SOURCE_COMMIT=$OPENJDK8U504_COMMIT"
+            echo 'P2B_JDK8_LAYOUT_TRIGGER_SOURCE_MIN=U+0300'
+            echo 'P2B_JDK8_LAYOUT_TRIGGER_SOURCE_MAX=U+206F'
+            echo 'P2B_JDK8_LAYOUT_TRIGGER_SOURCE_ANCHORS=PASS'
+          } | tee out/P2B-JDK8-LAYOUT-TRIGGER-SOURCE.txt
+
+      - name: Materialize exact Miyoo MiSans
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out/classes
+          URL='https://github.com/aweigit/freej2me-miyoomini/releases/download/2.0/miyoomini-freej2me.zip'
+          curl -fL --retry 3 --retry-delay 2 "$URL" -o out/miyoomini-freej2me.zip
+          ENTRY=$(unzip -Z1 out/miyoomini-freej2me.zip | grep -Ei '(^|/)font\.ttf$')
+          test "$(printf '%s\n' "$ENTRY" | wc -l | tr -d ' ')" = 1
+          unzip -p out/miyoomini-freej2me.zip "$ENTRY" > out/font.ttf
+          test "$(sha256sum out/font.ttf | awk '{print $1}')" = "$EXPECTED_FONT_SHA256"
+          test "$(wc -c < out/font.ttf | tr -d ' ')" = "$EXPECTED_FONT_SIZE"
+          echo 'P2B_JDK8_LAYOUT_TRIGGER_FONT_IDENTITY=PASS'
+
+      - name: Run exact metric-vs-draw trigger classifier
+        shell: bash
+        run: |
+          set -euo pipefail
+          javac -encoding UTF-8 -source 1.6 -target 1.6 -d out/classes \
+            tests/p2b/diagnostic/RG35XXP2BJdkLayoutTriggerDiagnostic.java
+          java -Djava.awt.headless=true -cp out/classes \
+            RG35XXP2BJdkLayoutTriggerDiagnostic out/font.ttf \
+            | tee out/P2B-JDK8-LAYOUT-TRIGGER.log
+          grep -F "P2B_JDK8_LAYOUT_TRIGGER_OPENJDK_COMMIT=$OPENJDK8U504_COMMIT" out/P2B-JDK8-LAYOUT-TRIGGER.log
+          grep -F 'P2B_JDK8_LAYOUT_TRIGGER_METRIC_UNITS=4588' out/P2B-JDK8-LAYOUT-TRIGGER.log
+          grep -F 'P2B_JDK8_LAYOUT_TRIGGER_DRAW_UNITS=2540' out/P2B-JDK8-LAYOUT-TRIGGER.log
+          grep -F 'P2B_JDK8_LAYOUT_TRIGGER_SURROGATE_ONLY_UNITS=2048' out/P2B-JDK8-LAYOUT-TRIGGER.log
+          grep -F 'P2B_JDK8_LAYOUT_TRIGGER_METRIC_DRAW_DIVERGENCE=2048' out/P2B-JDK8-LAYOUT-TRIGGER.log
+          grep -F 'P2B_JDK8_LAYOUT_TRIGGER_NONSIMPLE_SOURCE_MISMATCH=0' out/P2B-JDK8-LAYOUT-TRIGGER.log
+          grep -F 'P2B_JDK8_LAYOUT_TRIGGER_MAPPER_SOURCE_MISMATCH=0' out/P2B-JDK8-LAYOUT-TRIGGER.log
+          grep -F 'P2B_JDK8_LAYOUT_TRIGGER_LAYOUT_ATTR_FACES=0' out/P2B-JDK8-LAYOUT-TRIGGER.log
+          grep -F 'P2B_JDK8_LAYOUT_TRIGGER_SUPPLEMENTARY_CASES=4' out/P2B-JDK8-LAYOUT-TRIGGER.log
+          grep -F 'P2B_JDK8_LAYOUT_TRIGGER_SUPPLEMENTARY_METRIC=4' out/P2B-JDK8-LAYOUT-TRIGGER.log
+          grep -F 'P2B_JDK8_LAYOUT_TRIGGER_SUPPLEMENTARY_DRAW_DIRECT=4' out/P2B-JDK8-LAYOUT-TRIGGER.log
+          grep -F 'P2B_JDK8_LAYOUT_TRIGGER_SAMPLE_CASES=27' out/P2B-JDK8-LAYOUT-TRIGGER.log
+          grep -F 'P2B_JDK8_LAYOUT_TRIGGER_SAMPLE_METRIC_TEXTLAYOUT_EXACT=18' out/P2B-JDK8-LAYOUT-TRIGGER.log
+          grep -F 'P2B_JDK8_LAYOUT_TRIGGER_CLASSIFICATION=METRIC_NONSIMPLE_VS_DRAW_COMPLEX_MAPPER_SPLIT' out/P2B-JDK8-LAYOUT-TRIGGER.log
+          grep -F 'P2B_JDK8_LAYOUT_TRIGGER_RESULT=PASS' out/P2B-JDK8-LAYOUT-TRIGGER.log
+          grep -F 'P2B_RUNTIME_PATCH=FORBIDDEN' out/P2B-JDK8-LAYOUT-TRIGGER.log
+          java -version 2>&1 | tee out/P2B-JDK8-LAYOUT-TRIGGER-JAVA-VERSION.txt
+
+      - name: Remove source/font bytes and record audit-only status
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf out/source out/classes
+          rm -f out/font.ttf out/miyoomini-freej2me.zip
+          if find out -type f | grep -Ei '\.(ttf|otf|java|class)$'; then
+            echo 'P2B_JDK8_LAYOUT_TRIGGER_BYTE_LEAK=FAIL'; exit 1
+          fi
+          {
+            echo 'P2B_JDK8_LAYOUT_TRIGGER_BYTE_LEAK=NO'
+            echo 'P2B_RUNTIME_PATCH=FORBIDDEN'
+            echo 'DEVICE_TEST=NOT_REQUESTED'
+            echo 'RG35XX_PLATFORM_BASELINE_DEVICE_PASS=NO'
+            echo 'STABLE=NO'
+          } | tee out/P2B-JDK8-LAYOUT-TRIGGER-STATUS.txt
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: RG35XX-P2B-JDK8-LAYOUT-TRIGGER-${{ github.sha }}
+          path: |
+            out/P2B-JDK8-LAYOUT-TRIGGER-SOURCE.txt
+            out/P2B-JDK8-LAYOUT-TRIGGER.log
+            out/P2B-JDK8-LAYOUT-TRIGGER-JAVA-VERSION.txt
+            out/P2B-JDK8-LAYOUT-TRIGGER-STATUS.txt
+          if-no-files-found: warn

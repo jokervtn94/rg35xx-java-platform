@@ -1,0 +1,275 @@
+name: P2B Font JDK8 Runtime Planner ScriptRun Audit
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - audit/p2b-font-text
+    paths:
+      - '.github/workflows/p2b-font-jdk8-runtime-planner-scriptrun-audit.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  p2b-jdk8-runtime-planner-scriptrun:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    env:
+      BASE: 77a36526e0f6d875c57c7e9a973e0c1a05573721
+      JDK8U_TAG: jdk8u504-b01
+      JDK8U_COMMIT: 4efe36434f44bafb854e602ccbbe1b5696fce1a2
+      SCRIPT_BLOB: 155ab07d93cacf854c19187e020a66ef63921e52
+      SCRIPTRUNDATA_BLOB: e72c85624242ce7c486d78dbf800c91facb2cfbf
+      SCRIPTRUN_BLOB: e719fc335605f957f6bd713da226700aba15b8c9
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Verify audit-only ancestry and protected scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git merge-base HEAD "$BASE")" = "$BASE"
+          if git diff --name-only "$BASE"...HEAD | grep -E '^(adapter/|native/|upstream/|packaging/|scripts/stage-|scripts/build-)'; then
+            echo 'P2B_RUNTIME_DELTA=FAIL'
+            exit 1
+          fi
+          test "$(git -C upstream/freej2me-miyoomini rev-parse HEAD)" = ca11dfe8ea1cc273d92460f9a83bbf192023fa63
+          echo 'P2B_PLANNER_SCRIPTRUN_AUDIT_SCOPE=PASS'
+          echo 'P2B_RUNTIME_DELTA=NONE'
+          echo 'P2B_PROTECTED_JAMVM_GLIBJ_CHANGE=NO'
+
+      - name: Pin exact JDK8u504 ScriptRun source identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/jdk8u out/p2b-planner
+          mkdir -p out/p2b-planner
+          git clone --filter=blob:none --no-checkout https://github.com/adoptium/jdk8u.git /tmp/jdk8u
+          git -C /tmp/jdk8u fetch --depth 1 origin tag "$JDK8U_TAG"
+          git -C /tmp/jdk8u checkout --detach "$JDK8U_TAG"
+          test "$(git -C /tmp/jdk8u rev-parse HEAD)" = "$JDK8U_COMMIT"
+          test "$(git -C /tmp/jdk8u rev-parse HEAD:jdk/src/share/classes/sun/font/Script.java)" = "$SCRIPT_BLOB"
+          test "$(git -C /tmp/jdk8u rev-parse HEAD:jdk/src/share/classes/sun/font/ScriptRunData.java)" = "$SCRIPTRUNDATA_BLOB"
+          test "$(git -C /tmp/jdk8u rev-parse HEAD:jdk/src/share/classes/sun/font/ScriptRun.java)" = "$SCRIPTRUN_BLOB"
+          {
+            echo 'OPENJDK8_TAG=jdk8u504-b01'
+            echo 'OPENJDK8_COMMIT=4efe36434f44bafb854e602ccbbe1b5696fce1a2'
+            echo "SCRIPT_BLOB=$SCRIPT_BLOB"
+            echo "SCRIPTRUNDATA_BLOB=$SCRIPTRUNDATA_BLOB"
+            echo "SCRIPTRUN_BLOB=$SCRIPTRUN_BLOB"
+            echo 'P2B_PLANNER_SCRIPTRUN_SOURCE_PROVENANCE=PASS'
+          } | tee out/p2b-planner/PROVENANCE.txt
+
+      - name: Materialize package-only ScriptRun audit copy
+        shell: bash
+        run: |
+          set -euo pipefail
+          SRC=/tmp/jdk8u/jdk/src/share/classes/sun/font
+          DST=out/p2b-planner/src/org/recompile/rg35xx/p2b/jdk8/script
+          mkdir -p "$DST"
+          python3 - "$SRC" "$DST" <<'PY'
+          from pathlib import Path
+          import sys
+          src=Path(sys.argv[1]); dst=Path(sys.argv[2])
+          old='package sun.font;'
+          new='package org.recompile.rg35xx.p2b.jdk8.script;'
+          for name in ('Script.java','ScriptRunData.java','ScriptRun.java'):
+              raw=(src/name).read_text(encoding='utf-8')
+              if raw.count(old)!=1:
+                  raise SystemExit('P2B_SCRIPTRUN_PACKAGE_ANCHOR_FAIL '+name+' count='+str(raw.count(old)))
+              staged=raw.replace(old,new,1)
+              (dst/name).write_text(staged,encoding='utf-8')
+              restored=staged.replace(new,old,1)
+              if restored!=raw:
+                  raise SystemExit('P2B_SCRIPTRUN_SOURCE_DELTA_FAIL '+name)
+          print('P2B_SCRIPTRUN_SOURCE_DELTA=PACKAGE_DECLARATION_ONLY')
+          print('P2B_SCRIPTRUN_SOURCE_RESTORATION=BIT_EXACT')
+          PY
+
+      - name: Generate generic ScriptRun differential harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > out/p2b-planner/ScriptRunDifferential.java <<'JAVA'
+          import java.lang.reflect.Constructor;
+          import java.lang.reflect.Method;
+          import java.util.ArrayList;
+          import java.util.List;
+          import org.recompile.rg35xx.p2b.jdk8.script.ScriptRun;
+
+          public final class ScriptRunDifferential {
+              private static final class R {
+                  int start, limit, script;
+                  R(int a,int b,int c){start=a;limit=b;script=c;}
+                  public String toString(){return start+":"+limit+":"+script;}
+              }
+
+              private static List local(char[] a,int start,int count) {
+                  ScriptRun sr=new ScriptRun(a,start,count);
+                  List out=new ArrayList();
+                  while(sr.next()) out.add(new R(sr.getScriptStart(),sr.getScriptLimit(),sr.getScriptCode()));
+                  return out;
+              }
+
+              private static final Constructor REF_CTOR;
+              private static final Method REF_NEXT, REF_START, REF_LIMIT, REF_CODE;
+              static {
+                  try {
+                      Class c=Class.forName("sun.font.ScriptRun");
+                      REF_CTOR=c.getConstructor(new Class[]{char[].class,Integer.TYPE,Integer.TYPE});
+                      REF_NEXT=c.getMethod("next",new Class[0]);
+                      REF_START=c.getMethod("getScriptStart",new Class[0]);
+                      REF_LIMIT=c.getMethod("getScriptLimit",new Class[0]);
+                      REF_CODE=c.getMethod("getScriptCode",new Class[0]);
+                  } catch(Exception e) { throw new RuntimeException(e); }
+              }
+
+              private static List ref(char[] a,int start,int count) throws Exception {
+                  Object sr=REF_CTOR.newInstance(new Object[]{a,Integer.valueOf(start),Integer.valueOf(count)});
+                  List out=new ArrayList();
+                  while(((Boolean)REF_NEXT.invoke(sr,new Object[0])).booleanValue()) {
+                      out.add(new R(((Integer)REF_START.invoke(sr,new Object[0])).intValue(),
+                                    ((Integer)REF_LIMIT.invoke(sr,new Object[0])).intValue(),
+                                    ((Integer)REF_CODE.invoke(sr,new Object[0])).intValue()));
+                  }
+                  return out;
+              }
+
+              private static boolean same(List a,List b) {
+                  if(a.size()!=b.size()) return false;
+                  for(int i=0;i<a.size();i++) {
+                      R x=(R)a.get(i), y=(R)b.get(i);
+                      if(x.start!=y.start || x.limit!=y.limit || x.script!=y.script) return false;
+                  }
+                  return true;
+              }
+
+              private static int cases=0, mismatch=0, full=0, slices=0;
+              private static void check(String label,String s,int start,int count) throws Exception {
+                  char[] a=s.toCharArray();
+                  List x=ref(a,start,count), y=local(a,start,count);
+                  cases++;
+                  if(start==0 && count==a.length) full++; else slices++;
+                  if(!same(x,y)) {
+                      mismatch++;
+                      if(mismatch<=12) System.out.println("MISMATCH="+label+" start="+start+" count="+count+" REF="+x+" LOCAL="+y);
+                  }
+              }
+
+              private static int next(int x) { return x*1103515245+12345; }
+
+              public static void main(String[] args) throws Exception {
+                  String[] fixed=new String[]{
+                      "ABCxyz09","AVATAR","ToTo","ffi","Tiếng Việt","Tie\u0302\u0301ng Vie\u0323\u0302t","A\u0301",
+                      "سلام","لا","שלום","नमस्ते","ภาษาไทย","中文","A\u200DB",
+                      "(سلام)","abc שלום 123","[नमस्ते]","漢かなカナ","A(Б)Γ","\u0301ABC","A\uD800\uDF48B",
+                      "abc العربية 123 עברית","(A[שלום]ب)","\u202Aabc\u202C","\u200Fשלום\u200EABC"
+                  };
+                  for(int i=0;i<fixed.length;i++) {
+                      String s=fixed[i]; char[] a=s.toCharArray();
+                      check("fixed-"+i,s,0,a.length);
+                      if(a.length>2) {
+                          check("fixed-slice-a-"+i,s,1,a.length-1);
+                          check("fixed-slice-b-"+i,s,0,a.length-1);
+                      }
+                  }
+
+                  String[] tok=new String[]{
+                      "A","z","0"," ","\u0301","\u0590","א","ש","س","ل","م","क","्","त","ก","า","中",
+                      "あ","ア","α","Я","(",")","[","]","<",">","\u200C","\u200D","\u202A","\u202C","\u206A","\u206F",
+                      "\uD800\uDF48","\uD83D\uDE00"
+                  };
+                  int state=0x13579bdf;
+                  for(int n=0;n<4096;n++) {
+                      state=next(state); int parts=1+((state>>>1)&15);
+                      StringBuffer b=new StringBuffer();
+                      for(int j=0;j<parts;j++) { state=next(state); b.append(tok[(state>>>1)%tok.length]); }
+                      String s=b.toString(); char[] a=s.toCharArray();
+                      check("rnd-full-"+n,s,0,a.length);
+                      if(a.length>1) {
+                          state=next(state); int st=(state>>>1)%a.length;
+                          state=next(state); int ct=(state>>>1)%(a.length-st+1);
+                          check("rnd-slice-"+n,s,st,ct);
+                      }
+                  }
+
+                  System.out.println("P2B_PLANNER_SCRIPTRUN_CASES="+cases);
+                  System.out.println("P2B_PLANNER_SCRIPTRUN_FULL_CASES="+full);
+                  System.out.println("P2B_PLANNER_SCRIPTRUN_SLICE_CASES="+slices);
+                  System.out.println("P2B_PLANNER_SCRIPTRUN_MISMATCH_COUNT="+mismatch);
+                  if(mismatch!=0) throw new RuntimeException("ScriptRun differential mismatch="+mismatch);
+                  System.out.println("P2B_PLANNER_SCRIPTRUN_GENERIC_DIFFERENTIAL=PASS");
+              }
+          }
+          JAVA
+
+      - name: Compile Java 6-compatible package-only planner and run differential
+        shell: bash
+        run: |
+          set -euo pipefail
+          JAVA8="${JAVA_HOME}"
+          CLASSES=out/p2b-planner/classes
+          mkdir -p "$CLASSES"
+          find out/p2b-planner/src -name '*.java' -print | sort > out/p2b-planner/sources.list
+          printf '%s\n' out/p2b-planner/ScriptRunDifferential.java >> out/p2b-planner/sources.list
+          "$JAVA8/bin/javac" -encoding UTF-8 -source 1.6 -target 1.6 \
+            -bootclasspath "$JAVA8/jre/lib/rt.jar" -d "$CLASSES" @out/p2b-planner/sources.list
+          python3 - "$CLASSES" <<'PY'
+          from pathlib import Path
+          import sys
+          root=Path(sys.argv[1]); bad=[]; majors=set(); count=0
+          for p in root.rglob('*.class'):
+              b=p.read_bytes(); major=int.from_bytes(b[6:8],'big'); majors.add(major); count+=1
+              if major>50: bad.append((str(p),major))
+          if bad: raise SystemExit('P2B_PLANNER_SCRIPTRUN_JAVA6_FAIL '+repr(bad))
+          print('P2B_PLANNER_SCRIPTRUN_CLASS_COUNT='+str(count))
+          print('P2B_PLANNER_SCRIPTRUN_CLASS_MAJORS='+','.join(map(str,sorted(majors))))
+          print('P2B_PLANNER_SCRIPTRUN_JAVA6_GATE=PASS')
+          PY
+          "$JAVA8/bin/java" -cp "$CLASSES" ScriptRunDifferential | tee out/p2b-planner/DIFFERENTIAL.log
+          grep -q '^P2B_PLANNER_SCRIPTRUN_MISMATCH_COUNT=0$' out/p2b-planner/DIFFERENTIAL.log
+          grep -q '^P2B_PLANNER_SCRIPTRUN_GENERIC_DIFFERENTIAL=PASS$' out/p2b-planner/DIFFERENTIAL.log
+          {
+            echo 'P2B_PLANNER_SCRIPTRUN_SOURCE_DELTA=PACKAGE_DECLARATION_ONLY'
+            echo 'P2B_PLANNER_SCRIPTRUN_GENERIC=YES'
+            echo 'P2B_PLANNER_SCRIPTRUN_JAVA6=PASS'
+            echo 'P2B_PLANNER_SCRIPTRUN_RESULT=PASS'
+            echo 'P2B_PLANNER_BIDI_RESULT=BLOCKED_RESOURCE_PROVENANCE'
+            echo 'P2B_RUNTIME_PATCH=FORBIDDEN'
+            echo 'P2B_DEVICE_PACKAGE=FORBIDDEN'
+            echo 'DEVICE_TEST=NOT_REQUESTED'
+            echo 'STABLE=NO'
+          } | tee out/p2b-planner/STATUS.txt
+
+      - name: Cleanup source/classes and enforce evidence-only artifact
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/jdk8u out/p2b-planner/src out/p2b-planner/classes
+          rm -f out/p2b-planner/ScriptRunDifferential.java out/p2b-planner/sources.list
+          if find out/p2b-planner -type f | grep -Ei '\.(class|java|ttf|otf|jar|zip|so|a|o|icu)$'; then
+            echo 'P2B_PLANNER_SCRIPTRUN_EVIDENCE_LEAK=FAIL'
+            exit 1
+          fi
+          echo 'P2B_PLANNER_SCRIPTRUN_EVIDENCE_LEAK=NO' | tee out/p2b-planner/CLEANUP.txt
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: RG35XX-P2B-JDK8-RUNTIME-PLANNER-SCRIPTRUN-${{ github.sha }}
+          path: |
+            out/p2b-planner/PROVENANCE.txt
+            out/p2b-planner/DIFFERENTIAL.log
+            out/p2b-planner/STATUS.txt
+            out/p2b-planner/CLEANUP.txt
+          if-no-files-found: warn

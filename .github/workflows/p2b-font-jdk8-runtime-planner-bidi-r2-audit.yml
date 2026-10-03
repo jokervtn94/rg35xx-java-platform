@@ -1,0 +1,394 @@
+name: P2B Font JDK8 Runtime Planner Bidi R2 Audit
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - audit/p2b-font-text
+    paths:
+      - '.github/workflows/p2b-font-jdk8-runtime-planner-bidi-r2-audit.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  p2b-jdk8-runtime-planner-bidi-r2:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    env:
+      BASE: 77a36526e0f6d875c57c7e9a973e0c1a05573721
+      JDK8U_TAG: jdk8u504-b01
+      JDK8U_COMMIT: 4efe36434f44bafb854e602ccbbe1b5696fce1a2
+      BIDI_BLOB: 3d0e1381adb1cb11cbd45d2f8e09c4830aa1fba8
+      BIDIBASE_BLOB: 6485bea94e69f1cb3f054360fb5caad461a60ef8
+      BIDILINE_BLOB: 1d54867ad42b486857693e63a3cf15fbe99354e9
+      BIDIRUN_BLOB: 07519db3934eb47a566ad0e597611bcfa8ed2b67
+      UBIDIPROPS_BLOB: c7ac9aeac61a3abcf6f9fc28105585ff3110f61f
+      ICUDATA_BLOB: 20c21a583d6689356e1d3c65aecfd37aca223521
+      ICUBINARY_BLOB: 20984d3b8fbd9d3523a9de7a9df05caff0e9be55
+      TRIE_BLOB: 0430bf5e955db100512d6f366b509b97bd07f51d
+      CHARTRIE_BLOB: 9726e8932f6ddeacf7ff4f0f3faf08d2b908777f
+      UTF16_BLOB: 934eecca8ff9aaf6f4ac8f80fe33cc5285a895e1
+      UCHAR_BLOB: bad507e2ee03b22e1c72680c4b60ca0787fd30b3
+      UCHARPROP_BLOB: 0149140feab974541f5ca1e56027b864aa9e803d
+      UBIDI_RESOURCE_BLOB: 3c545bd7a450e407f4755effb75f68886faa43e5
+      UBIDI_RESOURCE_SIZE: '19924'
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Verify audit-only ancestry and protected scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git merge-base HEAD "$BASE")" = "$BASE"
+          if git diff --name-only "$BASE"...HEAD | grep -E '^(adapter/|native/|upstream/|packaging/|scripts/stage-|scripts/build-)'; then
+            echo 'P2B_RUNTIME_DELTA=FAIL'
+            exit 1
+          fi
+          test "$(git -C upstream/freej2me-miyoomini rev-parse HEAD)" = ca11dfe8ea1cc273d92460f9a83bbf192023fa63
+          echo 'P2B_PLANNER_BIDI_R2_AUDIT_SCOPE=PASS'
+          echo 'P2B_RUNTIME_DELTA=NONE'
+          echo 'P2B_PROTECTED_JAMVM_GLIBJ_CHANGE=NO'
+
+      - name: Pin exact JDK8u504 Bidi source and resource identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/jdk8u out/p2b-bidi-r2
+          mkdir -p out/p2b-bidi-r2
+          git clone --filter=blob:none --no-checkout https://github.com/adoptium/jdk8u.git /tmp/jdk8u
+          git -C /tmp/jdk8u fetch --depth 1 origin tag "$JDK8U_TAG"
+          git -C /tmp/jdk8u checkout --detach "$JDK8U_TAG"
+          test "$(git -C /tmp/jdk8u rev-parse HEAD)" = "$JDK8U_COMMIT"
+          check_blob(){ test "$(git -C /tmp/jdk8u rev-parse HEAD:"$1")" = "$2"; }
+          check_blob jdk/src/share/classes/java/text/Bidi.java "$BIDI_BLOB"
+          check_blob jdk/src/share/classes/sun/text/bidi/BidiBase.java "$BIDIBASE_BLOB"
+          check_blob jdk/src/share/classes/sun/text/bidi/BidiLine.java "$BIDILINE_BLOB"
+          check_blob jdk/src/share/classes/sun/text/bidi/BidiRun.java "$BIDIRUN_BLOB"
+          check_blob jdk/src/share/classes/sun/text/normalizer/UBiDiProps.java "$UBIDIPROPS_BLOB"
+          check_blob jdk/src/share/classes/sun/text/normalizer/ICUData.java "$ICUDATA_BLOB"
+          check_blob jdk/src/share/classes/sun/text/normalizer/ICUBinary.java "$ICUBINARY_BLOB"
+          check_blob jdk/src/share/classes/sun/text/normalizer/Trie.java "$TRIE_BLOB"
+          check_blob jdk/src/share/classes/sun/text/normalizer/CharTrie.java "$CHARTRIE_BLOB"
+          check_blob jdk/src/share/classes/sun/text/normalizer/UTF16.java "$UTF16_BLOB"
+          check_blob jdk/src/share/classes/sun/text/normalizer/UCharacter.java "$UCHAR_BLOB"
+          check_blob jdk/src/share/classes/sun/text/normalizer/UCharacterProperty.java "$UCHARPROP_BLOB"
+          check_blob jdk/src/share/classes/sun/text/resources/ubidi.icu "$UBIDI_RESOURCE_BLOB"
+          test "$(wc -c </tmp/jdk8u/jdk/src/share/classes/sun/text/resources/ubidi.icu | tr -d ' ')" = "$UBIDI_RESOURCE_SIZE"
+          {
+            echo "OPENJDK8_TAG=$JDK8U_TAG"
+            echo "OPENJDK8_COMMIT=$JDK8U_COMMIT"
+            echo "BIDI_BLOB=$BIDI_BLOB"
+            echo "BIDIBASE_BLOB=$BIDIBASE_BLOB"
+            echo "BIDILINE_BLOB=$BIDILINE_BLOB"
+            echo "BIDIRUN_BLOB=$BIDIRUN_BLOB"
+            echo "UBIDIPROPS_BLOB=$UBIDIPROPS_BLOB"
+            echo "UTF16_BLOB=$UTF16_BLOB"
+            echo "UCHAR_BLOB=$UCHAR_BLOB"
+            echo "UCHARPROP_BLOB=$UCHARPROP_BLOB"
+            echo "UBIDI_RESOURCE_BLOB=$UBIDI_RESOURCE_BLOB"
+            echo "UBIDI_RESOURCE_SIZE=$UBIDI_RESOURCE_SIZE"
+            echo "UBIDI_RESOURCE_SHA256=$(sha256sum /tmp/jdk8u/jdk/src/share/classes/sun/text/resources/ubidi.icu | awk '{print $1}')"
+            echo 'P2B_PLANNER_BIDI_R2_SOURCE_PROVENANCE=PASS'
+          } | tee out/p2b-bidi-r2/PROVENANCE.txt
+
+      - name: Materialize Java6-compatible source-derived Bidi audit copy
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - /tmp/jdk8u out/p2b-bidi-r2 <<'PY'
+          from pathlib import Path
+          import sys
+          j=Path(sys.argv[1]); out=Path(sys.argv[2]); root=out/'src'
+          p_text='org.recompile.rg35xx.p2b.jdk8.text'
+          p_bidi='org.recompile.rg35xx.p2b.jdk8.bidi'
+          p_norm='org.recompile.rg35xx.p2b.jdk8.normalizer'
+          changes=[]
+
+          def read(rel): return (j/rel).read_text(encoding='utf-8')
+          def write(pkg,name,s):
+              d=root/Path(pkg.replace('.','/')); d.mkdir(parents=True,exist_ok=True); (d/name).write_text(s,encoding='utf-8')
+          def once(s,old,new,label):
+              n=s.count(old)
+              if n!=1: raise SystemExit('P2B_BIDI_R2_STAGE_FAIL '+label+' count='+str(n))
+              changes.append(label)
+              return s.replace(old,new,1)
+
+          s=read('jdk/src/share/classes/java/text/Bidi.java')
+          s=once(s,'package java.text;','package '+p_text+';','Bidi-package')
+          s=once(s,'import sun.text.bidi.BidiBase;','import '+p_bidi+'.BidiBase;\nimport java.text.AttributedCharacterIterator;\nimport java.text.AttributedString;','Bidi-import-relocation')
+          write(p_text,'Bidi.java',s)
+
+          for name in ('BidiBase.java','BidiLine.java','BidiRun.java'):
+              s=read('jdk/src/share/classes/sun/text/bidi/'+name)
+              s=once(s,'package sun.text.bidi;','package '+p_bidi+';',name+'-package')
+              if 'import java.text.Bidi;' in s:
+                  s=once(s,'import java.text.Bidi;','import '+p_text+'.Bidi;',name+'-Bidi-import')
+              if name=='BidiBase.java':
+                  for cls in ('UBiDiProps','UCharacter','UTF16'):
+                      s=once(s,'import sun.text.normalizer.'+cls+';','import '+p_norm+'.'+cls+';',name+'-'+cls+'-import')
+                  old='''            } catch (NoSuchFieldException | IllegalAccessException x) {\n                throw new AssertionError(x);\n            }'''
+                  new='''            } catch (NoSuchFieldException x) {\n                throw new AssertionError(x);\n            } catch (IllegalAccessException x) {\n                throw new AssertionError(x);\n            }'''
+                  s=once(s,old,new,'BidiBase-java6-equivalent-multicatch-split')
+              write(p_bidi,name,s)
+
+          for name in ('UBiDiProps.java','ICUData.java','ICUBinary.java','Trie.java','CharTrie.java'):
+              s=read('jdk/src/share/classes/sun/text/normalizer/'+name)
+              s=once(s,'package sun.text.normalizer;','package '+p_norm+';',name+'-package')
+              write(p_norm,name,s)
+
+          s=read('jdk/src/share/classes/sun/text/normalizer/UTF16.java')
+          s=once(s,'package sun.text.normalizer;','package '+p_norm+';','UTF16-package')
+          needle='UCharacterProperty.getRawSupplementary('
+          n=s.count(needle)
+          if n<1: raise SystemExit('P2B_BIDI_R2_STAGE_FAIL UTF16 rawSupplementary refs='+str(n))
+          s=s.replace(needle,'rawSupplementary(')
+          pos=s.rfind('\n}')
+          if pos<0: raise SystemExit('P2B_BIDI_R2_STAGE_FAIL UTF16 final brace')
+          helper='''\n    /* Source-extracted from JDK8u504 UCharacterProperty.getRawSupplementary. */\n    private static int rawSupplementary(char lead, char trail)\n    {\n        final int leadSurrogateShift = 10;\n        final int surrogateOffset = SUPPLEMENTARY_MIN_VALUE -\n            (SURROGATE_MIN_VALUE << leadSurrogateShift) - TRAIL_SURROGATE_MIN_VALUE;\n        return (lead << leadSurrogateShift) + trail + surrogateOffset;\n    }\n'''
+          s=s[:pos]+helper+s[pos:]
+          changes.append('UTF16-source-extracted-rawSupplementary refs='+str(n))
+          write(p_norm,'UTF16.java',s)
+
+          uchar='''package %s;\n\nimport java.io.IOException;\n\npublic final class UCharacter\n{\n    private static final UBiDiProps gBdp;\n    static\n    {\n        UBiDiProps bdp;\n        try {\n            bdp=UBiDiProps.getSingleton();\n        } catch(IOException e) {\n            bdp=UBiDiProps.getDummy();\n        }\n        gBdp=bdp;\n    }\n\n    private UCharacter() { }\n\n    public static int getDirection(int ch)\n    {\n        return gBdp.getClass(ch);\n    }\n}\n''' % p_norm
+          write(p_norm,'UCharacter.java',uchar)
+          changes.append('UCharacter-direction-only-source-extraction')
+
+          up=read('jdk/src/share/classes/sun/text/normalizer/UCharacterProperty.java')
+          if 'return (lead << LEAD_SURROGATE_SHIFT_) + trail + SURROGATE_OFFSET_;' not in up:
+              raise SystemExit('P2B_BIDI_R2_STAGE_FAIL rawSupplementary exact anchor')
+          uc=read('jdk/src/share/classes/sun/text/normalizer/UCharacter.java')
+          if 'return gBdp.getClass(ch);' not in uc or 'bdp=UBiDiProps.getSingleton();' not in uc or 'bdp=UBiDiProps.getDummy();' not in uc:
+              raise SystemExit('P2B_BIDI_R2_STAGE_FAIL UCharacter direction anchors')
+
+          (out/'STAGE.txt').write_text('\n'.join([
+              'P2B_PLANNER_BIDI_R2_STAGE=PASS',
+              'P2B_PLANNER_BIDI_CORE_DELTA=PACKAGE_IMPORT_RELOCATION_PLUS_JAVA6_EQUIVALENT_MULTICATCH_SPLIT',
+              'P2B_PLANNER_BIDI_JAVA6_SOURCE_REWRITE=EXACT_EXCEPTION_EQUIVALENT',
+              'P2B_PLANNER_UCHAR_DELTA=DIRECTION_ONLY_SOURCE_EXTRACTION',
+              'P2B_PLANNER_UTF16_DELTA=RAW_SUPPLEMENTARY_SOURCE_EXTRACTION',
+              'P2B_PLANNER_UNRELATED_UPROPS_UNORM_DATABASES=EXCLUDED',
+              'P2B_PLANNER_STAGE_CHANGE_COUNT='+str(len(changes)),
+          ])+'\n',encoding='utf-8')
+          print((out/'STAGE.txt').read_text(),end='')
+          PY
+
+      - name: Generate exhaustive helper and generic Bidi differential harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > out/p2b-bidi-r2/BidiDifferential.java <<'JAVA'
+          import java.lang.reflect.Method;
+          import org.recompile.rg35xx.p2b.jdk8.text.Bidi;
+
+          public final class BidiDifferential {
+              private static final Method REF_DIR;
+              private static final Method REF_UTF16;
+              static {
+                  try {
+                      Class uc=Class.forName("sun.text.normalizer.UCharacter");
+                      REF_DIR=uc.getMethod("getDirection",new Class[]{Integer.TYPE});
+                      Class u16=Class.forName("sun.text.normalizer.UTF16");
+                      REF_UTF16=u16.getMethod("charAt",new Class[]{char[].class,Integer.TYPE,Integer.TYPE,Integer.TYPE});
+                  } catch(Exception e) { throw new RuntimeException(e); }
+              }
+              private static int refDir(int cp) throws Exception {
+                  return ((Integer)REF_DIR.invoke(null,new Object[]{Integer.valueOf(cp)})).intValue();
+              }
+              private static int refUtf16(char[] a,int st,int lim,int off) throws Exception {
+                  return ((Integer)REF_UTF16.invoke(null,new Object[]{a,Integer.valueOf(st),Integer.valueOf(lim),Integer.valueOf(off)})).intValue();
+              }
+              private static void helperDifferential() throws Exception {
+                  int dm=0;
+                  for(int cp=0;cp<=0x10ffff;cp++) {
+                      int r=refDir(cp), l=org.recompile.rg35xx.p2b.jdk8.normalizer.UCharacter.getDirection(cp);
+                      if(r!=l){dm++;if(dm<=8)System.out.println("DIR_MISMATCH cp="+Integer.toHexString(cp)+" ref="+r+" local="+l);}
+                  }
+                  System.out.println("P2B_PLANNER_BIDI_DIRECTION_CODEPOINTS=1114112");
+                  System.out.println("P2B_PLANNER_BIDI_DIRECTION_MISMATCH_COUNT="+dm);
+                  if(dm!=0) throw new RuntimeException("direction mismatch="+dm);
+
+                  int um=0,uc=0;
+                  for(int hi=0xd800;hi<=0xdbff;hi++) for(int lo=0xdc00;lo<=0xdfff;lo++) {
+                      char[] a=new char[]{'A',(char)hi,(char)lo,'B'};
+                      int r=refUtf16(a,0,a.length,1);
+                      int l=org.recompile.rg35xx.p2b.jdk8.normalizer.UTF16.charAt(a,0,a.length,1);
+                      uc++; if(r!=l){um++;if(um<=8)System.out.println("UTF16_PAIR_MISMATCH hi="+hi+" lo="+lo);}
+                  }
+                  char[][] edge=new char[][]{
+                      new char[]{'A'},new char[]{(char)0xd800},new char[]{(char)0xdc00},
+                      new char[]{(char)0xd800,'A'},new char[]{'A',(char)0xdc00},
+                      new char[]{'A',(char)0xd800,(char)0xdc00,'B'}
+                  };
+                  for(int i=0;i<edge.length;i++) for(int off=0;off<edge[i].length;off++) {
+                      int r=refUtf16(edge[i],0,edge[i].length,off);
+                      int l=org.recompile.rg35xx.p2b.jdk8.normalizer.UTF16.charAt(edge[i],0,edge[i].length,off);
+                      uc++; if(r!=l)um++;
+                  }
+                  System.out.println("P2B_PLANNER_BIDI_UTF16_CASES="+uc);
+                  System.out.println("P2B_PLANNER_BIDI_UTF16_MISMATCH_COUNT="+um);
+                  if(um!=0) throw new RuntimeException("UTF16 mismatch="+um);
+              }
+
+              private static int cases=0,mismatch=0,chars=0,runs=0,requiresCases=0;
+              private static void diffOne(String label,String s,int flag) {
+                  java.text.Bidi r=new java.text.Bidi(s,flag);
+                  Bidi l=new Bidi(s,flag);
+                  cases++; chars+=s.length(); boolean bad=false;
+                  if(r.baseIsLeftToRight()!=l.baseIsLeftToRight())bad=true;
+                  if(r.isLeftToRight()!=l.isLeftToRight())bad=true;
+                  if(r.isRightToLeft()!=l.isRightToLeft())bad=true;
+                  if(r.isMixed()!=l.isMixed())bad=true;
+                  if(r.getLength()!=l.getLength())bad=true;
+                  if(r.getBaseLevel()!=l.getBaseLevel())bad=true;
+                  int n=Math.min(r.getLength(),l.getLength());
+                  for(int i=0;i<n;i++)if(r.getLevelAt(i)!=l.getLevelAt(i))bad=true;
+                  int rr=r.getRunCount(),lr=l.getRunCount(); if(rr!=lr)bad=true;
+                  int m=Math.min(rr,lr);runs+=m;
+                  for(int i=0;i<m;i++)if(r.getRunStart(i)!=l.getRunStart(i)||r.getRunLimit(i)!=l.getRunLimit(i)||r.getRunLevel(i)!=l.getRunLevel(i))bad=true;
+
+                  char[] a=s.toCharArray();
+                  java.text.Bidi rc=new java.text.Bidi(a,0,null,0,a.length,flag);
+                  Bidi lc=new Bidi(a,0,null,0,a.length,flag);
+                  if(rc.getBaseLevel()!=lc.getBaseLevel()||rc.getRunCount()!=lc.getRunCount())bad=true;
+                  for(int i=0;i<a.length;i++)if(rc.getLevelAt(i)!=lc.getLevelAt(i))bad=true;
+                  int cm=Math.min(rc.getRunCount(),lc.getRunCount());
+                  for(int i=0;i<cm;i++)if(rc.getRunStart(i)!=lc.getRunStart(i)||rc.getRunLimit(i)!=lc.getRunLimit(i)||rc.getRunLevel(i)!=lc.getRunLevel(i))bad=true;
+                  if(bad){mismatch++;if(mismatch<=12)System.out.println("BIDI_MISMATCH="+label+" flag="+flag+" text="+escape(s));}
+              }
+              private static void diffRequires(String label,String s,int st,int lim){
+                  char[] a=s.toCharArray();requiresCases++;
+                  boolean r=java.text.Bidi.requiresBidi(a,st,lim),l=Bidi.requiresBidi(a,st,lim);
+                  if(r!=l){mismatch++;if(mismatch<=12)System.out.println("REQUIRES_MISMATCH="+label+" st="+st+" lim="+lim);}
+              }
+              private static String escape(String s){
+                  StringBuffer b=new StringBuffer();
+                  for(int i=0;i<s.length();i++){int c=s.charAt(i);if(c>=32&&c<127)b.append((char)c);else{String h=Integer.toHexString(c);while(h.length()<4)h="0"+h;b.append("\\u").append(h);}}
+                  return b.toString();
+              }
+              private static int next(int x){return x*1103515245+12345;}
+
+              public static void main(String[] args) throws Exception {
+                  helperDifferential();
+                  String[] fixed=new String[]{
+                      "ABCxyz09","AVATAR","ToTo","ffi","Tiếng Việt","Tie\u0302\u0301ng Vie\u0323\u0302t","A\u0301",
+                      "سلام","لا","שלום","नमस्ते","ภาษาไทย","中文","A\u200DB","(سلام)","abc שלום 123","[नमस्ते]","漢かなカナ",
+                      "A(Б)Γ","\u0301ABC","A\uD800\uDF48B","abc العربية 123 עברית","(A[שלום]ب)","\u202Aabc\u202C","\u200Fשלום\u200EABC",
+                      "123 אבג 456 العربية XYZ","(abc) [שלום] <سلام>","\u202BABC 123 שלום\u202C","A\u206AB\u206FC"
+                  };
+                  int[] flags=new int[]{Bidi.DIRECTION_DEFAULT_LEFT_TO_RIGHT,Bidi.DIRECTION_DEFAULT_RIGHT_TO_LEFT,Bidi.DIRECTION_LEFT_TO_RIGHT,Bidi.DIRECTION_RIGHT_TO_LEFT};
+                  for(int i=0;i<fixed.length;i++){
+                      for(int f=0;f<flags.length;f++)diffOne("fixed-"+i,fixed[i],flags[f]);
+                      diffRequires("fixed-"+i,fixed[i],0,fixed[i].length());
+                      if(fixed[i].length()>2)diffRequires("fixed-slice-"+i,fixed[i],1,fixed[i].length()-1);
+                  }
+                  String[] tok=new String[]{
+                      "A","z","0","1"," ",".",",","\u0301","א","ש","ם","س","ل","م","ك","क","्","त","ग","า","ก","中","文",
+                      "あ","ア","α","Я","(",")","[","]","<",">","\u200C","\u200D","\u200E","\u200F","\u202A","\u202B","\u202C","\u202D","\u202E",
+                      "\u206A","\u206B","\u206C","\u206D","\u206E","\u206F","\uD800\uDF48","\uD83D\uDE00"
+                  };
+                  int state=0x2468ace1;
+                  for(int n=0;n<4096;n++){
+                      state=next(state);int parts=1+((state>>>1)&31);StringBuffer b=new StringBuffer();
+                      for(int j=0;j<parts;j++){state=next(state);b.append(tok[(state>>>1)%tok.length]);}
+                      String s=b.toString();
+                      for(int f=0;f<flags.length;f++)diffOne("rnd-"+n,s,flags[f]);
+                      diffRequires("rnd-full-"+n,s,0,s.length());
+                      if(s.length()>1){state=next(state);int st=(state>>>1)%s.length();state=next(state);int lim=st+((state>>>1)%(s.length()-st+1));diffRequires("rnd-slice-"+n,s,st,lim);}
+                  }
+                  int reorderMismatch=0,reorderCases=0;
+                  for(int n=1;n<=64;n++){
+                      byte[] lv=new byte[n];Object[] a=new Object[n],b=new Object[n];
+                      for(int i=0;i<n;i++){state=next(state);lv[i]=(byte)((state>>>1)&7);a[i]=Integer.valueOf(i);b[i]=Integer.valueOf(i);}
+                      java.text.Bidi.reorderVisually(lv,0,a,0,n);Bidi.reorderVisually(lv,0,b,0,n);reorderCases++;
+                      for(int i=0;i<n;i++)if(!a[i].equals(b[i])){reorderMismatch++;break;}
+                  }
+                  System.out.println("P2B_PLANNER_BIDI_CASES="+cases);
+                  System.out.println("P2B_PLANNER_BIDI_CHAR_LEVEL_COMPARISONS="+chars);
+                  System.out.println("P2B_PLANNER_BIDI_RUN_COMPARISONS="+runs);
+                  System.out.println("P2B_PLANNER_BIDI_REQUIRES_CASES="+requiresCases);
+                  System.out.println("P2B_PLANNER_BIDI_REORDER_CASES="+reorderCases);
+                  System.out.println("P2B_PLANNER_BIDI_REORDER_MISMATCH_COUNT="+reorderMismatch);
+                  System.out.println("P2B_PLANNER_BIDI_MISMATCH_COUNT="+mismatch);
+                  if(mismatch!=0||reorderMismatch!=0)throw new RuntimeException("Bidi mismatch="+mismatch+" reorder="+reorderMismatch);
+                  System.out.println("P2B_PLANNER_BIDI_GENERIC_DIFFERENTIAL=PASS");
+              }
+          }
+          JAVA
+
+      - name: Compile Java 6-compatible planner and run differential
+        shell: bash
+        run: |
+          set -euo pipefail
+          JAVA8="$JAVA_HOME"
+          CLASSES=out/p2b-bidi-r2/classes
+          mkdir -p "$CLASSES/sun/text/resources"
+          cp /tmp/jdk8u/jdk/src/share/classes/sun/text/resources/ubidi.icu "$CLASSES/sun/text/resources/ubidi.icu"
+          find out/p2b-bidi-r2/src -name '*.java' -print | sort > out/p2b-bidi-r2/sources.list
+          printf '%s\n' out/p2b-bidi-r2/BidiDifferential.java >> out/p2b-bidi-r2/sources.list
+          "$JAVA8/bin/javac" -encoding UTF-8 -source 1.6 -target 1.6 \
+            -bootclasspath "$JAVA8/jre/lib/rt.jar" -d "$CLASSES" @out/p2b-bidi-r2/sources.list
+          python3 - "$CLASSES" <<'PY'
+          from pathlib import Path
+          import sys
+          root=Path(sys.argv[1]);bad=[];maj=set();count=0
+          for p in root.rglob('*.class'):
+              b=p.read_bytes();m=int.from_bytes(b[6:8],'big');maj.add(m);count+=1
+              if m>50:bad.append((str(p),m))
+          if bad:raise SystemExit('P2B_PLANNER_BIDI_R2_JAVA6_FAIL '+repr(bad))
+          print('P2B_PLANNER_BIDI_R2_CLASS_COUNT='+str(count))
+          print('P2B_PLANNER_BIDI_R2_CLASS_MAJORS='+','.join(map(str,sorted(maj))))
+          print('P2B_PLANNER_BIDI_R2_JAVA6_GATE=PASS')
+          PY
+          "$JAVA8/bin/java" -Xmx512m -cp "$CLASSES" BidiDifferential | tee out/p2b-bidi-r2/DIFFERENTIAL.log
+          grep -q '^P2B_PLANNER_BIDI_DIRECTION_MISMATCH_COUNT=0$' out/p2b-bidi-r2/DIFFERENTIAL.log
+          grep -q '^P2B_PLANNER_BIDI_UTF16_MISMATCH_COUNT=0$' out/p2b-bidi-r2/DIFFERENTIAL.log
+          grep -q '^P2B_PLANNER_BIDI_REORDER_MISMATCH_COUNT=0$' out/p2b-bidi-r2/DIFFERENTIAL.log
+          grep -q '^P2B_PLANNER_BIDI_MISMATCH_COUNT=0$' out/p2b-bidi-r2/DIFFERENTIAL.log
+          grep -q '^P2B_PLANNER_BIDI_GENERIC_DIFFERENTIAL=PASS$' out/p2b-bidi-r2/DIFFERENTIAL.log
+          {
+            echo 'P2B_PLANNER_BIDI_PROVENANCE=JDK8U504_EXACT_CORE_PLUS_SOURCE_EXTRACTIONS'
+            echo 'P2B_PLANNER_BIDI_JAVA6_REWRITE=EXACT_EXCEPTION_EQUIVALENT'
+            echo 'P2B_PLANNER_BIDI_GENERIC=YES'
+            echo 'P2B_PLANNER_BIDI_JAVA6=PASS'
+            echo 'P2B_PLANNER_BIDI_RESULT=PASS'
+            echo 'P2B_PLANNER_FULL_LAYOUT_PLAN=NOT_YET_PROVEN'
+            echo 'P2B_RUNTIME_PATCH=FORBIDDEN'
+            echo 'P2B_DEVICE_PACKAGE=FORBIDDEN'
+            echo 'DEVICE_TEST=NOT_REQUESTED'
+            echo 'STABLE=NO'
+          } | tee out/p2b-bidi-r2/STATUS.txt
+
+      - name: Cleanup source/classes/resource and enforce evidence-only artifact
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/jdk8u out/p2b-bidi-r2/src out/p2b-bidi-r2/classes
+          rm -f out/p2b-bidi-r2/BidiDifferential.java out/p2b-bidi-r2/sources.list
+          if find out/p2b-bidi-r2 -type f | grep -Ei '\.(class|java|ttf|otf|jar|zip|so|a|o|icu)$'; then
+            echo 'P2B_PLANNER_BIDI_R2_EVIDENCE_LEAK=FAIL'
+            exit 1
+          fi
+          echo 'P2B_PLANNER_BIDI_R2_EVIDENCE_LEAK=NO' | tee out/p2b-bidi-r2/CLEANUP.txt
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: RG35XX-P2B-JDK8-RUNTIME-PLANNER-BIDI-R2-${{ github.sha }}
+          path: |
+            out/p2b-bidi-r2/PROVENANCE.txt
+            out/p2b-bidi-r2/STAGE.txt
+            out/p2b-bidi-r2/DIFFERENTIAL.log
+            out/p2b-bidi-r2/STATUS.txt
+            out/p2b-bidi-r2/CLEANUP.txt
+          if-no-files-found: warn
