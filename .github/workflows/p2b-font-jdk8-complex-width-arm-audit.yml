@@ -31,6 +31,7 @@ jobs:
       JDK8_GLYPHLAYOUT_BLOB: bff5f4a94f9e05342f836fd7789f8d755814efcd
       JDK8_SUNLAYOUT_CPP_BLOB: ab65748eec5de20229657e0f270a39e58434910f
       JDK8_TEXTLINE_BLOB: 9efcdc32de2f3f75f73669e7468f9ec8787e8cdf
+      JDK8_FDM_BLOB: d843c16cd5f598624567e648a83d7f2d14759ca9
     steps:
       - uses: actions/checkout@v4
         with:
@@ -75,7 +76,7 @@ jobs:
           /opt/miyoo/bin/arm-miyoo-linux-uclibcgnueabi-g++ --version | head -n 1 | tee out/P2B-COMPLEX-WIDTH-ARM-CXX.txt
           echo 'P2B_COMPLEX_WIDTH_ARM_TOOLCHAIN=PASS'
 
-      - name: Pin exact JDK8u504 LayoutEngine and FreeType sources
+      - name: Pin exact JDK8u504 LayoutEngine, width, and FreeType sources
         shell: bash
         run: |
           set -euo pipefail
@@ -90,8 +91,14 @@ jobs:
           test "$(git -C /tmp/jdk8u rev-parse HEAD:jdk/src/share/classes/sun/font/GlyphLayout.java)" = "$JDK8_GLYPHLAYOUT_BLOB"
           test "$(git -C /tmp/jdk8u rev-parse HEAD:jdk/src/share/native/sun/font/layout/SunLayoutEngine.cpp)" = "$JDK8_SUNLAYOUT_CPP_BLOB"
           test "$(git -C /tmp/jdk8u rev-parse HEAD:jdk/src/share/classes/java/awt/font/TextLine.java)" = "$JDK8_TEXTLINE_BLOB"
+          test "$(git -C /tmp/jdk8u rev-parse HEAD:jdk/src/share/classes/sun/font/FontDesignMetrics.java)" = "$JDK8_FDM_BLOB"
           grep -F 'Freetype v2.14.3' /tmp/jdk8u/THIRD_PARTY_README
-          echo 'P2B_COMPLEX_WIDTH_ARM_SOURCE_PROVENANCE=PASS' | tee out/P2B-COMPLEX-WIDTH-ARM-PROVENANCE.txt
+          grep -F 'width = new TextLayout(str, font, frc).getAdvance();' /tmp/jdk8u/jdk/src/share/classes/sun/font/FontDesignMetrics.java
+          grep -F 'return (int) (0.5 + width);' /tmp/jdk8u/jdk/src/share/classes/sun/font/FontDesignMetrics.java
+          {
+            echo "P2B_JDK8_FDM_BLOB=$JDK8_FDM_BLOB"
+            echo 'P2B_COMPLEX_WIDTH_ARM_SOURCE_PROVENANCE=PASS'
+          } | tee out/P2B-COMPLEX-WIDTH-ARM-PROVENANCE.txt
 
       - name: Materialize exact Miyoo MiSans for diagnostics
         shell: bash
