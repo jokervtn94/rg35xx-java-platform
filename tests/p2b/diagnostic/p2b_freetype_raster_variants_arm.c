@@ -12,6 +12,10 @@ static const char *samples[] = {
 };
 static const uint64_t FNV_OFFSET = UINT64_C(0xcbf29ce484222325);
 static const uint64_t FNV_PRIME  = UINT64_C(0x100000001b3);
+#define CANVAS_W 256
+#define CANVAS_H 128
+#define ORIGIN_X 16
+#define ORIGIN_Y 64
 
 static int utf8_next(const unsigned char **pp) {
     const unsigned char *p=*pp; unsigned int c;
@@ -44,8 +48,10 @@ static int occupied(const FT_Bitmap *b, int row, int col, int mode) {
 }
 static void run_case(FT_Face face, const char *s, int style, int mode,
                      int *out_width, int *ink, int *x0, int *y0, int *x1, int *y1, uint64_t *fp) {
-    const unsigned char *p=(const unsigned char*)s; int pen=0;
-    *ink=0; *x0=*y0=99999; *x1=*y1=-99999; *fp=FNV_OFFSET;
+    const unsigned char *p=(const unsigned char*)s;
+    unsigned char canvas[CANVAS_W*CANVAS_H];
+    int pen=0, row, col, xx, yy;
+    memset(canvas,0,sizeof(canvas));
     while (*p) {
         int cp=utf8_next(&p); FT_Int32 flags=FT_LOAD_DEFAULT; int rc; int adv;
         if (mode==0) flags |= FT_LOAD_TARGET_MONO | FT_LOAD_MONOCHROME;
@@ -59,16 +65,21 @@ static void run_case(FT_Face face, const char *s, int style, int mode,
         rc=FT_Render_Glyph(face->glyph, mode==0 ? FT_RENDER_MODE_MONO : FT_RENDER_MODE_NORMAL);
         if(!rc) {
             FT_GlyphSlot g=face->glyph; int gx=pen+g->bitmap_left, gy=-g->bitmap_top;
-            int row,col;
             for(row=0;row<(int)g->bitmap.rows;row++) for(col=0;col<(int)g->bitmap.width;col++) {
                 if(occupied(&g->bitmap,row,col,mode)) {
-                    int x=gx+col,y=gy+row; (*ink)++;
-                    if(x<*x0)*x0=x; if(x>*x1)*x1=x; if(y<*y0)*y0=y; if(y>*y1)*y1=y;
-                    *fp=mix32(*fp,x); *fp=mix32(*fp,y);
+                    int x=ORIGIN_X+gx+col, y=ORIGIN_Y+gy+row;
+                    if(x>=0 && x<CANVAS_W && y>=0 && y<CANVAS_H) canvas[y*CANVAS_W+x]=1;
                 }
             }
         }
         pen += adv;
+    }
+    *ink=0; *x0=*y0=99999; *x1=*y1=-99999; *fp=FNV_OFFSET;
+    /* Match JDK diagnostic semantics: unique occupied pixels, traversed as one canvas row-major. */
+    for(yy=0;yy<CANVAS_H;yy++) for(xx=0;xx<CANVAS_W;xx++) if(canvas[yy*CANVAS_W+xx]) {
+        int rx=xx-ORIGIN_X, ry=yy-ORIGIN_Y; (*ink)++;
+        if(rx<*x0)*x0=rx; if(rx>*x1)*x1=rx; if(ry<*y0)*y0=ry; if(ry>*y1)*y1=ry;
+        *fp=mix32(*fp,rx); *fp=mix32(*fp,ry);
     }
     if(*ink==0)*x0=*y0=*x1=*y1=-1; *out_width=pen;
 }
