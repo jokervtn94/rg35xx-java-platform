@@ -55,6 +55,7 @@ jobs:
       - name: ELF and diagnostic isolation gate
         run: |
           set -eu
+          BASE=build/p2c-input-capability-diagnostic/m1_3c_onscreen_keymap_probe.c
           BIN=build/p2c-input-capability-diagnostic/p2c_input_capability_probe
           GEN=build/p2c-input-capability-diagnostic/p2c_input_capability_probe.c
           file "$BIN"
@@ -67,7 +68,7 @@ jobs:
           grep -Fq '"LONE","LTWO","RONE","RTWO"' "$GEN"
           grep -Fq 'const int steps=14;' "$GEN"
           ! grep -Ei 'JamVM|freej2me|audio|font|transparency' "$GEN"
-          sha256sum miyoo-m1/m1_3c_onscreen_keymap_probe.c "$GEN" "$BIN" | tee /tmp/p2c-probe-sha256.txt
+          sha256sum "$BASE" "$GEN" "$BIN" | tee /tmp/p2c-probe-sha256.txt
           echo 'P2C_DIAGNOSTIC_BUILD=PASS'
           echo 'P2C_PHYSICAL_TEST=NOT_TESTED'
 
