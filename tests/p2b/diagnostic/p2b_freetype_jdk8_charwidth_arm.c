@@ -21,8 +21,6 @@ static int is_jdk_invisible_control(unsigned long cp) {
         if (cp <= 0x200fUL) return 1;
         if (cp >= 0x2028UL && cp <= 0x202eUL) return 1;
         if (cp >= 0x206aUL && cp <= 0x206fUL) return 1;
-        /* BMP CMap path uses the no-surrogates control guard. */
-        if (cp >= 0xffffUL) return 1;
     }
     return 0;
 }
