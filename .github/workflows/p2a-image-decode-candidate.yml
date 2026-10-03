@@ -6,11 +6,17 @@ on:
       - module/p2a-image-decode-candidate
     paths:
       - '.github/workflows/p2a-image-decode-candidate.yml'
+      - '.github/workflows/p2a-image-decode-module-gate.yml'
+      - 'docs/RG35XX-PLATFORM-SOURCE-COVERAGE-MATRIX-v1.tsv'
+      - 'packaging/p2a/**'
       - 'scripts/stage-p2a-image-decode.py'
       - 'scripts/build-p2a-image-decode-candidate.sh'
       - 'scripts/build-p2a-image-decode-candidate-v2.sh'
       - 'scripts/build-p2a-image-decode-candidate-v3.sh'
+      - 'scripts/build-p2a-image-exerciser.sh'
+      - 'scripts/build-p2a-image-physical-package.sh'
       - 'tests/p2a/RG35XXP2AImageDecodeDifferentialGate.java'
+      - 'tests/p2a/exerciser/RG35XXP2AImageDecodeExerciser.java'
   workflow_dispatch:
 
 permissions:
@@ -41,7 +47,7 @@ jobs:
           git merge-base --is-ancestor "$PARENT" HEAD
           [ "$(git merge-base "$PARENT" HEAD)" = "$PARENT" ]
           changed="$(git diff --name-only "$PARENT"..HEAD | LC_ALL=C sort)"
-          expected=$'.github/workflows/p2a-image-decode-candidate.yml\nscripts/build-p2a-image-decode-candidate-v2.sh\nscripts/build-p2a-image-decode-candidate-v3.sh\nscripts/build-p2a-image-decode-candidate.sh\nscripts/stage-p2a-image-decode.py\ntests/p2a/RG35XXP2AImageDecodeDifferentialGate.java'
+          expected=$'.github/workflows/p2a-image-decode-candidate.yml\n.github/workflows/p2a-image-decode-module-gate.yml\ndocs/RG35XX-PLATFORM-SOURCE-COVERAGE-MATRIX-v1.tsv\npackaging/p2a/COLLECT-RG35XX-P2A-IMAGE-DECODE-EVIDENCE.ps1\npackaging/p2a/INSTALL-RG35XX-P2A-IMAGE-DECODE.ps1\npackaging/p2a/README-FIRST.txt\npackaging/p2a/RG35XX-P2A-IMAGE-DECODE.sh\nscripts/build-p2a-image-decode-candidate-v2.sh\nscripts/build-p2a-image-decode-candidate-v3.sh\nscripts/build-p2a-image-decode-candidate.sh\nscripts/build-p2a-image-exerciser.sh\nscripts/build-p2a-image-physical-package.sh\nscripts/stage-p2a-image-decode.py\ntests/p2a/RG35XXP2AImageDecodeDifferentialGate.java\ntests/p2a/exerciser/RG35XXP2AImageDecodeExerciser.java'
           [ "$changed" = "$expected" ] || { echo "P2A_IMAGE_BRANCH_SCOPE_FAIL=$changed" >&2; exit 1; }
           ! git diff --name-only "$PARENT"..HEAD | grep -E '^(adapter/|native/|upstream/)'
           if git log --format=%H "$PARENT"..HEAD | grep -Eq '82d166c2ff2c5832c794c3064274dff67b4a32ae|f83507c7b48f4fdb90199d0c4784c516e4c88ac5'; then
