@@ -1,0 +1,150 @@
+name: P2B Font Text Audit
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - audit/p2b-font-text
+    paths:
+      - '.github/workflows/p2b-font-text-audit.yml'
+      - 'docs/P2B-FONT-TEXT-AUDIT-v1.md'
+      - 'tests/p2b/diagnostic/**'
+
+permissions:
+  contents: read
+
+jobs:
+  p2b-font-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact P2A runtime parent plus audit files
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Set up pinned diagnostic JDK 8
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Verify audit-only ancestry and repository scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE=77a36526e0f6d875c57c7e9a973e0c1a05573721
+          test "$(git merge-base HEAD "$BASE")" = "$BASE"
+          git diff --name-only "$BASE"...HEAD | tee /tmp/p2b-files.txt
+          if grep -Ev '^(docs/P2B-FONT-TEXT-AUDIT-v1\.md|tests/p2b/diagnostic/[^/]+|\.github/workflows/p2b-font-text-audit\.yml)$' /tmp/p2b-files.txt | grep -q .; then
+            echo 'P2B_AUDIT_SCOPE=FAIL'
+            exit 1
+          fi
+          if git diff --name-only "$BASE"...HEAD | grep -E '^(adapter/|native/|upstream/|packaging/|scripts/stage-|scripts/build-)'; then
+            echo 'P2B_RUNTIME_DELTA=FAIL'
+            exit 1
+          fi
+          echo 'P2B_AUDIT_SCOPE=PASS'
+          echo 'P2B_RUNTIME_DELTA=NONE'
+
+      - name: Verify pinned Miyoo source contract and release-lineage Font blob
+        shell: bash
+        run: |
+          set -euo pipefail
+          CANON=upstream/freej2me-miyoomini
+          PIN=ca11dfe8ea1cc273d92460f9a83bbf192023fa63
+          FONT_BLOB=51bbe0b933055761bb4e128dfee6969d0b4e86d7
+          test "$(git -C "$CANON" rev-parse HEAD)" = "$PIN"
+          test "$(git -C "$CANON" rev-parse HEAD:src/javax/microedition/lcdui/Font.java)" = "$FONT_BLOB"
+          TTF_COUNT=$(git -C "$CANON" ls-tree -r --name-only HEAD | grep -Ei '\.ttf$' | wc -l || true)
+          test "$TTF_COUNT" = 0
+          grep -F 'new File("./font.ttf")' "$CANON/src/org/recompile/freej2me/Anbu.java"
+          grep -F 'case SIZE_LARGE  : return 16;' "$CANON/src/javax/microedition/lcdui/Font.java"
+          grep -F 'case SIZE_MEDIUM : return 14;' "$CANON/src/javax/microedition/lcdui/Font.java"
+          grep -F 'case SIZE_SMALL  : return 12;' "$CANON/src/javax/microedition/lcdui/Font.java"
+          grep -F 'gc.drawString(str, x, y);' "$CANON/src/org/recompile/mobile/PlatformGraphics.java"
+          git -C "$CANON" fetch --force --depth=1 origin refs/tags/2.0:refs/tags/p2b-release-2.0
+          RELEASE_FONT_BLOB=$(git -C "$CANON" rev-parse refs/tags/p2b-release-2.0^{commit}:src/javax/microedition/lcdui/Font.java)
+          test "$RELEASE_FONT_BLOB" = "$FONT_BLOB"
+          echo "P2B_PINNED_FONT_BLOB=$FONT_BLOB"
+          echo "P2B_RELEASE_FONT_BLOB=$RELEASE_FONT_BLOB"
+          echo "P2B_PINNED_SOURCE_TTF_COUNT=$TTF_COUNT"
+          echo 'P2B_SOURCE_CONTRACT=PASS'
+
+      - name: Download official Miyoo release package and identify font asset
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          URL='https://github.com/aweigit/freej2me-miyoomini/releases/download/2.0/miyoomini-freej2me.zip'
+          ZIP=out/miyoomini-freej2me.zip
+          curl -fL --retry 3 --retry-delay 2 "$URL" -o "$ZIP"
+          ZIP_SHA=$(sha256sum "$ZIP" | awk '{print $1}')
+          unzip -Z1 "$ZIP" | grep -Ei '(^|/)font\.ttf$' | tee out/P2B-FONT-ENTRIES.txt
+          COUNT=$(wc -l < out/P2B-FONT-ENTRIES.txt | tr -d ' ')
+          test "$COUNT" = 1
+          FONT_ENTRY=$(cat out/P2B-FONT-ENTRIES.txt)
+          unzip -p "$ZIP" "$FONT_ENTRY" > out/font.ttf
+          FONT_SHA=$(sha256sum out/font.ttf | awk '{print $1}')
+          FONT_SIZE=$(wc -c < out/font.ttf | tr -d ' ')
+          {
+            echo 'PROJECT=RG35XX-AWEIGIT-R1'
+            echo 'MODULE=P2B_FONT_TEXT'
+            echo 'DIAGNOSTIC_ONLY=YES'
+            echo 'PINNED_AWEIGIT=ca11dfe8ea1cc273d92460f9a83bbf192023fa63'
+            echo 'PINNED_FONT_JAVA_BLOB=51bbe0b933055761bb4e128dfee6969d0b4e86d7'
+            echo 'RELEASE_TAG=2.0'
+            echo "RELEASE_URL=$URL"
+            echo "RELEASE_ZIP_SHA256=$ZIP_SHA"
+            echo "FONT_ENTRY=$FONT_ENTRY"
+            echo "FONT_SHA256=$FONT_SHA"
+            echo "FONT_SIZE=$FONT_SIZE"
+            echo 'FONT_FILE_COMMITTED=NO'
+            echo 'FONT_FILE_UPLOADED_AS_ARTIFACT=NO'
+            echo 'RUNTIME_PATCH=FORBIDDEN'
+          } | tee out/P2B-FONT-ASSET-IDENTITY.txt
+          echo "P2B_RELEASE_FONT_ENTRY_COUNT=$COUNT"
+          echo 'P2B_RELEASE_FONT_ASSET_IDENTITY=PASS'
+
+      - name: Inspect TTF name/provenance records without external font libraries
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tests/p2b/diagnostic/inspect_ttf_names.py out/font.ttf | tee out/P2B-TTF-NAMES.txt
+          grep -F 'P2B_TTF_PARSE_RESULT=PASS' out/P2B-TTF-NAMES.txt
+
+      - name: Run exact JDK8 AWT backend diagnostic
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out/classes
+          javac -encoding UTF-8 -source 1.6 -target 1.6 -d out/classes tests/p2b/diagnostic/RG35XXP2BFontBackendDiagnostic.java
+          java -Djava.awt.headless=true -cp out/classes RG35XXP2BFontBackendDiagnostic out/font.ttf | tee out/P2B-JDK8-FONT-BACKEND.log
+          grep -F 'P2B_FONT_DIAGNOSTIC_BOOT=PASS' out/P2B-JDK8-FONT-BACKEND.log
+          grep -F 'P2B_DERIVE_CASES=24' out/P2B-JDK8-FONT-BACKEND.log
+          grep -F 'P2B_FONT_DIAGNOSTIC_RESULT=PASS' out/P2B-JDK8-FONT-BACKEND.log
+          java -version 2>&1 | tee out/JAVA-VERSION.txt
+          echo 'P2B_JDK8_BACKEND_DIAGNOSTIC=PASS'
+
+      - name: Remove font bytes before evidence upload
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f out/font.ttf out/miyoomini-freej2me.zip
+          if find out -type f | grep -Ei '\.(ttf|otf)$'; then
+            echo 'P2B_FONT_BYTE_LEAK=FAIL'
+            exit 1
+          fi
+          echo 'P2B_FONT_BYTE_LEAK=NO'
+
+      - name: Upload P2B audit evidence (no font bytes)
+        uses: actions/upload-artifact@v4
+        with:
+          name: RG35XX-P2B-FONT-TEXT-AUDIT-${{ github.sha }}
+          path: |
+            out/P2B-FONT-ASSET-IDENTITY.txt
+            out/P2B-FONT-ENTRIES.txt
+            out/P2B-TTF-NAMES.txt
+            out/P2B-JDK8-FONT-BACKEND.log
+            out/JAVA-VERSION.txt
+          if-no-files-found: error
