@@ -104,6 +104,7 @@ jobs:
             P2C_VIDEO_PARENT_IDENTITY=PASS \
             P2C_FONT_PARENT_IDENTITY=PASS \
             P2C_LAUNCH_RESOLUTION_CONTRACT_GATE=PASS \
+            P2C_FINAL_OUTPUT_HASH_GATE=PASS \
             P2C_HOST_MODULE_GATE=PASS \
             P2C_PHYSICAL_TEST=NOT_TESTED \
             RG35XX_PLATFORM_BASELINE_DEVICE_PASS=NO \
@@ -114,11 +115,13 @@ jobs:
           grep -q '^P2C_L2_OWNER=JS0_AXIS2_BASELINE_-32767_PRESS_32767_BIT12$' "$ID"
           grep -q '^P2C_R2_OWNER=JS0_AXIS5_BASELINE_-32767_PRESS_32767_BIT13$' "$ID"
           grep -q '^P2C_LAUNCH_RESOLUTION_CONTRACT_GATE=PASS$' "$ID"
+          grep -q '^P2C_FINAL_OUTPUT_HASH_GATE=PASS$' "$ID"
           grep -q '^P2C_HOST_MODULE_GATE=PASS$' "$ID"
           grep -q '^PHYSICAL_TEST_LEVEL=MODULE$' "$ID"
           grep -q '^P2C_PHYSICAL_TEST=NOT_TESTED$' "$ID"
           grep -q '^GAME_SPECIFIC_CODE=NO$' "$ID"
           grep -q '^A9_PARENT=NO$' "$ID"
+          (cd out/p2c-input-frontend-candidate-r1 && sha256sum -c SHA256SUMS.txt)
           echo P2C_R1_CI_GATE=PASS
 
       - name: Upload P2C R1 candidate evidence
