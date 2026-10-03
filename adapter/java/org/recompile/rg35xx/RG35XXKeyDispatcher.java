@@ -1,27 +1,38 @@
 package org.recompile.rg35xx;
 
+import java.io.File;
+
 import org.recompile.mobile.Mobile;
 import org.recompile.mobile.MobilePlatform;
 
 /**
- * Converts the device-proven RG35XX semantic bitmap to the pinned Aweigit
- * MobilePlatform event boundary. This class does not call Displayable directly.
+ * Converts the original-RG35XX semantic bitmap to the pinned Aweigit
+ * frontend/MobilePlatform boundary. This class never calls Displayable.
  */
 public final class RG35XXKeyDispatcher {
     public static final int UP=1, DOWN=2, LEFT=3, RIGHT=4;
-    public static final int A=5, B=6, X=7, Y=8, L1=9, R1=10, START=11, SELECT=12;
+    public static final int A=5, B=6, X=7, Y=8, L1=9, R1=10, START=11, SELECT=12, L2=13, R2=14;
 
     private static final int REPEAT_DELAY_MS = 400;
     private static final int REPEAT_PERIOD_MS = 100;
-    private static final boolean A4_INPUT_TRACE = Boolean.getBoolean("rg35xx.a4.inputtrace");
 
     private final MobilePlatform platform;
+    private final RG35XXFrontendPolicy policy;
     private int previous;
-    private final long[] nextRepeat = new long[13];
+    private int suppressedBits;
+    private boolean suppressSelectRelease;
+    private final long[] nextRepeat = new long[15];
+    private final int[] activeKey = new int[15];
 
     public RG35XXKeyDispatcher(MobilePlatform platform) {
+        this(platform, new RG35XXFrontendPolicy(platform, new File("."), new File("."), "default", platform.lcdWidth, platform.lcdHeight));
+    }
+
+    public RG35XXKeyDispatcher(MobilePlatform platform, RG35XXFrontendPolicy policy) {
         if (platform == null) throw new IllegalArgumentException("platform");
+        if (policy == null) throw new IllegalArgumentException("policy");
         this.platform = platform;
+        this.policy = policy;
     }
 
     public void poll(long nowMs) {
@@ -30,70 +41,115 @@ public final class RG35XXKeyDispatcher {
 
     void dispatchState(int state, long nowMs) {
         boolean displayReady = Mobile.getDisplay() != null && Mobile.getDisplay().getCurrent() != null;
-        if (A4_INPUT_TRACE && state != previous) {
-            System.out.println("RG35XX_A4_INPUT_STATE prev=0x" + Integer.toHexString(previous)
-                + " state=0x" + Integer.toHexString(state)
-                + " displayReady=" + (displayReady ? "YES" : "NO"));
+        if (!displayReady) return;
+
+        int rising = state & ~previous;
+        boolean selectDown = isDown(state, SELECT);
+
+        if (selectDown && (rising & bit(START)) != 0 && !policy.isPointerMode()) {
+            releaseSelectForChord();
+            policy.cyclePhoneMode();
+            suppressedBits |= bit(START);
         }
-        if (!displayReady) {
-            if (A4_INPUT_TRACE && state != previous) {
-                System.out.println("RG35XX_A4_INPUT_DISPATCH=DEFERRED_DISPLAY_NOT_READY");
+        if (selectDown && (rising & bit(B)) != 0) {
+            releaseSelectForChord();
+            policy.cycleRotation();
+            suppressedBits |= bit(B);
+        }
+        if (selectDown && (rising & bit(Y)) != 0) {
+            releaseSelectForChord();
+            boolean entering = !policy.isPointerMode();
+            if (entering) releaseAllActiveKeysExcept(SELECT);
+            policy.togglePointerMode();
+            suppressedBits |= bit(Y);
+        }
+
+        for (int id = UP; id <= R2; id++) {
+            int mask = bit(id);
+            boolean wasDown = (previous & mask) != 0;
+            boolean isDown = (state & mask) != 0;
+
+            if ((suppressedBits & mask) != 0) {
+                if (!isDown) suppressedBits &= ~mask;
+                nextRepeat[id] = 0;
+                activeKey[id] = 0;
+                continue;
             }
-            return;
-        }
-        for (int id = UP; id <= SELECT; id++) {
-            int bit = 1 << (id - 1);
-            boolean wasDown = (previous & bit) != 0;
-            boolean isDown = (state & bit) != 0;
-            int key = toAweigitDefaultKey(id);
-            if (key == 0) continue;
+            if (id == SELECT && suppressSelectRelease) {
+                if (!isDown) suppressSelectRelease = false;
+                nextRepeat[id] = 0;
+                activeKey[id] = 0;
+                continue;
+            }
+
+            if (policy.isPointerMode()) {
+                if (id == X) {
+                    if (wasDown != isDown) policy.setPointerConfirm(isDown);
+                    nextRepeat[id] = 0;
+                    activeKey[id] = 0;
+                    continue;
+                }
+                if (id >= UP && id <= RIGHT) {
+                    if (!wasDown && isDown) {
+                        policy.movePointer(id);
+                        nextRepeat[id] = nowMs + REPEAT_DELAY_MS;
+                    } else if (isDown && nextRepeat[id] != 0 && nowMs >= nextRepeat[id]) {
+                        policy.movePointer(id);
+                        nextRepeat[id] = nowMs + REPEAT_PERIOD_MS;
+                    } else if (!isDown) {
+                        nextRepeat[id] = 0;
+                    }
+                    activeKey[id] = 0;
+                    continue;
+                }
+                nextRepeat[id] = 0;
+                activeKey[id] = 0;
+                continue;
+            }
 
             if (!wasDown && isDown) {
-                if (A4_INPUT_TRACE) {
-                    System.out.println("RG35XX_A4_INPUT_EVENT=PRESS id=" + id + " bit=0x"
-                        + Integer.toHexString(bit) + " key=" + key);
-                }
-                platform.keyPressed(key);
+                int key = policy.mapPhysicalToMobileKey(id);
+                activeKey[id] = key;
+                if (key != 0) platform.keyPressed(key);
                 nextRepeat[id] = repeatable(id) ? nowMs + REPEAT_DELAY_MS : 0;
             } else if (wasDown && !isDown) {
-                if (A4_INPUT_TRACE) {
-                    System.out.println("RG35XX_A4_INPUT_EVENT=RELEASE id=" + id + " bit=0x"
-                        + Integer.toHexString(bit) + " key=" + key);
-                }
-                platform.keyReleased(key);
+                int key = activeKey[id];
+                if (key != 0) platform.keyReleased(key);
+                activeKey[id] = 0;
                 nextRepeat[id] = 0;
             } else if (isDown && repeatable(id) && nextRepeat[id] != 0 && nowMs >= nextRepeat[id]) {
-                if (A4_INPUT_TRACE) {
-                    System.out.println("RG35XX_A4_INPUT_EVENT=REPEAT id=" + id + " bit=0x"
-                        + Integer.toHexString(bit) + " key=" + key);
-                }
-                platform.keyRepeated(key);
+                int key = activeKey[id];
+                if (key != 0) platform.keyRepeated(key);
                 nextRepeat[id] = nowMs + REPEAT_PERIOD_MS;
             }
         }
         previous = state;
     }
 
-    private static boolean repeatable(int id) {
-        return id == UP || id == DOWN || id == LEFT || id == RIGHT || id == A;
+    private void releaseSelectForChord() {
+        if (activeKey[SELECT] != 0) {
+            platform.keyReleased(activeKey[SELECT]);
+            activeKey[SELECT] = 0;
+        }
+        nextRepeat[SELECT] = 0;
+        suppressSelectRelease = true;
     }
 
-    /** Mirrors the pinned Aweigit default P-phone mapping, without its SDL2 frontend. */
-    private static int toAweigitDefaultKey(int id) {
-        switch (id) {
-            case UP:     return Mobile.KEY_NUM2;
-            case DOWN:   return Mobile.KEY_NUM8;
-            case LEFT:   return Mobile.KEY_NUM4;
-            case RIGHT:  return Mobile.KEY_NUM6;
-            case A:      return Mobile.KEY_NUM5;
-            case B:      return Mobile.NOKIA_SOFT2;
-            case X:      return Mobile.KEY_NUM7;
-            case Y:      return Mobile.KEY_NUM9;
-            case L1:     return Mobile.KEY_STAR;
-            case R1:     return Mobile.KEY_POUND;
-            case START:  return Mobile.NOKIA_SOFT1;
-            case SELECT: return Mobile.KEY_NUM0;
-            default:     return 0;
+    private void releaseAllActiveKeysExcept(int except) {
+        for (int id = UP; id <= R2; id++) {
+            if (id == except) continue;
+            if (activeKey[id] != 0) {
+                platform.keyReleased(activeKey[id]);
+                activeKey[id] = 0;
+            }
+            nextRepeat[id] = 0;
         }
     }
+
+    private boolean repeatable(int id) {
+        return id == UP || id == DOWN || id == LEFT || id == RIGHT || policy.isOkPhysical(id);
+    }
+
+    private static int bit(int id) { return 1 << (id - 1); }
+    private static boolean isDown(int state, int id) { return (state & bit(id)) != 0; }
 }

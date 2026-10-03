@@ -42,6 +42,9 @@ public final class RG35XXLauncher {
         platform.dataPath = withSlash(dataDir.getAbsolutePath());
         platform.rootPath = withSlash(rootDir.getAbsolutePath());
 
+        final RG35XXFrontendPolicy frontend = new RG35XXFrontendPolicy(
+            platform, dataDir, rootDir, jar.getName(), width, height);
+
         try {
             int videoRc = RG35XXVideo.initDisplay();
             if (videoRc != 0) {
@@ -54,7 +57,7 @@ public final class RG35XXLauncher {
             System.exit(5);
         }
 
-        final FramePresenter presenter = new FramePresenter(platform, raw2d);
+        final FramePresenter presenter = new FramePresenter(platform, raw2d, frontend);
         platform.setPainter(presenter);
 
         if (!platform.loadJar(jar.getAbsolutePath())) {
@@ -63,7 +66,7 @@ public final class RG35XXLauncher {
             System.exit(6);
         }
 
-        final InputPump input = new InputPump(platform);
+        final InputPump input = new InputPump(platform, frontend);
         Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
             public void run() {
                 input.stop();
@@ -75,6 +78,7 @@ public final class RG35XXLauncher {
         System.out.println("RG35XX_A3_LOGICAL_LCD=" + width + "x" + height);
         System.out.println("RG35XX_A3_DATA_PATH=" + platform.dataPath);
         System.out.println("RG35XX_A3_ROOT_PATH=" + platform.rootPath);
+        System.out.println("RG35XX_P2C_PHONE_MODE=" + frontend.getPhoneMode());
 
         platform.runJar();
         input.start();
@@ -103,14 +107,17 @@ public final class RG35XXLauncher {
     private static final class FramePresenter implements Runnable {
         private final MobilePlatform platform;
         private final boolean rawMode;
+        private final RG35XXFrontendPolicy frontend;
         private final Method rawPixelsMethod;
         private int[] pixels;
+        private int[] transformed;
         private int lastError = Integer.MIN_VALUE;
         private boolean rawInvokeErrorLogged;
 
-        FramePresenter(MobilePlatform platform, boolean rawMode) {
+        FramePresenter(MobilePlatform platform, boolean rawMode, RG35XXFrontendPolicy frontend) {
             this.platform = platform;
             this.rawMode = rawMode;
+            this.frontend = frontend;
             Method method = null;
             if (rawMode) {
                 try {
@@ -135,11 +142,7 @@ public final class RG35XXLauncher {
                         }
                         return;
                     }
-                    int rc = RG35XXVideo.presentARGB(raw, width, height);
-                    if (rc != 0 && rc != lastError) {
-                        System.err.println("RG35XX_A3_PRESENT_FAIL=" + rc + " SOURCE=" + width + "x" + height + " RAW2D=YES");
-                    }
-                    lastError = rc;
+                    present(raw, width, height, true);
                     return;
                 } catch (Exception e) {
                     if (!rawInvokeErrorLogged) {
@@ -157,11 +160,58 @@ public final class RG35XXLauncher {
             int needed = width * height;
             if (pixels == null || pixels.length != needed) pixels = new int[needed];
             pixels = image.getRGB(0, 0, width, height, pixels, 0, width);
-            int rc = RG35XXVideo.presentARGB(pixels, width, height);
+            present(pixels, width, height, false);
+        }
+
+        private void present(int[] source, int width, int height, boolean raw) {
+            int rotation = frontend.getRotation();
+            boolean cursor = frontend.isPointerMode() && rotation == 0;
+            int[] out = source;
+            int outWidth = width;
+            int outHeight = height;
+
+            if (rotation != 0 || cursor) {
+                int needed = width * height;
+                if (transformed == null || transformed.length != needed) transformed = new int[needed];
+                if (rotation == 1) {
+                    rotateClockwise(source, transformed, width, height);
+                    outWidth = height;
+                    outHeight = width;
+                } else if (rotation == 2) {
+                    rotateCounterClockwise(source, transformed, width, height);
+                    outWidth = height;
+                    outHeight = width;
+                } else {
+                    System.arraycopy(source, 0, transformed, 0, needed);
+                    frontend.drawPointerCursor(transformed, width, height);
+                }
+                out = transformed;
+            }
+
+            int rc = RG35XXVideo.presentARGB(out, outWidth, outHeight);
             if (rc != 0 && rc != lastError) {
-                System.err.println("RG35XX_A3_PRESENT_FAIL=" + rc + " SOURCE=" + width + "x" + height);
+                System.err.println("RG35XX_A3_PRESENT_FAIL=" + rc + " SOURCE=" + outWidth + "x" + outHeight +
+                    (raw ? " RAW2D=YES" : ""));
             }
             lastError = rc;
+        }
+
+        private static void rotateClockwise(int[] src, int[] dst, int width, int height) {
+            for (int y = 0; y < height; y++) {
+                int row = y * width;
+                for (int x = 0; x < width; x++) {
+                    dst[x * height + (height - 1 - y)] = src[row + x];
+                }
+            }
+        }
+
+        private static void rotateCounterClockwise(int[] src, int[] dst, int width, int height) {
+            for (int y = 0; y < height; y++) {
+                int row = y * width;
+                for (int x = 0; x < width; x++) {
+                    dst[(width - 1 - x) * height + y] = src[row + x];
+                }
+            }
         }
     }
 
@@ -170,8 +220,8 @@ public final class RG35XXLauncher {
         private volatile boolean running;
         private Thread thread;
 
-        InputPump(MobilePlatform platform) {
-            dispatcher = new RG35XXKeyDispatcher(platform);
+        InputPump(MobilePlatform platform, RG35XXFrontendPolicy frontend) {
+            dispatcher = new RG35XXKeyDispatcher(platform, frontend);
         }
 
         void start() {
