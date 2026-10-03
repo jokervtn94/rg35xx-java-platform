@@ -1,0 +1,237 @@
+name: P2B Font JDK8 Generic Component Plan Differential Audit
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - audit/p2b-font-text
+    paths:
+      - '.github/workflows/p2b-font-jdk8-generic-component-plan-differential-audit.yml'
+      - 'tests/p2b/diagnostic/stage_jdk8_text_planner_audit.py'
+      - 'tests/p2b/diagnostic/RG35XXP2BJdkTextPlannerDifferential.java'
+
+permissions:
+  contents: read
+
+jobs:
+  p2b-jdk8-generic-component-plan-differential:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      BASE: 77a36526e0f6d875c57c7e9a973e0c1a05573721
+      JDK8U_TAG: jdk8u504-b01
+      JDK8U_COMMIT: 4efe36434f44bafb854e602ccbbe1b5696fce1a2
+      EXPECTED_FONT_SHA256: 1a5f4112daaa9473747c6834041646cc9b2c338cb40ab5dbb2f0161f8968ca10
+      EXPECTED_FONT_SIZE: '8092724'
+      BIDI_BLOB: 3d0e1381adb1cb11cbd45d2f8e09c4830aa1fba8
+      BIDIBASE_BLOB: 6485bea94e69f1cb3f054360fb5caad461a60ef8
+      BIDILINE_BLOB: 1d54867ad42b486857693e63a3cf15fbe99354e9
+      BIDIRUN_BLOB: 07519db3934eb47a566ad0e597611bcfa8ed2b67
+      UBIDIPROPS_BLOB: c7ac9aeac61a3abcf6f9fc28105585ff3110f61f
+      ICUDATA_BLOB: 20c21a583d6689356e1d3c65aecfd37aca223521
+      ICUBINARY_BLOB: 20984d3b8fbd9d3523a9de7a9df05caff0e9be55
+      TRIE_BLOB: 0430bf5e955db100512d6f366b509b97bd07f51d
+      CHARTRIE_BLOB: 9726e8932f6ddeacf7ff4f0f3faf08d2b908777f
+      UTF16_BLOB: 934eecca8ff9aaf6f4ac8f80fe33cc5285a895e1
+      UCHAR_BLOB: bad507e2ee03b22e1c72680c4b60ca0787fd30b3
+      UCHARPROP_BLOB: 0149140feab974541f5ca1e56027b864aa9e803d
+      SCRIPT_BLOB: 155ab07d93cacf854c19187e020a66ef63921e52
+      SCRIPTRUNDATA_BLOB: e72c85624242ce7c486d78dbf800c91facb2cfbf
+      SCRIPTRUN_BLOB: e719fc335605f957f6bd713da226700aba15b8c9
+      BIDIUTILS_BLOB: 41d6acd02b95656b3644e669443b3230b950eb08
+      TEXTLINE_BLOB: 9efcdc32de2f3f75f73669e7468f9ec8787e8cdf
+      TEXTLABELFACTORY_BLOB: 1f9ba94159cb6f8f0696199c7ab7855db724797c
+      UBIDI_RESOURCE_BLOB: 3c545bd7a450e407f4755effb75f68886faa43e5
+      UBIDI_RESOURCE_SIZE: '19924'
+      UBIDI_RESOURCE_SHA256: 38b96789a88870d20c0eb1392cb8fc2bd58e2c31cfff3326bea1e00a52ec9889
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Verify audit-only ancestry and protected scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git merge-base HEAD "$BASE")" = "$BASE"
+          if git diff --name-only "$BASE"...HEAD | grep -E '^(adapter/|native/|upstream/|packaging/|scripts/stage-|scripts/build-)'; then
+            echo 'P2B_RUNTIME_DELTA=FAIL'; exit 1
+          fi
+          test "$(git -C upstream/freej2me-miyoomini rev-parse HEAD)" = ca11dfe8ea1cc273d92460f9a83bbf192023fa63
+          echo 'P2B_GENERIC_COMPONENT_PLAN_AUDIT_SCOPE=PASS'
+          echo 'P2B_RUNTIME_DELTA=NONE'
+          echo 'P2B_PROTECTED_JAMVM_GLIBJ_CHANGE=NO'
+
+      - name: Pin exact JDK8u504 planner source identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/jdk8u out/p2b-generic-plan
+          mkdir -p out/p2b-generic-plan
+          git clone --filter=blob:none --no-checkout https://github.com/adoptium/jdk8u.git /tmp/jdk8u
+          git -C /tmp/jdk8u fetch --depth 1 origin tag "$JDK8U_TAG"
+          git -C /tmp/jdk8u checkout --detach "$JDK8U_TAG"
+          test "$(git -C /tmp/jdk8u rev-parse HEAD)" = "$JDK8U_COMMIT"
+          check_blob(){ test "$(git -C /tmp/jdk8u rev-parse HEAD:"$1")" = "$2"; }
+          check_blob jdk/src/share/classes/java/text/Bidi.java "$BIDI_BLOB"
+          check_blob jdk/src/share/classes/sun/text/bidi/BidiBase.java "$BIDIBASE_BLOB"
+          check_blob jdk/src/share/classes/sun/text/bidi/BidiLine.java "$BIDILINE_BLOB"
+          check_blob jdk/src/share/classes/sun/text/bidi/BidiRun.java "$BIDIRUN_BLOB"
+          check_blob jdk/src/share/classes/sun/text/normalizer/UBiDiProps.java "$UBIDIPROPS_BLOB"
+          check_blob jdk/src/share/classes/sun/text/normalizer/ICUData.java "$ICUDATA_BLOB"
+          check_blob jdk/src/share/classes/sun/text/normalizer/ICUBinary.java "$ICUBINARY_BLOB"
+          check_blob jdk/src/share/classes/sun/text/normalizer/Trie.java "$TRIE_BLOB"
+          check_blob jdk/src/share/classes/sun/text/normalizer/CharTrie.java "$CHARTRIE_BLOB"
+          check_blob jdk/src/share/classes/sun/text/normalizer/UTF16.java "$UTF16_BLOB"
+          check_blob jdk/src/share/classes/sun/text/normalizer/UCharacter.java "$UCHAR_BLOB"
+          check_blob jdk/src/share/classes/sun/text/normalizer/UCharacterProperty.java "$UCHARPROP_BLOB"
+          check_blob jdk/src/share/classes/sun/font/Script.java "$SCRIPT_BLOB"
+          check_blob jdk/src/share/classes/sun/font/ScriptRunData.java "$SCRIPTRUNDATA_BLOB"
+          check_blob jdk/src/share/classes/sun/font/ScriptRun.java "$SCRIPTRUN_BLOB"
+          check_blob jdk/src/share/classes/sun/font/BidiUtils.java "$BIDIUTILS_BLOB"
+          check_blob jdk/src/share/classes/java/awt/font/TextLine.java "$TEXTLINE_BLOB"
+          check_blob jdk/src/share/classes/sun/font/TextLabelFactory.java "$TEXTLABELFACTORY_BLOB"
+          check_blob jdk/src/share/classes/sun/text/resources/ubidi.icu "$UBIDI_RESOURCE_BLOB"
+          test "$(wc -c </tmp/jdk8u/jdk/src/share/classes/sun/text/resources/ubidi.icu | tr -d ' ')" = "$UBIDI_RESOURCE_SIZE"
+          test "$(sha256sum /tmp/jdk8u/jdk/src/share/classes/sun/text/resources/ubidi.icu | awk '{print $1}')" = "$UBIDI_RESOURCE_SHA256"
+          {
+            echo "OPENJDK8_TAG=$JDK8U_TAG"
+            echo "OPENJDK8_COMMIT=$JDK8U_COMMIT"
+            echo "TEXTLINE_BLOB=$TEXTLINE_BLOB"
+            echo "TEXTLABELFACTORY_BLOB=$TEXTLABELFACTORY_BLOB"
+            echo "BIDIUTILS_BLOB=$BIDIUTILS_BLOB"
+            echo "SCRIPTRUN_BLOB=$SCRIPTRUN_BLOB"
+            echo "BIDI_BLOB=$BIDI_BLOB"
+            echo "BIDIBASE_BLOB=$BIDIBASE_BLOB"
+            echo "UBIDI_RESOURCE_BLOB=$UBIDI_RESOURCE_BLOB"
+            echo "UBIDI_RESOURCE_SHA256=$UBIDI_RESOURCE_SHA256"
+            echo 'P2B_GENERIC_COMPONENT_PLAN_SOURCE_PROVENANCE=PASS'
+          } | tee out/p2b-generic-plan/PROVENANCE.txt
+
+      - name: Verify exact JDK8 planner algorithm anchors
+        shell: bash
+        run: |
+          set -euo pipefail
+          TL=/tmp/jdk8u/jdk/src/share/classes/java/awt/font/TextLine.java
+          TLF=/tmp/jdk8u/jdk/src/share/classes/sun/font/TextLabelFactory.java
+          grep -F 'requiresBidi = Bidi.requiresBidi(chars, 0, chars.length);' "$TL"
+          grep -F 'levels = BidiUtils.getLevels(bidi);' "$TL"
+          grep -F 'int[] charsVtoL = BidiUtils.createVisualToLogicalMap(levels);' "$TL"
+          grep -F 'charsLtoV = BidiUtils.createInverseMap(charsVtoL);' "$TL"
+          grep -F 'int chunkLimit = firstVisualChunk(charsLtoV, levels, pos, runLimit);' "$TL"
+          grep -F 'componentOrder[i] = charsLtoV[gStart];' "$TL"
+          grep -F 'componentOrder = BidiUtils.createContiguousOrder(componentOrder);' "$TL"
+          grep -F 'componentOrder = BidiUtils.createInverseMap(componentOrder);' "$TL"
+          grep -F 'if ((level & 0x1) != 0) layoutFlags |= 1;' "$TLF"
+          grep -F 'if ((linedir & 0x1) != 0) layoutFlags |= 8;' "$TLF"
+          {
+            echo 'P2B_GENERIC_COMPONENT_PLAN_ANCHOR_REQUIRES_BIDI=PASS'
+            echo 'P2B_GENERIC_COMPONENT_PLAN_ANCHOR_LEVEL_MAPS=PASS'
+            echo 'P2B_GENERIC_COMPONENT_PLAN_ANCHOR_VISUAL_CHUNK=PASS'
+            echo 'P2B_GENERIC_COMPONENT_PLAN_ANCHOR_COMPONENT_ORDER=PASS'
+            echo 'P2B_GENERIC_COMPONENT_PLAN_ANCHOR_LAYOUT_FLAGS=PASS'
+          } | tee out/p2b-generic-plan/ANCHORS.txt
+
+      - name: Materialize exact Miyoo MiSans for diagnostic reference
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL='https://github.com/aweigit/freej2me-miyoomini/releases/download/2.0/miyoomini-freej2me.zip'
+          curl -fL --retry 3 --retry-delay 2 "$URL" -o /tmp/miyoomini-freej2me.zip
+          ENTRY=$(unzip -Z1 /tmp/miyoomini-freej2me.zip | grep -Ei '(^|/)font\.ttf$')
+          test "$(printf '%s\n' "$ENTRY" | wc -l | tr -d ' ')" = 1
+          unzip -p /tmp/miyoomini-freej2me.zip "$ENTRY" > /tmp/p2b-font.ttf
+          test "$(sha256sum /tmp/p2b-font.ttf | awk '{print $1}')" = "$EXPECTED_FONT_SHA256"
+          test "$(wc -c </tmp/p2b-font.ttf | tr -d ' ')" = "$EXPECTED_FONT_SIZE"
+          echo 'P2B_GENERIC_COMPONENT_PLAN_FONT_IDENTITY=PASS' | tee out/p2b-generic-plan/FONT.txt
+
+      - name: Stage source-derived Java6 planner primitives
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tests/p2b/diagnostic/stage_jdk8_text_planner_audit.py /tmp/jdk8u out/p2b-generic-plan | tee out/p2b-generic-plan/STAGE.log
+          grep -F 'P2B_TEXT_PLANNER_STAGE=PASS' out/p2b-generic-plan/STAGE.log
+          grep -F 'P2B_TEXT_PLANNER_SCRIPTRUN_DELTA=PACKAGE_DECLARATION_ONLY' out/p2b-generic-plan/STAGE.log
+          grep -F 'P2B_TEXT_PLANNER_BIDIUTILS_DELTA=PACKAGE_AND_BIDI_IMPORT_RELOCATION_ONLY' out/p2b-generic-plan/STAGE.log
+
+      - name: Compile Java6 planner and run exact component-plan differential
+        shell: bash
+        run: |
+          set -euo pipefail
+          JAVA8="$JAVA_HOME"
+          CLASSES=out/p2b-generic-plan/classes
+          mkdir -p "$CLASSES/sun/text/resources"
+          cp /tmp/jdk8u/jdk/src/share/classes/sun/text/resources/ubidi.icu "$CLASSES/sun/text/resources/ubidi.icu"
+          find out/p2b-generic-plan/src -name '*.java' -print | sort > out/p2b-generic-plan/sources.list
+          printf '%s\n' tests/p2b/diagnostic/RG35XXP2BJdkTextPlannerDifferential.java >> out/p2b-generic-plan/sources.list
+          "$JAVA8/bin/javac" -encoding UTF-8 -source 1.6 -target 1.6 \
+            -bootclasspath "$JAVA8/jre/lib/rt.jar" -d "$CLASSES" @out/p2b-generic-plan/sources.list
+          python3 - "$CLASSES" <<'PY'
+          from pathlib import Path
+          import sys
+          root=Path(sys.argv[1]); bad=[]; majors=set(); count=0
+          for p in root.rglob('*.class'):
+              b=p.read_bytes(); major=int.from_bytes(b[6:8],'big'); majors.add(major); count+=1
+              if major>50: bad.append((str(p),major))
+          if bad: raise SystemExit('P2B_GENERIC_COMPONENT_PLAN_JAVA6_FAIL '+repr(bad))
+          print('P2B_GENERIC_COMPONENT_PLAN_CLASS_COUNT='+str(count))
+          print('P2B_GENERIC_COMPONENT_PLAN_CLASS_MAJORS='+','.join(map(str,sorted(majors))))
+          print('P2B_GENERIC_COMPONENT_PLAN_JAVA6_GATE=PASS')
+          PY
+          "$JAVA8/bin/java" -Djava.awt.headless=true -Xmx512m -cp "$CLASSES" \
+            RG35XXP2BJdkTextPlannerDifferential /tmp/p2b-font.ttf \
+            | tee out/p2b-generic-plan/DIFFERENTIAL.log
+          grep -F 'P2B_TEXT_PLANNER_DIFF_CASES=2072' out/p2b-generic-plan/DIFFERENTIAL.log
+          grep -F 'P2B_TEXT_PLANNER_DIFF_MISMATCH_COUNT=0' out/p2b-generic-plan/DIFFERENTIAL.log
+          grep -F 'P2B_TEXT_PLANNER_COMPONENT_PLAN_DIFFERENTIAL=PASS' out/p2b-generic-plan/DIFFERENTIAL.log
+          cat > out/p2b-generic-plan/STATUS.txt <<EOF
+          P2B_PLANNER_SCRIPTRUN_RESULT=PASS_PREVIOUS_GATE
+          P2B_PLANNER_BIDI_RESULT=PASS_V4
+          P2B_PLANNER_COMPONENT_PLAN_RESULT=PASS
+          P2B_PLANNER_MIXED_SCRIPT_COVERAGE=PASS
+          P2B_PLANNER_MIXED_BIDI_COVERAGE=PASS
+          P2B_PLANNER_SURROGATE_CONTROL_COVERAGE=PASS
+          P2B_PLANNER_JAVA6=PASS
+          P2B_PLANNER_GENERIC_DATA_PLAN=PASS
+          P2B_EXISTING_336_REGRESSION=NOT_YET_RERUN_AFTER_PLANNER_GATE
+          P2B_RUNTIME_PATCH=FORBIDDEN
+          P2B_RUNTIME_CANDIDATE_BRANCH=DO_NOT_CREATE
+          P2B_DEVICE_PACKAGE=FORBIDDEN
+          DEVICE_TEST=NOT_REQUESTED
+          STABLE=NO
+          EOF
+          cat out/p2b-generic-plan/STATUS.txt
+
+      - name: Cleanup source classes resources and enforce evidence-only artifact
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/jdk8u out/p2b-generic-plan/src out/p2b-generic-plan/classes
+          rm -f out/p2b-generic-plan/sources.list /tmp/p2b-font.ttf /tmp/miyoomini-freej2me.zip
+          if find out/p2b-generic-plan -type f | grep -Ei '\.(class|java|ttf|otf|jar|zip|so|a|o|icu)$'; then
+            echo 'P2B_GENERIC_COMPONENT_PLAN_EVIDENCE_LEAK=FAIL'; exit 1
+          fi
+          echo 'P2B_GENERIC_COMPONENT_PLAN_EVIDENCE_LEAK=NO' | tee out/p2b-generic-plan/CLEANUP.txt
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: RG35XX-P2B-JDK8-GENERIC-COMPONENT-PLAN-${{ github.sha }}
+          path: |
+            out/p2b-generic-plan/PROVENANCE.txt
+            out/p2b-generic-plan/ANCHORS.txt
+            out/p2b-generic-plan/FONT.txt
+            out/p2b-generic-plan/STAGE.txt
+            out/p2b-generic-plan/STAGE.log
+            out/p2b-generic-plan/DIFFERENTIAL.log
+            out/p2b-generic-plan/STATUS.txt
+            out/p2b-generic-plan/CLEANUP.txt
+          if-no-files-found: warn
