@@ -37,7 +37,7 @@ jobs:
           test "$(git merge-base "$EXACT_PARENT" HEAD)" = "$EXACT_PARENT"
           test "$(git -C upstream/freej2me-miyoomini rev-parse HEAD)" = "$CANONICAL_AWEIGIT"
           git diff --name-only "$EXACT_PARENT"..HEAD | LC_ALL=C sort | tee /tmp/p2c-files.txt
-          if grep -Ev '^(adapter/native/rg35xx_input\.c|adapter/java/org/recompile/rg35xx/RG35XX(FrontendPolicy|KeyDispatcher|Launcher)\.java|docs/P2C-[^/]+\.md|tests/p2c/[^/]+\.(java|c)|scripts/build-p2c-input-frontend-candidate\.sh|\.github/workflows/p2c-input-frontend-candidate-r1\.yml)$' /tmp/p2c-files.txt | grep -q .; then
+          if grep -Ev '^(adapter/native/rg35xx_input\.c|adapter/java/org/recompile/rg35xx/RG35XX(FrontendPolicy|KeyDispatcher|Launcher)\.java|docs/P2C-[^/]+\.md|tests/p2c/[^/]+\.(java|c)|scripts/build-p2c-input-frontend-candidate(-v2)?\.sh|\.github/workflows/p2c-input-frontend-candidate-r1\.yml)$' /tmp/p2c-files.txt | grep -q .; then
             echo P2C_REPOSITORY_SCOPE=FAIL
             exit 1
           fi
@@ -91,8 +91,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          chmod +x scripts/build-p2c-input-frontend-candidate.sh scripts/build-p2b-font-text-candidate.sh scripts/build-p2b-font-text-candidate-v2.sh
-          JAVA8="$JAVA_HOME" bash scripts/build-p2c-input-frontend-candidate.sh | tee /tmp/p2c-r1.log
+          chmod +x scripts/build-p2c-input-frontend-candidate.sh scripts/build-p2c-input-frontend-candidate-v2.sh scripts/build-p2b-font-text-candidate.sh scripts/build-p2b-font-text-candidate-v2.sh
+          JAVA8="$JAVA_HOME" bash scripts/build-p2c-input-frontend-candidate-v2.sh | tee /tmp/p2c-r1.log
           for marker in \
             P2C_CANONICAL_DIFF_VERIFIED=PASS \
             P2C_OWNER_SCOPE_VERIFIED=PASS \
@@ -126,6 +126,7 @@ jobs:
           name: RG35XX-P2C-INPUT-FRONTEND-R1-${{ github.sha }}
           path: |
             /tmp/p2c-r1.log
+            /tmp/p2c-r1-v2-parent.log
             /tmp/p2c-files.txt
             out/p2c-input-frontend-candidate-r1/
           if-no-files-found: warn
