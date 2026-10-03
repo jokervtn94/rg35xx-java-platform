@@ -1,0 +1,179 @@
+name: P2B Font JDK8 LayoutEngine Host Semantic Audit
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - audit/p2b-font-text-layout-semantic-tmp
+    paths:
+      - '.github/workflows/p2b-font-jdk8-layoutengine-semantic-host-audit.yml'
+      - 'tests/p2b/diagnostic/RG35XXP2BJdkLayoutEngineSemanticReference.java'
+      - 'tests/p2b/diagnostic/p2b_jdk8_layoutengine_semantic_arm.cpp'
+      - 'tests/p2b/diagnostic/compare_p2b_jdk8_layoutengine_semantics.py'
+
+permissions:
+  contents: read
+
+jobs:
+  p2b-jdk8-layoutengine-semantic-host:
+    runs-on: ubuntu-latest
+    env:
+      BASE: 77a36526e0f6d875c57c7e9a973e0c1a05573721
+      EXPECTED_FONT_SHA256: 1a5f4112daaa9473747c6834041646cc9b2c338cb40ab5dbb2f0161f8968ca10
+      EXPECTED_FONT_SIZE: '8092724'
+      JDK8U_TAG: jdk8u504-b01
+      JDK8U_COMMIT: 4efe36434f44bafb854e602ccbbe1b5696fce1a2
+      JDK8_LAYOUT_TREE: bc6641fecdfb59f3146bb1591e090761a24b4061
+      JDK8U_FT_INCLUDE_TREE: 43f2e4398cfd927acac29ce3515e23a195349eb7
+      JDK8U_FT_SRC_TREE: 8690dd39ef9f4da5bae000d757fe6dfa2d2102a6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Verify audit-only ancestry and scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git merge-base HEAD "$BASE")" = "$BASE"
+          if git diff --name-only "$BASE"...HEAD | grep -E '^(adapter/|native/|upstream/|packaging/|scripts/stage-|scripts/build-)'; then
+            echo 'P2B_RUNTIME_DELTA=FAIL'; exit 1
+          fi
+          test "$(git -C upstream/freej2me-miyoomini rev-parse HEAD)" = ca11dfe8ea1cc273d92460f9a83bbf192023fa63
+          echo 'P2B_JDK8_LAYOUTENGINE_HOST_AUDIT_SCOPE=PASS'
+          echo 'P2B_RUNTIME_DELTA=NONE'
+
+      - name: Pin exact JDK8u504 LayoutEngine and FreeType sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          rm -rf /tmp/jdk8u
+          git clone --filter=blob:none --no-checkout https://github.com/adoptium/jdk8u.git /tmp/jdk8u
+          git -C /tmp/jdk8u fetch --depth 1 origin tag "$JDK8U_TAG"
+          git -C /tmp/jdk8u checkout --detach "$JDK8U_TAG"
+          test "$(git -C /tmp/jdk8u rev-parse HEAD)" = "$JDK8U_COMMIT"
+          test "$(git -C /tmp/jdk8u rev-parse HEAD:jdk/src/share/native/sun/font/layout)" = "$JDK8_LAYOUT_TREE"
+          test "$(git -C /tmp/jdk8u rev-parse HEAD:jdk/src/share/native/sun/awt/libfreetype/include)" = "$JDK8U_FT_INCLUDE_TREE"
+          test "$(git -C /tmp/jdk8u rev-parse HEAD:jdk/src/share/native/sun/awt/libfreetype/src)" = "$JDK8U_FT_SRC_TREE"
+          grep -F 'Freetype v2.14.3' /tmp/jdk8u/THIRD_PARTY_README
+          echo 'P2B_JDK8_LAYOUTENGINE_HOST_SOURCE_PROVENANCE=PASS' | tee out/P2B-JDK8-LAYOUTENGINE-HOST-PROVENANCE.txt
+
+      - name: Materialize exact Miyoo MiSans for diagnostics
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL='https://github.com/aweigit/freej2me-miyoomini/releases/download/2.0/miyoomini-freej2me.zip'
+          curl -fL --retry 3 --retry-delay 2 "$URL" -o out/miyoomini-freej2me.zip
+          ENTRY=$(unzip -Z1 out/miyoomini-freej2me.zip | grep -Ei '(^|/)font\.ttf$')
+          test "$(printf '%s\n' "$ENTRY" | wc -l | tr -d ' ')" = 1
+          unzip -p out/miyoomini-freej2me.zip "$ENTRY" > out/font.ttf
+          test "$(sha256sum out/font.ttf | awk '{print $1}')" = "$EXPECTED_FONT_SHA256"
+          test "$(wc -c < out/font.ttf | tr -d ' ')" = "$EXPECTED_FONT_SIZE"
+          echo 'P2B_JDK8_LAYOUTENGINE_HOST_FONT_IDENTITY=PASS'
+
+      - name: Generate exact JDK8 ScriptRun and GlyphVector reference
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out/classes
+          javac -encoding UTF-8 -source 1.6 -target 1.6 -d out/classes \
+            tests/p2b/diagnostic/RG35XXP2BJdkLayoutEngineSemanticReference.java
+          java -Djava.awt.headless=true -cp out/classes \
+            RG35XXP2BJdkLayoutEngineSemanticReference out/font.ttf out/P2B-JDK8-LAYOUTENGINE-REFERENCE.tsv \
+            | tee out/P2B-JDK8-LAYOUTENGINE-REFERENCE.log
+          grep -F 'P2B_JDK8_LAYOUTENGINE_SEMANTIC_CASES=192' out/P2B-JDK8-LAYOUTENGINE-REFERENCE.log
+          grep -F 'P2B_JDK8_LAYOUTENGINE_SEMANTIC_RESULT=PASS' out/P2B-JDK8-LAYOUTENGINE-REFERENCE.log
+
+      - name: Build exact vendored FreeType and LayoutEngine on host
+        shell: bash
+        run: |
+          set -euo pipefail
+          FTROOT=/tmp/jdk8u/jdk/src/share/native/sun/awt/libfreetype
+          FONT=/tmp/jdk8u/jdk/src/share/native/sun/font
+          LAYOUT="$FONT/layout"
+          FTOBJ=out/jdk8u-ft-layout-semantic-host-obj
+          LEOBJ=out/jdk8-layoutengine-semantic-host-obj
+          rm -rf "$FTOBJ" "$LEOBJ" && mkdir -p "$FTOBJ" "$LEOBJ"
+          while IFS= read -r src; do
+            rel=${src#"$FTROOT/src/"}
+            obj="$FTOBJ/${rel//\//_}.o"
+            cc -O2 -fPIC -DFT2_BUILD_LIBRARY -I"$FTROOT/include" -c "$src" -o "$obj"
+          done < <(find "$FTROOT/src" -type f -name '*.c' -print | sort)
+          ar rcs out/libfreetype-jdk8u504-layout-semantic-host.a "$FTOBJ"/*.o
+          compiled=0
+          excluded=0
+          while IFS= read -r src; do
+            base=$(basename "$src")
+            if test "$base" = SunLayoutEngine.cpp; then excluded=$((excluded+1)); continue; fi
+            g++ -O2 -std=gnu++98 -DLE_STANDALONE -DHEADLESS -I"$FONT" -I"$LAYOUT" \
+              -c "$src" -o "$LEOBJ/${base%.cpp}.o"
+            compiled=$((compiled+1))
+          done < <(find "$LAYOUT" -maxdepth 1 -type f -name '*.cpp' -print | sort)
+          test "$compiled" = 87
+          test "$excluded" = 1
+          ar rcs out/libjdk8-layoutengine-semantic-host.a "$LEOBJ"/*.o
+          g++ -O2 -std=gnu++98 -DLE_STANDALONE -DHEADLESS \
+            -I"$FONT" -I"$LAYOUT" -I"$FTROOT/include" \
+            tests/p2b/diagnostic/p2b_jdk8_layoutengine_semantic_arm.cpp \
+            -Wl,--whole-archive out/libjdk8-layoutengine-semantic-host.a -Wl,--no-whole-archive \
+            out/libfreetype-jdk8u504-layout-semantic-host.a -lm \
+            -o out/p2b-jdk8-layoutengine-semantic-host
+          echo 'P2B_JDK8_LAYOUTENGINE_HOST_BUILD=PASS'
+
+      - name: Run host source-equivalent semantic differential
+        shell: bash
+        run: |
+          set -euo pipefail
+          out/p2b-jdk8-layoutengine-semantic-host \
+            out/font.ttf out/P2B-JDK8-LAYOUTENGINE-REFERENCE.tsv out/P2B-HOST-LAYOUTENGINE.tsv \
+            | tee out/P2B-HOST-LAYOUTENGINE.log
+          grep -F 'P2B_ARM_LAYOUTENGINE_SEMANTIC_CASES=192' out/P2B-HOST-LAYOUTENGINE.log
+          grep -F 'P2B_ARM_LAYOUTENGINE_SEMANTIC_RESULT=PASS' out/P2B-HOST-LAYOUTENGINE.log
+          python3 tests/p2b/diagnostic/compare_p2b_jdk8_layoutengine_semantics.py \
+            out/P2B-JDK8-LAYOUTENGINE-REFERENCE.tsv out/P2B-HOST-LAYOUTENGINE.tsv \
+            | tee out/P2B-JDK8-HOST-LAYOUTENGINE-DIFFERENTIAL.txt
+          grep -F 'P2B_LAYOUTENGINE_SEMANTIC_PARSE=PASS' out/P2B-JDK8-HOST-LAYOUTENGINE-DIFFERENTIAL.txt
+          grep -F 'P2B_LAYOUTENGINE_SEMANTIC_DIFF_RESULT=PASS' out/P2B-JDK8-HOST-LAYOUTENGINE-DIFFERENTIAL.txt
+          classification=$(sed -n 's/^P2B_LAYOUTENGINE_SEMANTIC_CLASSIFICATION=//p' out/P2B-JDK8-HOST-LAYOUTENGINE-DIFFERENTIAL.txt)
+          mismatch=$(sed -n 's/^P2B_LAYOUTENGINE_SEMANTIC_MISMATCH_COUNT=//p' out/P2B-JDK8-HOST-LAYOUTENGINE-DIFFERENTIAL.txt)
+          {
+            echo "P2B_JDK8_LAYOUTENGINE_HOST_CLASSIFICATION=$classification"
+            echo "P2B_JDK8_LAYOUTENGINE_HOST_MISMATCH_COUNT=$mismatch"
+            echo 'P2B_RUNTIME_PATCH=FORBIDDEN'
+            echo 'DEVICE_TEST=NOT_REQUESTED'
+            echo 'STABLE=NO'
+          } | tee out/P2B-JDK8-LAYOUTENGINE-HOST-STATUS.txt
+
+      - name: Remove font and source-build binaries before evidence upload
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/jdk8u out/classes out/jdk8u-ft-layout-semantic-host-obj out/jdk8-layoutengine-semantic-host-obj
+          rm -f out/font.ttf out/miyoomini-freej2me.zip
+          rm -f out/libfreetype-jdk8u504-layout-semantic-host.a out/libjdk8-layoutengine-semantic-host.a
+          rm -f out/p2b-jdk8-layoutengine-semantic-host
+          if find out -type f | grep -Ei '\.(ttf|otf|a|o|so)$'; then echo 'P2B_JDK8_LAYOUTENGINE_HOST_BYTE_LEAK=FAIL'; exit 1; fi
+          echo 'P2B_JDK8_LAYOUTENGINE_HOST_BYTE_LEAK=NO' | tee out/P2B-JDK8-LAYOUTENGINE-HOST-CLEANUP.txt
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: RG35XX-P2B-JDK8-LAYOUTENGINE-HOST-${{ github.sha }}
+          path: |
+            out/P2B-JDK8-LAYOUTENGINE-HOST-PROVENANCE.txt
+            out/P2B-JDK8-LAYOUTENGINE-REFERENCE.log
+            out/P2B-JDK8-LAYOUTENGINE-REFERENCE.tsv
+            out/P2B-HOST-LAYOUTENGINE.log
+            out/P2B-HOST-LAYOUTENGINE.tsv
+            out/P2B-JDK8-HOST-LAYOUTENGINE-DIFFERENTIAL.txt
+            out/P2B-JDK8-LAYOUTENGINE-HOST-STATUS.txt
+            out/P2B-JDK8-LAYOUTENGINE-HOST-CLEANUP.txt
+          if-no-files-found: warn
