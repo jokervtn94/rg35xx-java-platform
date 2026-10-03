@@ -137,12 +137,14 @@ static void run_case(FT_Face face, const char *s, int style,
 int main(int argc,char **argv) {
     FT_Library lib=0; FT_Face face=0;
     int sizes[]={12,14,16};
-    int style,zi,si;
+    int style,zi,si,ft_major=0,ft_minor=0,ft_patch=0;
     if(argc!=2){fprintf(stderr,"usage: %s font.ttf\n",argv[0]);return 2;}
     if(FT_Init_FreeType(&lib))return 3;
+    FT_Library_Version(lib,&ft_major,&ft_minor,&ft_patch);
     if(set_jdk8_interpreter(lib)!=0){fprintf(stderr,"interpreter-version=35 unavailable\n");return 4;}
     if(FT_New_Face(lib,argv[1],0,&face))return 5;
     printf("P2B_FT_JDK8_SCALER_BOOT=PASS\n");
+    printf("P2B_FT_LIBRARY_VERSION=%d.%d.%d\n",ft_major,ft_minor,ft_patch);
     printf("P2B_FT_JDK8_INTERPRETER=35\n");
     printf("P2B_FT_JDK8_AA=OFF\n");
     printf("P2B_FT_JDK8_FM=OFF\n");
