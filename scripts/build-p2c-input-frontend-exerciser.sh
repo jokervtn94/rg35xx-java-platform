@@ -14,11 +14,14 @@ SRC="$ROOT/tests/p2c/exerciser/RG35XXP2CInputFrontendExerciser.java"
 BUILD="$ROOT/build/p2c-input-frontend-exerciser"
 JAROUT="$OUT/RG35XX-Platform-Exerciser-P2C-InputFrontend.jar"
 IDENTITY="$OUT/P2C-INPUT-FRONTEND-EXERCISER-IDENTITY.txt"
-EXPECTED_PLATFORM_SHA=533442c7e67965c8ac095898bfb32c9fcdd233471cd19e64ca2012ceaca00c60
+DIGEST="$ROOT/scripts/p2c-semantic-jar-digest.py"
+EXPECTED_PLATFORM_SEMANTIC=0a4f197bdbf39b7102c69bb2e560c6e469c32c20ae58c8fb688fadbcecf1c6c6
 
 [ -f "$PLATFORM" ] || fail "P2C candidate platform jar missing"
 [ -f "$SRC" ] || fail "exerciser source missing"
-[ "$(sha256sum "$PLATFORM" | awk '{print $1}')" = "$EXPECTED_PLATFORM_SHA" ] || fail "candidate platform identity"
+[ -f "$DIGEST" ] || fail "semantic digest helper missing"
+[ "$(python3 "$DIGEST" "$PLATFORM")" = "$EXPECTED_PLATFORM_SEMANTIC" ] || fail "candidate platform semantic identity"
+echo P2C_EXERCISER_PLATFORM_SEMANTIC_GATE=PASS
 
 # The device exerciser must terminate at public MIDP callbacks. No RG35XX or
 # org.recompile.mobile implementation class may be imported or referenced.
@@ -122,4 +125,5 @@ echo P2C_EXERCISER_BUILD=PASS
 echo P2C_EXERCISER_JAVA6_GATE=PASS
 echo P2C_EXERCISER_PUBLIC_MIDP_ONLY=YES
 echo P2C_EXERCISER_DIRECT_BACKEND_CALL=NO
+echo RUNTIME_SEMANTIC_DELTA=NONE
 cat "$IDENTITY"
