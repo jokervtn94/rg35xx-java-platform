@@ -174,6 +174,42 @@ jobs:
           grep -F 'P2B_JDK8_FT_SCALER_DIFF_RESULT=PASS' out/P2B-JDK8-FT-SCALER-HOST-DIFFERENTIAL.txt
           grep -F 'P2B_RUNTIME_PATCH=FORBIDDEN' out/P2B-JDK8-FT-SCALER-HOST-DIFFERENTIAL.txt
 
+      - name: Build and run host probe against exact Temurin bundled FreeType
+        shell: bash
+        run: |
+          set -euo pipefail
+          JAVA_BIN=$(readlink -f "$(command -v java)")
+          JDK_RUNTIME_HOME=$(dirname "$(dirname "$JAVA_BIN")")
+          JDKFT=$(find "$JDK_RUNTIME_HOME/jre/lib" -type f -name libfreetype.so -print -quit)
+          test -n "$JDKFT"
+          JDKFT_DIR=$(dirname "$JDKFT")
+          {
+            echo "P2B_JDK8_RUNTIME_JAVA_BIN=$JAVA_BIN"
+            echo "P2B_JDK8_RUNTIME_HOME=$JDK_RUNTIME_HOME"
+            echo "P2B_JDK8_BUNDLED_FREETYPE_PATH=$JDKFT"
+            sha256sum "$JDKFT"
+          } | tee out/P2B-JDK8-BUNDLED-FREETYPE-PROVENANCE.txt
+          cc -O2 $(pkg-config --cflags freetype2) \
+            tests/p2b/diagnostic/p2b_freetype_jdk8_scaler_arm.c \
+            "$JDKFT" -lm -Wl,-rpath,"$JDKFT_DIR" \
+            -o out/p2b-freetype-jdk8-scaler-bundled
+          file out/p2b-freetype-jdk8-scaler-bundled | tee out/P2B-JDK8-FT-SCALER-BUNDLED-FILE.txt
+          LD_LIBRARY_PATH="$JDKFT_DIR" ldd out/p2b-freetype-jdk8-scaler-bundled \
+            | tee out/P2B-JDK8-FT-SCALER-BUNDLED-LDD.txt
+          LD_LIBRARY_PATH="$JDKFT_DIR" out/p2b-freetype-jdk8-scaler-bundled out/font.ttf \
+            | tee out/P2B-JDK8-FT-SCALER-BUNDLED.log
+          grep -F 'P2B_FT_LIBRARY_VERSION=' out/P2B-JDK8-FT-SCALER-BUNDLED.log
+          grep -F 'P2B_FT_JDK8_SCALER_CASES=144' out/P2B-JDK8-FT-SCALER-BUNDLED.log
+          grep -F 'P2B_FT_JDK8_SCALER_RESULT=PASS' out/P2B-JDK8-FT-SCALER-BUNDLED.log
+          python3 tests/p2b/diagnostic/compare_p2b_jdk8_scaler_raster.py \
+            out/P2B-JDK8-RASTER-FP.log out/P2B-JDK8-FT-SCALER-BUNDLED.log \
+            | tee out/P2B-JDK8-FT-SCALER-BUNDLED-DIFFERENTIAL.txt
+          grep -F 'P2B_JDK8_FT_SCALER_DIFF_PARSE=PASS' out/P2B-JDK8-FT-SCALER-BUNDLED-DIFFERENTIAL.txt
+          grep -F 'P2B_JDK8_FT_SCALER_JDK_CASES=144' out/P2B-JDK8-FT-SCALER-BUNDLED-DIFFERENTIAL.txt
+          grep -F 'P2B_JDK8_FT_SCALER_ARM_CASES=144' out/P2B-JDK8-FT-SCALER-BUNDLED-DIFFERENTIAL.txt
+          grep -F 'P2B_JDK8_FT_SCALER_DIFF_RESULT=PASS' out/P2B-JDK8-FT-SCALER-BUNDLED-DIFFERENTIAL.txt
+          grep -F 'P2B_RUNTIME_PATCH=FORBIDDEN' out/P2B-JDK8-FT-SCALER-BUNDLED-DIFFERENTIAL.txt
+
       - name: Build and run ARM probe matching OpenJDK8 FreetypeFontScaler policy
         shell: bash
         run: |
@@ -218,7 +254,8 @@ jobs:
         run: |
           set -euo pipefail
           rm -f out/font.ttf out/miyoomini-freej2me.zip \
-            out/p2b-freetype-jdk8-scaler-arm out/p2b-freetype-jdk8-scaler-host
+            out/p2b-freetype-jdk8-scaler-arm out/p2b-freetype-jdk8-scaler-host \
+            out/p2b-freetype-jdk8-scaler-bundled
           if find out -type f | grep -Ei '\.(ttf|otf)$'; then echo 'P2B_FONT_BYTE_LEAK=FAIL'; exit 1; fi
           {
             echo 'P2B_FONT_BYTE_LEAK=NO'
@@ -247,6 +284,11 @@ jobs:
             out/P2B-JDK8-FT-SCALER-HOST-DIFFERENTIAL.txt
             out/P2B-JDK8-FT-SCALER-HOST-FILE.txt
             out/P2B-JDK8-FT-SCALER-HOST-LDD.txt
+            out/P2B-JDK8-BUNDLED-FREETYPE-PROVENANCE.txt
+            out/P2B-JDK8-FT-SCALER-BUNDLED.log
+            out/P2B-JDK8-FT-SCALER-BUNDLED-DIFFERENTIAL.txt
+            out/P2B-JDK8-FT-SCALER-BUNDLED-FILE.txt
+            out/P2B-JDK8-FT-SCALER-BUNDLED-LDD.txt
             out/P2B-JDK8-FT-SCALER.log
             out/P2B-JDK8-FT-SCALER-DIFFERENTIAL.txt
             out/P2B-JDK8-FT-SCALER-FILE.txt
