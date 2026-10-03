@@ -1,0 +1,126 @@
+name: P2B Font Text Windows Installer R2 Hygiene
+
+on:
+  push:
+    branches:
+      - physical-test/p2b-font-text-accepted-20261003
+    paths:
+      - scripts/repack-p2b-font-text-physical-windows-r2.py
+      - .github/workflows/p2b-font-text-windows-installer-r2-hygiene.yml
+      - docs/P2B-FONT-TEXT-PHYSICAL-ACCEPTANCE-20261003.md
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  p2b-windows-installer-r2-hygiene:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    env:
+      SOURCE_PHYSICAL_HEAD: 5a8e29dd368bf99b22e81d256691b2a7ec8f1adf
+      RUNTIME_CANDIDATE: 2f18b78e9b0aa1660b7fd2f5904dd697fcef5830
+      R1_RUN_ID: 37127662925
+      R1_ARTIFACT_ID: 11275935320
+      R1_PACKAGE_SHA256: 1e78c30c166f2ce4988478d44c476b0bfdf8c6795e433cf8f21ed934796037da
+
+    steps:
+      - name: Checkout accepted P2B evidence branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify accepted lineage and hygiene-only repository scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git merge-base "$SOURCE_PHYSICAL_HEAD" HEAD)" = "$SOURCE_PHYSICAL_HEAD"
+          test -f docs/P2B-FONT-TEXT-PHYSICAL-ACCEPTANCE-20261003.md
+          grep -q '^P2B_FONT_TEXT_MODULE_PHYSICAL_ACCEPTANCE=PASS$' docs/P2B-FONT-TEXT-PHYSICAL-ACCEPTANCE-20261003.md
+          grep -q "$RUNTIME_CANDIDATE" docs/P2B-FONT-TEXT-PHYSICAL-ACCEPTANCE-20261003.md
+          changed="$(git diff --name-only "$SOURCE_PHYSICAL_HEAD"..HEAD | LC_ALL=C sort)"
+          printf '%s\n' "$changed"
+          if printf '%s\n' "$changed" | grep -E '^(adapter/|upstream/|native/|scripts/stage-|scripts/build-a[0-9])'; then
+            echo P2B_R2_REPOSITORY_SCOPE=FAIL
+            exit 1
+          fi
+          echo P2B_R2_ACCEPTED_LINEAGE=PASS
+          echo P2B_R2_REPOSITORY_SCOPE=PASS
+          echo P2B_R2_RUNTIME_SEMANTIC_DELTA=NONE
+          echo GAME_SPECIFIC_CODE=NO
+          echo A9_PARENT=NO
+
+      - name: Download exact CI-produced physical R1 artifact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/p2b-r1-artifact
+          curl -fL --retry 3 --retry-delay 2 \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/${R1_ARTIFACT_ID}/zip" \
+            -o /tmp/p2b-r1-artifact.zip
+          unzip -q /tmp/p2b-r1-artifact.zip -d /tmp/p2b-r1-artifact
+          R1="$(find /tmp/p2b-r1-artifact -type f -name 'RG35XX-P2B-FONT-TEXT-PHYSICAL-R1.zip' -print -quit)"
+          test -n "$R1"
+          test -f "$R1"
+          test "$(sha256sum "$R1" | awk '{print $1}')" = "$R1_PACKAGE_SHA256"
+          echo "R1=$R1" >> "$GITHUB_ENV"
+          echo P2B_R2_EXACT_ACCEPTED_R1_INPUT=PASS
+
+      - name: Repack Windows installer R2 without touching SD runtime payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out/p2b-windows-r2
+          python3 scripts/repack-p2b-font-text-physical-windows-r2.py \
+            "$R1" out/p2b-windows-r2/RG35XX-P2B-FONT-TEXT-PHYSICAL-R2.zip \
+            | tee /tmp/p2b-r2.log
+          for marker in \
+            P2B_R2_INPUT_R1_SHA_GATE=PASS \
+            P2B_R2_KEY_PAYLOAD_HASH_GATE=PASS \
+            P2B_R2_SD_RUNTIME_PAYLOAD_DELTA=NONE \
+            P2B_R2_RUNTIME_SEMANTIC_DELTA=NONE \
+            P2B_R2_PACKAGE_BUILD=PASS; do
+            grep -q "^${marker}$" /tmp/p2b-r2.log
+          done
+          echo P2B_R2_REPACK_GATE=PASS
+
+      - name: Independently compare R1 and R2 SD payload trees
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/p2b-r1-tree /tmp/p2b-r2-tree
+          mkdir -p /tmp/p2b-r1-tree /tmp/p2b-r2-tree
+          unzip -q "$R1" -d /tmp/p2b-r1-tree
+          unzip -q out/p2b-windows-r2/RG35XX-P2B-FONT-TEXT-PHYSICAL-R2.zip -d /tmp/p2b-r2-tree
+          R1ROOT="$(find /tmp/p2b-r1-tree -mindepth 1 -maxdepth 1 -type d | head -n1)"
+          R2ROOT="$(find /tmp/p2b-r2-tree -mindepth 1 -maxdepth 1 -type d | head -n1)"
+          test -d "$R1ROOT/SD"
+          test -d "$R2ROOT/SD"
+          diff -qr "$R1ROOT/SD" "$R2ROOT/SD"
+          grep -q 'INSTALL_RESULT=PASS' "$R2ROOT/INSTALL-RG35XX-P2B-FONT-TEXT.ps1"
+          grep -q 'Wait-BeforeExit' "$R2ROOT/INSTALL-RG35XX-P2B-FONT-TEXT.ps1"
+          grep -q 'Refusing to install to Windows system drive' "$R2ROOT/INSTALL-RG35XX-P2B-FONT-TEXT.ps1"
+          test -f "$R2ROOT/INSTALL-RG35XX-P2B-FONT-TEXT.cmd"
+          test -f "$R2ROOT/COLLECT-RG35XX-P2B-FONT-TEXT-EVIDENCE.cmd"
+          grep -q '^SD_RUNTIME_PAYLOAD_DELTA=NONE$' "$R2ROOT/WINDOWS-INSTALLER-R2-IDENTITY.txt"
+          grep -q '^RUNTIME_SEMANTIC_DELTA=NONE$' "$R2ROOT/WINDOWS-INSTALLER-R2-IDENTITY.txt"
+          grep -q '^P2B_FONT_TEXT_MODULE_PHYSICAL_ACCEPTANCE=PASS$' "$R2ROOT/WINDOWS-INSTALLER-R2-IDENTITY.txt"
+          echo P2B_R2_INDEPENDENT_SD_TREE_IDENTITY=PASS
+          echo P2B_R2_WINDOWS_HELPER_GATE=PASS
+          echo RG35XX_PLATFORM_BASELINE_DEVICE_PASS=NO
+          echo STABLE=NO
+
+      - name: Upload P2B Windows installer R2 hygiene package
+        uses: actions/upload-artifact@v4
+        with:
+          name: RG35XX-P2B-FONT-TEXT-PHYSICAL-R2-WINDOWS-HYGIENE-${{ github.sha }}
+          path: |
+            out/p2b-windows-r2/RG35XX-P2B-FONT-TEXT-PHYSICAL-R2.zip
+            /tmp/p2b-r2.log
+          if-no-files-found: error
