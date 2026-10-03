@@ -116,9 +116,12 @@ jobs:
           test ! -e out/p2b-font-text-candidate-r1/miyoomini-freej2me.zip
           echo P2B_R1_V2_CI_GATE=PASS
 
-      - name: Upload P2B host candidate evidence without font bytes
+      - name: Upload P2B R1 V2 diagnostic and candidate evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: RG35XX-P2B-FONT-TEXT-CANDIDATE-R1-V2-${{ github.sha }}
-          path: out/p2b-font-text-candidate-r1/
-          if-no-files-found: error
+          name: RG35XX-P2B-FONT-TEXT-R1-V2-DIAG-${{ github.sha }}
+          path: |
+            /tmp/p2b-r1-v2.log
+            out/p2b-font-text-candidate-r1/
+          if-no-files-found: warn
