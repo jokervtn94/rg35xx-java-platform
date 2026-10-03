@@ -211,25 +211,41 @@ An RG35XX P2C rotation implementation should first attempt an owner-scoped Java/
 | --- | --- | --- | --- |
 | D-pad / basic key delivery | accepted RG35XX physical evidence; dispatcher ends at MobilePlatform | `RG35XX_NATIVE_BOUNDARY` | protect parent behavior |
 | Miyoo-default physical key roles | current fixed RG35XX mapping differs from pinned Miyoo frontend | `FRONTEND_CAPABILITY_GAP` | host mapping contract after hardware inventory |
-| L2/R2 | pinned Miyoo exposes 7/9; current RG35XX native bitmap has no L2/R2 semantic bits; no exact measured mapping recovered | `UNVERIFIED` | original-RG35XX hardware capability probe |
-| `keymap.cfg` configurable physical roles | absent in current RG35XX frontend | `FRONTEND_CAPABILITY_GAP` | design smallest Java/frontend owner after hardware probe |
+| L2/R2 | original RG35XX diagnostic measured L2=`axis 2`, R2=`axis 5`, baseline `-32767`, press `32767`, release `-32767` | `HARDWARE_EVIDENCE_PASS` | include in complete frontend mapping contract |
+| `keymap.cfg` configurable physical roles | absent in current RG35XX frontend | `FRONTEND_CAPABILITY_GAP` | design smallest Java/frontend owner |
 | p/n/e/s/m phone-mode switching | absent in current RG35XX frontend | `FRONTEND_CAPABILITY_GAP` | reproduce boundary keycode selection only; do not modify Canvas |
-| pointer emulation | canonical Miyoo virtual-pointer path exists; RG35XX producer absent | `MISSING_RG35XX_BACKING` | owner-scoped frontend producer after button inventory |
+| pointer emulation | canonical Miyoo virtual-pointer path exists; RG35XX producer absent | `MISSING_RG35XX_BACKING` | owner-scoped frontend producer using measured controls |
 | rotation | canonical Miyoo frontend supports it; RG35XX production path absent | `MISSING_RG35XX_BACKING` | owner-scoped Java/frontend presentation policy; protect video native |
 | launch-time logical resolution | Java launcher already generic; production shell hardcodes 240x320 | `FRONTEND_CAPABILITY_GAP` | remove hardcoded-only production policy in later generic package path |
 | dynamic resize | canonical method exists, but locked phase assigns resize to P3 | `DEFERRED_CAPABILITY` | P3 runtime-services/resize module |
 
-## Unresolved pre-change field
+## Original-RG35XX hardware evidence closure
 
 ```text
-HARDWARE_EVIDENCE=L2_R2_EXACT_ORIGINAL_RG35XX_BUTTON_INDEX_NOT_MEASURED
-MISSING_CONTRACT=COMPLETE_PHYSICAL_INPUT_MAPPING_CANNOT_BE_CLOSED_WITHOUT_L2_R2_RESULT
-OWNER=RG35XX_INPUT_FRONTEND_BOUNDARY
+DEVICE=ORIGINAL_RG35XX
+DIAGNOSTIC_PACKAGE_RUN=37137415150
+DIAGNOSTIC_ARTIFACT_ID=11279100414
+DIAGNOSTIC_PROBE_SHA256=b37a0e79f58795e90e75261c161697c9e150f6a59bba0f3ffa861d56404f3bf1
+DEVICE_RESULT_SHA256=2bf0de5660431bc144e29ab531fa7614ce764e29517b397fe865d88f3134fdf5
+KEYMAP_COUNT=14
+P2C_INPUT_CAPABILITY_RESULT=PASS
+PROBE_EXIT_CODE=0
+L2_TYPE=axis
+L2_INDEX=2
+L2_BASELINE=-32767
+L2_PRESS=32767
+L2_RELEASE=-32767
+R2_TYPE=axis
+R2_INDEX=5
+R2_BASELINE=-32767
+R2_PRESS=32767
+R2_RELEASE=-32767
+PROTECTED_JAMVM_BEFORE_AFTER=IDENTICAL
+PROTECTED_GLIBJ_BEFORE_AFTER=IDENTICAL
+HARDWARE_EVIDENCE=PASS
 ```
 
-The historical M1.3 probe enumerated all joystick axes/buttons, but the preserved workflow instruction asked for D-pad, A/B/X/Y, Start/Select and L/R and does not constitute exact L2/R2 identity evidence.
-
-Per locked Miyoo-first rules, original RG35XX measured behavior is the final hardware authority. Therefore a runtime patch is forbidden until this capability is measured or a prior exact device log is recovered.
+This closes only the hardware identity prerequisite. It is not P2C module acceptance.
 
 ## Pre-change checklist
 
@@ -238,33 +254,38 @@ CURRENT_PHASE=P2
 CURRENT_MODULE=P2C_INPUT_FRONTEND
 CANONICAL_SOURCE=aweigit/freej2me-miyoomini@ca11dfe8ea1cc273d92460f9a83bbf192023fa63
 EXACT_PARENT_IDENTITY=aa7f84dac5ff24b5fd30fc6158ca3be0327675a0
-HARDWARE_EVIDENCE=PARTIAL_L2_R2_UNVERIFIED
-MISSING_CONTRACT=COMPLETE_PHYSICAL_MAPPING+KEYMAP_POLICY+POINTER+ROTATION+GENERIC_LAUNCH_RESOLUTION_POLICY
+HARDWARE_EVIDENCE=PASS_14_CONTROL_ORIGINAL_RG35XX
+MISSING_CONTRACT=KEYMAP_POLICY+PHONE_MODE+POINTER+ROTATION+GENERIC_LAUNCH_RESOLUTION_POLICY
 OWNER=RG35XX_INPUT_FRONTEND_BOUNDARY
-FILES_ALLOWED_TO_CHANGE=NONE_RUNTIME_UNTIL_HARDWARE_PROBE
+FILES_ALLOWED_TO_CHANGE=OWNER_SCOPED_JAVA_FRONTEND+PACKAGING+TESTS_ONLY
 FILES_FORBIDDEN_TO_CHANGE=CANVAS+GAMECANVAS+MOBILEPLATFORM_SEMANTICS+JAMVM+GLIBJ+PROTECTED_INPUT_NATIVE+PROTECTED_VIDEO_NATIVE+PROTECTED_AUDIO_NATIVE+P1/P2A/P2B_ACCEPTED_OWNERS
 HOST_GATE=NOT_TESTED
 PHYSICAL_GATE=NOT_TESTED
 GENERIC_PLATFORM_IMPACT=REQUIRED_P2_PLATFORM_COMPLETION
-RUNTIME_PATCH=FORBIDDEN
+RUNTIME_PATCH=ALLOWED_ONLY_AFTER_MINIMUM_OWNER_SCOPE_IS_DEFINED
 ```
+
+## Minimum owner-scoped candidate requirement
+
+The candidate must preserve the protected native input/video/audio binaries and canonical MIDP classes. The first legal implementation must be limited to the RG35XX Java/frontend boundary and must:
+
+1. consume the measured 14-control hardware inventory, including L2/R2 axes;
+2. reproduce pinned Miyoo default physical roles at the `MobilePlatform` keycode boundary;
+3. provide platform-level remapping/config policy without game-specific branches;
+4. implement phone-mode switching as boundary keycode selection only;
+5. implement virtual pointer production through existing `MobilePlatform.pointerPressed/Released`;
+6. implement rotation in Java/frontend presentation first, preserving `librg35xx_video.so`;
+7. retain launch-time logical resolution as the P2 contract and defer dynamic resize to P3;
+8. preserve P1/P2A/P2B parent regressions and all protected hashes.
+
+No module-level physical test is legal until host/module gates prove this scope.
 
 ## Next legal action
 
-Create one **diagnostic-only original-RG35XX input capability probe** that:
-
-1. does not replace or modify the production runtime;
-2. enumerates joystick capabilities and logs every changed axis/button index;
-3. explicitly asks for D-pad, A/B/X/Y, Start/Select, L1/L2/R1/R2;
-4. records exact probe hash and device log;
-5. returns normally to GarlicOS;
-6. is evidence-only and cannot set `P2C_PHYSICAL_TEST=PASS`.
-
-After exact L2/R2 hardware identity is known, fill the remaining pre-change fields, define the minimum owner-scoped P2C candidate, then run host/module gates before one INPUT-FRONTEND-MODULE physical acceptance.
-
 ```text
-NEXT_LEGAL_ACTION=P2C_ORIGINAL_RG35XX_INPUT_CAPABILITY_DIAGNOSTIC
-RUNTIME_SEMANTIC_DELTA=NONE
+NEXT_LEGAL_ACTION=P2C_DEFINE_AND_BUILD_MINIMUM_OWNER_SCOPED_CANDIDATE
+RUNTIME_SEMANTIC_DELTA=NONE_AT_AUDIT_CHECKPOINT
+P2C_PHYSICAL_TEST=NOT_TESTED
 P2=PARTIAL
 STABLE=NO
 A9_PARENT=NO
