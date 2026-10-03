@@ -84,6 +84,21 @@ mkdir -p "$ROOT/out/p2b-font-text-candidate-r1"
 cp -a "$PARENT_OUT/." "$ROOT/out/p2b-font-text-candidate-r1/"
 echo P2C_R1_V2_ACCEPTED_P2B_ISOLATED_REBUILD=PASS
 
+# P2C owns launch-time logical resolution only. Prove the candidate still
+# consumes arbitrary positive launch dimensions and does not import P3 resize.
+LAUNCHER="$ROOT/adapter/java/org/recompile/rg35xx/RG35XXLauncher.java"
+grep -Fq 'int width = positiveInt(args[1], "width");' "$LAUNCHER"
+grep -Fq 'int height = positiveInt(args[2], "height");' "$LAUNCHER"
+grep -Fq 'new MobilePlatform(width, height);' "$LAUNCHER"
+if grep -R -nF 'resizeLCD(' \
+  "$ROOT/adapter/java/org/recompile/rg35xx/RG35XXFrontendPolicy.java" \
+  "$ROOT/adapter/java/org/recompile/rg35xx/RG35XXKeyDispatcher.java" \
+  "$ROOT/adapter/java/org/recompile/rg35xx/RG35XXLauncher.java"; then
+  echo P2C_R1_V2_LAUNCH_RESOLUTION_CONTRACT=FAIL >&2
+  exit 1
+fi
+echo P2C_R1_V2_LAUNCH_RESOLUTION_CONTRACT=PASS
+
 # The base build still owns every P2C semantic/build gate. Replace only its
 # parent-reconstruction invocation and non-reproducible raw-JAR rejection.
 # The isolated wrapper above has already verified the stable P2B semantic digest
@@ -114,3 +129,7 @@ print('P2C_R1_V2_RAW_JAR_GATE_REPLACED=PASS')
 PY
 
 JAVA8="$JAVA8" bash "$BASE"
+ID="$ROOT/out/p2c-input-frontend-candidate-r1/P2C-INPUT-FRONTEND-IDENTITY.txt"
+test -f "$ID"
+printf '%s\n' 'P2C_LAUNCH_RESOLUTION_CONTRACT_GATE=PASS' >> "$ID"
+echo P2C_LAUNCH_RESOLUTION_CONTRACT_GATE=PASS
