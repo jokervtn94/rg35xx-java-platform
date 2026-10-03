@@ -1,0 +1,55 @@
+RG35XX-AWEIGIT-R1 — A4 SMOKE
+=============================
+
+Purpose
+-------
+One package / one real-device run for the A4 Level-1 smoke gate only.
+Scope: boot, LCD, physical input, Canvas, GameCanvas, normal exit, protected hashes.
+Audio/media are intentionally NOT tested.
+
+Install
+-------
+1. Extract the downloaded A4 artifact on Windows.
+2. Run PowerShell:
+   .\INSTALL-RG35XX-AWEIGIT-R1-A4.ps1 -SdRoot G:\
+   Replace G:\ with the actual RG35XX SD-card root.
+3. The installer refuses to continue unless the protected JamVM/glibj hashes match.
+4. It only writes the A4-owned launcher/payload paths under Roms\APPS and creates an exact-path backup if an older A4 payload exists.
+
+Device test
+-----------
+Launch: RG35XX-AWEIGIT-R1-A4-SMOKE
+
+Phase 1 — Canvas
+- Expected screen: BLUE background + GREEN square.
+- Press/release one or more D-pad directions so the square moves.
+- Press/release A; the square becomes RED while A is held.
+- Once Canvas paint/input/release conditions pass, the test automatically switches to GameCanvas.
+
+Phase 2 — GameCanvas
+- Expected screen: BLACK background + CYAN square.
+- Press/hold/release one or more D-pad directions so the square moves.
+- Press/hold/release A; the square becomes YELLOW while A is held.
+- Once getKeyStates + flushGraphics + release conditions pass, the test exits automatically.
+
+Manual acceptance notes
+-----------------------
+PASS candidate only when ALL are true:
+- launcher boots without hard reset;
+- SDL driver is fbcon and physical LCD is visible;
+- Phase 1 renders correctly and responds to D-pad + A;
+- Phase 2 renders correctly and responds to D-pad + A;
+- no white-screen regression during the two phases;
+- test returns normally after completion;
+- result log reports A4_SMOKE_PROGRAMMATIC_RESULT=PASS and A4_PROTECTED_HASHES=PASS.
+
+Important
+---------
+The package NEVER writes DEVICE_PASS=YES automatically.
+It writes DEVICE_PASS_REVIEW=PENDING until the real-device visual result is reviewed.
+
+Evidence
+--------
+After the run, reconnect the SD card to Windows and run:
+  .\COLLECT-RG35XX-AWEIGIT-R1-A4.ps1 -SdRoot G:\
+Upload the generated RG35XX-AWEIGIT-R1-A4-EVIDENCE-*.zip for review.

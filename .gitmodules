@@ -1,0 +1,4 @@
+[submodule "upstream/freej2me-miyoomini"]
+	path = upstream/freej2me-miyoomini
+	url = https://github.com/aweigit/freej2me-miyoomini.git
+	branch = master

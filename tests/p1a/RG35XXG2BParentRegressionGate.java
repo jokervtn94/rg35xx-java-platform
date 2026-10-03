@@ -1,0 +1,28 @@
+package org.recompile.rg35xx.p1a;
+
+import java.util.Arrays;
+import org.recompile.mobile.PlatformGraphics;
+import org.recompile.mobile.PlatformImage;
+
+/** Protect G1 clear/copy and G2A fillRoundRect while G2B opens fillTriangle. */
+public final class RG35XXG2BParentRegressionGate {
+    private static final int W=36,H=28;
+    private interface Op { int[] run(PlatformImage image, PlatformGraphics g); }
+    private static final class Result { final int[] pixels; final Throwable error; Result(int[] p,Throwable e){pixels=p;error=e;} }
+    public static void main(String[] args){
+        int f=0;
+        f+=match("G1_CLEAR_CLIP_TRANSLATE",new Op(){public int[] run(PlatformImage i,PlatformGraphics g){g.setColor(0x315579);g.fillRect(0,0,W,H);g.setClip(7,5,14,11);g.translate(4,3);g.clearRect(0,0,30,20);return pixels(i);}});
+        f+=match("G1_COPY_OVERLAP_RIGHT",new Op(){public int[] run(PlatformImage i,PlatformGraphics g){paint(g);g.copyArea(2,4,18,10,7,4,PlatformGraphics.TOP|PlatformGraphics.LEFT);return pixels(i);}});
+        f+=match("G1_COPY_OVERLAP_DOWN",new Op(){public int[] run(PlatformImage i,PlatformGraphics g){paint(g);g.copyArea(4,3,14,12,4,8,PlatformGraphics.TOP|PlatformGraphics.LEFT);return pixels(i);}});
+        f+=match("G2A_FILLROUNDRECT_NORMAL",new Op(){public int[] run(PlatformImage i,PlatformGraphics g){g.setColor(0x3366CC);g.fillRoundRect(4,4,20,14,7,5);return pixels(i);}});
+        f+=match("G2A_FILLROUNDRECT_CLIP_TRANSLATE",new Op(){public int[] run(PlatformImage i,PlatformGraphics g){g.setColor(0x3366CC);g.setClip(9,8,12,9);g.translate(5,3);g.fillRoundRect(0,1,25,17,8,8);return pixels(i);}});
+        System.out.println("P1A_G2B_PARENT_REGRESSION_FAILURE_COUNT="+f);
+        if(f!=0)throw new RuntimeException("P1A_G2B_PARENT_REGRESSION_FAIL="+f);
+        System.out.println("P1A_G2B_G1_G2A_PARENT_REGRESSION=PASS");
+    }
+    private static int match(String n,Op op){Result a=exec(false,op),r=exec(true,op);boolean m=a.error==null&&r.error==null&&Arrays.equals(a.pixels,r.pixels);System.out.println("P1A_G2B_PARENT_CASE="+n+" MATCH="+m+" AWT="+err(a.error)+" RAW="+err(r.error));return m?0:1;}
+    private static Result exec(boolean raw,Op op){try{if(raw)System.setProperty("rg35xx.raw2d","true");else System.clearProperty("rg35xx.raw2d");PlatformImage i=new PlatformImage(W,H);PlatformGraphics g=i.getGraphics();return new Result(op.run(i,g),null);}catch(Throwable t){return new Result(null,t);}}
+    private static void paint(PlatformGraphics g){for(int y=0;y<H;y++)for(int x=0;x<W;x++){int r=(x*29+y*11)&255,gr=(x*17+y*43)&255,b=(x*7+y*71)&255;g.setColor((r<<16)|(gr<<8)|b);g.fillRect(x,y,1,1);}}
+    private static int[] pixels(PlatformImage i){int[] p=new int[W*H];i.getRGB(p,0,W,0,0,W,H);return p;}
+    private static String err(Throwable t){return t==null?"NONE":t.getClass().getName();}
+}

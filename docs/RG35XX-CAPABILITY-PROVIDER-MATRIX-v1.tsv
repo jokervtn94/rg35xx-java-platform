@@ -1,0 +1,26 @@
+CAPABILITY	CANONICAL_API_SURFACE	CANONICAL_PROVIDER	RG35XX_CURRENT_STATUS	CLASSIFICATION	NEXT_ACTION
+FileConnection	YES	org.microemu.cldc.file.Connection + FileSystemFileConnection using java.io.File	Compiled through A3; no dedicated current module DEVICE-PASS	CANONICAL_PROVIDER_PRESENT_RG35XX_UNVERIFIED	MODULE_EXERCISER
+HTTP	YES	org.microemu.cldc.http.Connection using java.net.HttpURLConnection	Compiled through A3; depends protected JamVM/glibj + OS network; no module DEVICE-PASS	CANONICAL_PROVIDER_PRESENT_ENVIRONMENT_UNVERIFIED	MODULE_EXERCISER
+HTTPS	YES	org.microemu.cldc.https.Connection using HttpsURLConnection	Compiled through A3; TLS/provider capability not physically validated	CANONICAL_PROVIDER_PRESENT_TLS_UNVERIFIED	MODULE_EXERCISER
+Socket	YES	org.microemu.cldc.socket.Connection using java.net.Socket	Compiled through A3; network/JVM capability not physically validated	CANONICAL_PROVIDER_PRESENT_ENVIRONMENT_UNVERIFIED	MODULE_EXERCISER
+Datagram/UDP	YES	org.microemu.cldc.datagram.Connection using java.net.DatagramSocket	Compiled through A3; network/JVM capability not physically validated	CANONICAL_PROVIDER_PRESENT_ENVIRONMENT_UNVERIFIED	MODULE_EXERCISER
+WMA/SMS	YES	org.microemu.cldc.sms in-memory/simulated connection	Not a physical modem/SMS backend	CANONICAL_SIMULATION	DO_NOT_BUILD_RG35XX_MODEM_BACKEND_AS_PORT_FIX
+Bluetooth/JSR82	PARTIAL	No LocalDevice or btspp provider found in pinned source	No RG35XX Bluetooth provider	CANONICAL_API_SURFACE_INCOMPLETE	DO_NOT_CLASSIFY_AS_RG35XX_GAP
+OBEX	YES interfaces/classes	No Bluetooth transport provider found	No RG35XX transport provider	CANONICAL_PROVIDER_INCOMPLETE	DO_NOT_CLASSIFY_AS_RG35XX_GAP
+PIM	YES	PIM.getInstance deliberately throws SecurityException implementation unavailable	Same canonical behavior	CANONICAL_UNAVAILABLE	DO_NOT_RG35XX_FIX
+PKI	YES limited surface	No independent device provider identified in audit	Compiled surface only	API_SURFACE_ONLY	AUDIT_IF_USED
+Sensor	YES interfaces/data classes	No SensorManager/provider implementation found in pinned source	Compiled surface only	CANONICAL_PROVIDER_ABSENT_OR_INCOMPLETE	DO_NOT_RG35XX_FIX_WITHOUT_CANONICAL_DECISION
+Location/JSR179	NO pinned javax.microedition.location tree found	NONE	NONE	CANONICAL_ABSENT	OUTSIDE_PINNED_PLATFORM_SCOPE
+Nokia DirectGraphics	YES	PlatformGraphics implements API through AWT backing	Raw2D coverage partial	RG35XX_RAW_BACKING_PARTIAL	P1_CORE_2D_COMPLETION
+Nokia Sound	YES	Pinned implementation largely no-op/stub	Same unless port changes it	CANONICAL_STUB	DO_NOT_RG35XX_FIX_BY_DEFAULT
+Samsung AudioClip	YES	Pinned isSupported=false; playback controls no-op	Same canonical behavior	CANONICAL_UNSUPPORTED	DO_NOT_RG35XX_FIX_BY_DEFAULT
+Siemens APIs	YES mixed set	Mixed wrappers/shims; not comprehensively audited or physically accepted	Compiled surface, broad behavior unverified	CANONICAL_MIXED_UNVERIFIED	AUDIT_REPRESENTATIVE_IMPLEMENTATIONS
+M3G	YES 34 Java files + native GLES path	Aweigit native 3D path	Explicitly removed by A3	DEFERRED_CAPABILITY	RG35XX_EGL_GLES_HARDWARE_PROBE_FIRST
+MascotCapsule/Micro3D	YES 12 Java files + native GLES path	Aweigit native 3D path	Explicitly removed by A3	DEFERRED_CAPABILITY	RG35XX_EGL_GLES_HARDWARE_PROBE_FIRST
+LWJGL/OpenGL support	YES supporting tree	Supports canonical 3D stack	Explicitly removed by A3	DEFERRED_CAPABILITY	DO_NOT_REENABLE_BLINDLY
+Pointer/Touch	Canvas pointer API YES	Miyoo SDL frontend mouse/touch emulation	No RG35XX pointer producer	FRONTEND_CAPABILITY_GAP	DECIDE_SUPPORT_AND_HARDWARE_MAPPING
+Haptic	Display/MMAPI hooks YES	Miyoo SDL haptic	RG35XX native haptic init=-1/no-op	HARDWARE_CAPABILITY_UNRESOLVED	HARDWARE_PROBE
+L2/R2 keys	Miyoo frontend YES	SDL frontend mapping	Current physical RG35XX contract only covers 12-bit map without L2/R2	FRONTEND_CAPABILITY_GAP	NARROW_INPUT_HARDWARE_PROBE
+Keymap configuration	Miyoo keymap.cfg YES	Frontend configuration	RG35XX fixed dispatcher mapping	FRONTEND_CAPABILITY_GAP	GENERIC_PLATFORM_FRONTEND_DESIGN
+Rotation	Miyoo frontend YES	SDL renderer rotation	No RG35XX production equivalent	FRONTEND_CAPABILITY_GAP	OPTIONAL_AFTER_CORE_COMPLETION
+Generic logical resolution	CLI accepts width/height	Frontend passes selected dimensions	RG35XXLauncher accepts dimensions but A8 shell hardcodes 240x320	FRONTEND_CAPABILITY_GAP	GENERIC_PLATFORM_LAUNCHER

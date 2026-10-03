@@ -1,0 +1,89 @@
+name: P1A G2D Arc Family JDK8 ProcessPath V2
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - p1a-g2d-arc-family-jdk8-raster
+    paths:
+      - '.github/workflows/p1a-g2d-arc-family-jdk8-raster-v2.yml'
+      - 'scripts/stage-p1a-g2d-arc-family-jdk8-raster-v2.py'
+      - 'scripts/build-p1a-g2d-arc-family-jdk8-raster-v2.sh'
+      - 'tests/p1a/RG35XXG2DFuzzTraceGate.java'
+
+permissions:
+  contents: read
+
+jobs:
+  p1a-g2d-processpath-v2:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 80
+    steps:
+      - name: Checkout branch and pinned canonical submodule
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Set up JDK 8
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Materialize A4 raw2D baseline
+        run: bash ./scripts/build-a4-raw2d-java.sh
+
+      - name: Stage protected PERF-A1 presenter chain
+        run: |
+          python3 ./scripts/stage-a6-rg35xx-video-perf-p1.py "$GITHUB_WORKSPACE"
+          python3 ./scripts/stage-a6-rg35xx-video-perf-p2.py "$GITHUB_WORKSPACE"
+          python3 ./scripts/stage-a6-rg35xx-video-perf-p3.py "$GITHUB_WORKSPACE"
+          python3 ./scripts/stage-a6-rg35xx-perf-a1-async-native.py "$GITHUB_WORKSPACE"
+
+      - name: Build exact protected native adapters
+        env:
+          TOOLCHAIN: docker.io/miyoocfw/toolchain-shared-uclibc@sha256:6f6761867b4e4dcc27c99bf25fb91b2910264165f27bdd40b1c17e6f98cf751e
+        run: |
+          docker pull "$TOOLCHAIN"
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/work" \
+            -w /work \
+            "$TOOLCHAIN" \
+            bash -lc 'git config --global --add safe.directory /work/upstream/freej2me-miyoomini && ./scripts/build-a3.sh native'
+
+      - name: Apply accepted A5 Core2D overlay
+        run: bash ./scripts/build-a5-core2d-java.sh
+
+      - name: Build and strictly gate G2D ProcessPath v2
+        run: bash ./scripts/build-p1a-g2d-arc-family-jdk8-raster-v2.sh
+
+      - name: Verify host-only identity
+        run: |
+          set -euo pipefail
+          ID=out/p1a-g2d-arc-family-jdk8-raster-v2/P1A-G2D-V2-IDENTITY.txt
+          TRACE=out/p1a-g2d-arc-family-jdk8-raster-v2/P1A-G2D-FUZZ-TRACE.txt
+          LOG=out/p1a-g2d-arc-family-jdk8-raster-v2/P1A-G2D-ARC-FAMILY-DIFFERENTIAL.txt
+          grep -q '^PARENT_G2C_SEMANTIC_SHA256=a177541d3d0f9a8ad5e322afae03994800f73d8b13b5b141f8343490aa3ae2dc$' "$ID"
+          grep -q '^CHANGED_METHODS=Graphics.drawArc,Graphics.fillArc$' "$ID"
+          grep -q '^CHANGED_JAR_ENTRIES=org/recompile/mobile/PlatformGraphics.class$' "$ID"
+          grep -q '^REJECTED_LATTICE_FILL=REMOVED$' "$ID"
+          grep -q '^G2D_FUZZ_TRACE=PASS$' "$ID"
+          grep -q '^G2D_STRICT_DIFFERENTIAL=PASS$' "$ID"
+          grep -q '^G2D_CANONICAL_EQUIVALENT=YES$' "$ID"
+          grep -q '^NO_A9_PARENT=YES$' "$ID"
+          grep -q '^JAMVM_GLIBJ=NOT_TOUCHED$' "$ID"
+          grep -q '^BUILD-PASS=YES$' "$ID"
+          grep -q '^HOST-DIFFERENTIAL-PASS=YES$' "$ID"
+          grep -q '^DEVICE-PASS=NO$' "$ID"
+          grep -q '^DEVICE-TEST-PENDING=NO_MODULE_INTEGRATION_PENDING$' "$ID"
+          grep -q '^P1A_G2D_FUZZ_TRACE_FAILURE_COUNT=0$' "$TRACE"
+          grep -q '^P1A_G2D_STRICT_FAILURE_COUNT=0$' "$LOG"
+          echo P1A_G2D_V2_CI_SCOPE_LOCK=PASS
+
+      - name: Upload G2D v2 host candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: RG35XX-P1A-G2D-PROCESSPATH-V2-${{ github.sha }}
+          path: out/p1a-g2d-arc-family-jdk8-raster-v2/
+          if-no-files-found: error
