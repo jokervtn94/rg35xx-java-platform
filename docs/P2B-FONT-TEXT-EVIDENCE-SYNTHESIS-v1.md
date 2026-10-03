@@ -105,23 +105,22 @@ TARGET=ARMv5TE / EABI5 / soft-float / uClibC
 
 ### 4.2 Initial raw/default FreeType differential
 
-The earlier raw/default JDK8 versus ARM FreeType sampled differential produced substantial raster and some metric divergence. The exhaustive BMP `charWidth` table also left 57 mismatches out of 196,608 cases, concentrated in control/format characters.
+The earlier raw/default JDK8 versus ARM FreeType sampled differential produced substantial raster and some metric divergence. The exhaustive BMP `charWidth` table also left 57 mismatches out of 196,608 cases.
 
-Those results remain valid for **raw/default FreeType substitution**, but they are no longer sufficient to characterize the JDK8 scaler path itself.
+Those results remain valid for **raw/default or pinned Miyoo FreeType 2.11.1 substitution**, but they are no longer sufficient to characterize the JDK8 scaler path itself.
 
-The prior broad conclusion is therefore corrected as follows:
+The prior broad conclusion is corrected as follows:
 
 ```text
 RAW_DEFAULT_FREETYPE_AS_JDK8_DROPIN=REJECTED
+PINNED_MIYOO_FREETYPE_2_11_1_AS_EXACT_JDK8_ENGINE=REJECTED
 FREETYPE_AS_LOW_LEVEL_ENGINE=NOT_REJECTED
 OPENJDK8_SCALER_POLICY=REQUIRES_SOURCE_MATCHED_PROBE
 ```
 
 ### 4.3 Exact OpenJDK8 scaler source/config path
 
-The audited JDK reference is Temurin/OpenJDK 8u504-b01. The `freetypeScaler.c` blob at the exact `jdk8u504-b01` source revision is the same blob used by the source reconstruction audit.
-
-The source-matched diagnostic reproduces the relevant JDK8 `FreetypeFontScaler` policy for this P2B path:
+The audited JDK reference is Temurin/OpenJDK 8u504-b01. The source-matched diagnostic reproduces the relevant JDK8 `FreetypeFontScaler` policy for this P2B path:
 
 ```text
 TRUETYPE_INTERPRETER_VERSION=35
@@ -184,8 +183,6 @@ P2B_JDK8_FT_SCALER_MISMATCH_COUNT=0
 P2B_JDK8_FT_SCALER_CLASSIFICATION=EXACT_FOR_SAMPLED_TABLE
 ```
 
-This proves the reconstructed scaler policy is source-equivalent for the sampled 144-case raster table when backed by the exact FreeType behavior used by the JDK8 reference.
-
 #### Host system FreeType 2.13.2
 
 ```text
@@ -233,7 +230,7 @@ This narrows provenance further: the exact sampled behavior is reproducible from
 
 ### 4.7 Exact vendored-source rebuild on Miyoo ARMv5/uClibC toolchain
 
-The same exact JDK8u504 vendored FreeType source snapshot was then cross-built with the pinned MiyooCFW ARMv5TE/uClibC compiler and linked statically into the audit probe. The resulting probe is ARM EABI5 and runs under the target sysroot through qemu.
+The same exact JDK8u504 vendored FreeType source snapshot was cross-built with the pinned MiyooCFW ARMv5TE/uClibC compiler and linked into the audit probe. The resulting probe is ARM EABI5 and runs under the target sysroot through qemu.
 
 The ARM source-equivalent probe produced:
 
@@ -264,11 +261,9 @@ RG35XX_PLATFORM_BASELINE_DEVICE_PASS=NO
 STABLE=NO
 ```
 
-This is the decisive portability result for the sampled scaler table: **the exact JDK8u504 vendored FreeType source behavior is reproducible on the pinned Miyoo ARMv5/uClibC toolchain with 144/144 exact sampled raster compatibility.** It does not authorize a production library or runtime integration by itself.
+This is the decisive sampled-raster portability result: **the exact JDK8u504 vendored FreeType source behavior is reproducible on the pinned Miyoo ARMv5/uClibC toolchain with 144/144 exact sampled raster compatibility.** It does not authorize a production library or runtime integration by itself.
 
-### 4.8 Corrected FreeType classification
-
-The evidence now supports:
+### 4.8 Corrected FreeType raster classification
 
 ```text
 P2B_OPENJDK8_SCALER_POLICY=PROVEN_FOR_SAMPLED_TABLE
@@ -282,15 +277,35 @@ P2B_Miyoo_FREETYPE_RESIDUAL_OWNER=FREETYPE_ENGINE_BUILD_BEHAVIOR
 P2B_FREETYPE_RAW_DROPIN_BACKEND=REJECTED
 ```
 
-The older conclusion that FreeType itself could not reproduce JDK8 raster behavior is therefore narrowed. The rejected path is **raw/default or pinned Miyoo 2.11.1 behavior as a direct JDK8 substitute**. A JDK8-source-compatible FreeType engine is now proven technically viable for the sampled raster table on the target architecture/toolchain.
-
-Production direction, if later authorized, must preserve **OpenJDK8 scaler semantics plus the proven JDK8u504 vendored FreeType behavior** rather than substitute raw/default FreeType calls.
+The older conclusion that FreeType itself could not reproduce JDK8 raster behavior is therefore narrowed. The rejected path is raw/default or pinned Miyoo 2.11.1 behavior as a direct JDK8 substitute. A JDK8-source-compatible FreeType engine is now proven technically viable for the sampled raster table on the target architecture/toolchain.
 
 ---
 
-## 5. Exhaustive `charWidth` / `canDisplay` status
+## 5. Exhaustive `charWidth` / `canDisplay` contract
 
-The earlier exhaustive three-size table covered 196,608 BMP UTF-16 code-unit cases against the pinned Miyoo FreeType 2.11.1 engine:
+### 5.1 Exact JDK source rule
+
+The exact OpenJDK8u504 `CMap.getControlCodeGlyph()` source was checked against the diagnostic implementation. The JDK invisible/control mapping is:
+
+```text
+U+0009 U+000A U+000D
+U+200C..U+200F
+U+2028..U+202E
+U+206A..U+206F
+and, for the no-surrogate cmap path used here, U+FFFF -> glyph 0
+```
+
+The source-match gate passed:
+
+```text
+P2B_JDK8_CMAP_CONTROL_RULE_SOURCE_MATCH=PASS
+```
+
+`CharToGlyphMapper.canDisplay()` is driven by whether the mapped glyph differs from the missing glyph; the diagnostic preserves JDK invisible-glyph semantics for the listed controls and the missing-glyph rule for U+FFFF.
+
+### 5.2 Older pinned-Miyoo FreeType 2.11.1 exhaustive result
+
+The earlier three-size table against Miyoo FreeType 2.11.1 covered 196,608 BMP UTF-16 code-unit cases and produced:
 
 ```text
 P2B_CHARWIDTH_CASES=196608
@@ -299,39 +314,89 @@ P2B_CHARWIDTH_WIDTH_MISMATCH_COUNT=57
 P2B_CHARWIDTH_DISPLAY_MISMATCH_COUNT=48
 P2B_CHARWIDTH_WIDTH_ABS_ERROR_TOTAL=462
 P2B_CHARWIDTH_WIDTH_ABS_ERROR_MAX=10
-P2B_CHARWIDTH_CLASSIFICATION=DIVERGENT_REQUIRES_CLASSIFICATION
 ```
 
-The exact OpenJDK8u504 `CMap.getControlCodeGlyph()` source has now also been checked. Its invisible/control mapping is exactly the rule already encoded in the source-matched C diagnostic:
+That result is now explicitly scoped to the **pinned Miyoo FreeType 2.11.1 engine** and is not a residual semantic uncertainty in the JDK8-compatible design.
+
+### 5.3 Exact JDK8u504 vendored FreeType ARM exhaustive result
+
+Run `37100127253` rebuilt the exact JDK8u504 vendored FreeType 2.14.3 source on the pinned Miyoo ARMv5/uClibC toolchain, generated both JDK8 and ARM tables for sizes 12/14/16, and compared all 196,608 BMP code-unit cases.
+
+The JDK side also checked all styles 1..7 against style 0 across all code units and sizes:
 
 ```text
-U+0009 U+000A U+000D
-U+200C..U+200F
-U+2028..U+202E
-U+206A..U+206F
-and, for no-surrogate cmap paths, U+FFFF -> glyph 0
+P2B_JDK_CHARWIDTH_TABLE_CASES=196608
+P2B_JDK_CHARWIDTH_DISPLAYABLE_COUNT=87684
+P2B_JDK_CHARWIDTH_STYLE_COMPARE_CASES=1376256
+P2B_JDK_CHARWIDTH_STYLE_MISMATCHES=0
 ```
 
-Therefore the remaining 57 old width mismatches cannot be attributed merely to an omitted control-code list in the diagnostic. However, that exhaustive table was generated against the pinned Miyoo FreeType 2.11.1 engine, not against the newly proven JDK8u504 vendored FreeType ARM rebuild.
-
-Current classification:
+The ARM exact-source engine returned the same displayable count:
 
 ```text
-P2B_JDK8_CMAP_CONTROL_RULE=SOURCE_MATCHED
+P2B_FT_JDK8_CHARWIDTH_TABLE_CASES=196608
+P2B_FT_JDK8_CHARWIDTH_DISPLAYABLE_COUNT=87684
+```
+
+The final differential is exact:
+
+```text
+P2B_CHARWIDTH_DIFF_PARSE=PASS
+P2B_CHARWIDTH_CASES=196608
+P2B_CHARWIDTH_WIDTH_EXACT=196608
+P2B_CHARWIDTH_DISPLAY_EXACT=196608
+P2B_CHARWIDTH_BOTH_EXACT=196608
+P2B_CHARWIDTH_WIDTH_ABS_ERROR_TOTAL=0
+P2B_CHARWIDTH_WIDTH_ABS_ERROR_MAX=0
+P2B_CHARWIDTH_WIDTH_MISMATCH_COUNT=0
+P2B_CHARWIDTH_DISPLAY_MISMATCH_COUNT=0
+P2B_CHARWIDTH_CLASSIFICATION=EXACT_ALL_BMP_CODE_UNITS
+P2B_CHARWIDTH_DIFF_RESULT=PASS
+```
+
+Cleanup also passed without publishing the font, generated binary tables, archive, object files, or diagnostic executable:
+
+```text
+P2B_JDK8_VENDORED_CHARWIDTH_BYTE_LEAK=NO
+```
+
+### 5.4 Corrected `charWidth` classification
+
+The older 57-width / 48-display mismatch conclusion is therefore corrected and narrowed:
+
+```text
 P2B_Miyoo_FREETYPE_2_11_1_EXHAUSTIVE_CHARWIDTH=RESIDUAL_57_OF_196608
-P2B_JDK8U504_FREETYPE_ARM_EXHAUSTIVE_CHARWIDTH=NOT_YET_TESTED
-P2B_FREETYPE_CHARWIDTH_BACKING=PARTIAL
+P2B_Miyoo_FREETYPE_2_11_1_EXHAUSTIVE_CANDISPLAY=RESIDUAL_48_OF_196608
+P2B_JDK8_CMAP_CONTROL_RULE=SOURCE_MATCHED
+P2B_JDK8U504_FREETYPE_ARM_EXHAUSTIVE_CHARWIDTH=EXACT_196608_OF_196608
+P2B_JDK8U504_FREETYPE_ARM_EXHAUSTIVE_CANDISPLAY=EXACT_196608_OF_196608
+P2B_JDK8_CHARWIDTH_STYLE_INVARIANCE=EXACT_1376256_OF_1376256
+P2B_FREETYPE_CHARWIDTH_BACKING=PROVEN_WITH_JDK8U504_SOURCE_ENGINE
 ```
 
-The next char-width audit must therefore rerun the exact same 196,608-case table against the exact JDK8u504 vendored FreeType ARM build before any further control/format calibration is considered.
+`charWidth` and `canDisplay` are no longer P2B semantic blockers for the proven JDK8u504 source-compatible ARM engine.
 
 ---
 
-## 6. HarfBuzz complex-layout differential
+## 6. String-width and complex-layout boundary
 
-The pinned Miyoo toolchain also contains HarfBuzz `libharfbuzz.so.0.30302.0`. The exhaustive JDK8 complex-trigger table was compared to ARM HarfBuzz for sizes 12 / 14 / 16.
+The remaining text-layout blocker is not `charWidth`. Exact JDK8 source establishes two distinct measurement paths for a font without layout attributes:
 
-Results:
+```text
+SIMPLE CHAR PATH:
+  accumulate FontStrike.getCodePointAdvance() values
+  round only once at end: (int)(0.5 + total)
+
+NON-SIMPLE CHAR PATH:
+  if FontUtilities.isNonSimpleChar(ch)
+  -> measure the entire string with TextLayout
+```
+
+`FontUtilities.isNonSimpleChar` treats JDK-defined complex-script ranges plus surrogate code units as non-simple. The complex ranges include combining marks, Hebrew/Arabic, Indic/Thai, Tibetan, old Hangul, Khmer, ZWJ/ZWNJ, and selected directional controls.
+
+Therefore an implementation that always sums already-rounded `FontMetrics.charWidth()` values remains invalid even though exhaustive `charWidth` itself is now exact.
+
+The pinned Miyoo HarfBuzz differential remains non-exact for the exhaustive JDK8 complex-trigger table:
 
 ```text
 P2B_HB_COMPLEX_JDK_CASES=13764
@@ -343,20 +408,11 @@ P2B_HB_COMPLEX_LAYOUT_ADV64_EXACT=0
 P2B_HB_COMPLEX_LAYOUT_GLYPHCOUNT_EXACT=12681
 P2B_HB_COMPLEX_ALL_SEMANTIC_FIELDS_EXACT=0
 P2B_HB_COMPLEX_MISMATCH_COUNT=13764
-P2B_HB_COMPLEX_MISMATCH_BY_CLASS:
-  LAYOUT_ADV_AND_GLYPHCOUNT_MISMATCH=45
-  LAYOUT_ADV_MISMATCH=4217
-  WIDTH_MISMATCH=9502
 P2B_HARFBUZZ_COMPLEX_CLASSIFICATION=NOT_EXACT_FOR_EXHAUSTIVE_JDK8_TRIGGER_TABLE
-```
-
-Therefore:
-
-```text
 P2B_HARFBUZZ_DROPIN_COMPLEX_BACKEND=REJECTED
 ```
 
-This rejects only direct substitution. HarfBuzz may remain a diagnostic/reference component, but current evidence does not authorize wiring its default output into the production runtime.
+Raw/default HarfBuzz is therefore not authorized as a `TextLayout` replacement.
 
 ---
 
@@ -393,11 +449,11 @@ Miyoo/AWT unavailable
   -> use current synthetic 5x7 Raw2D font                 REJECTED
   -> use raw/default FreeType as drop-in                  REJECTED
   -> use pinned Miyoo FreeType 2.11.1 as raster-exact     REJECTED
-  -> use raw HarfBuzz as drop-in                          REJECTED
-  -> use per-character additive draw loop for all text    REJECTED
+  -> use raw HarfBuzz as TextLayout drop-in               REJECTED
+  -> use per-character rounded-additive loop for strings  REJECTED
 ```
 
-The legal engineering path is now more specific:
+The legal engineering path is now:
 
 ```text
 PINNED MIYOO FONT/TEXT CONTRACT
@@ -408,9 +464,11 @@ OPENJDK8 FREETYPEFONTSCALER POLICY — SAMPLED RECONSTRUCTION PROVEN
         ↓
 JDK8U504 VENDORED FREETYPE — ARMv5/uClibC SAMPLED RASTER PROVEN EXACT
         ↓
-PROVE EXHAUSTIVE CHARWIDTH/CANDISPLAY WITH THAT SAME ARM ENGINE
+JDK8U504 VENDORED FREETYPE — 196608/196608 CHARWIDTH/CANDISPLAY PROVEN EXACT
         ↓
-RESOLVE SIMPLE-STRING VS COMPLEX/STRING-LEVEL LAYOUT SEMANTICS
+PROVE SIMPLE-STRING FINAL-ROUNDING PATH
+        ↓
+RESOLVE COMPLEX/TEXTLAYOUT PATH
         ↓
 MINIMUM RG35XX FONT/TEXT BACKING DESIGN
         ↓
@@ -421,7 +479,7 @@ ONE P2B MODULE EXERCISER
 ONE ORIGINAL-RG35XX P2B PHYSICAL MODULE TEST
 ```
 
-No physical device test is justified yet because the text-layout/backend contract remains incomplete.
+No physical device test is justified yet because the string-layout/backend contract remains incomplete.
 
 ---
 
@@ -447,15 +505,21 @@ P2B_JDK8_BUNDLED_FREETYPE_VERSION=2.14.3
 P2B_JDK8U504_FREETYPE_SOURCE_PROVENANCE=PASS
 P2B_JDK8U504_FREETYPE_HOST_REBUILD=EXACT_FOR_SAMPLED_TABLE
 P2B_JDK8U504_FREETYPE_ARMV5_UCLIBC_REBUILD=EXACT_FOR_SAMPLED_TABLE
+P2B_JDK8U504_FREETYPE_ARM_EXHAUSTIVE_CHARWIDTH=EXACT_196608_OF_196608
+P2B_JDK8U504_FREETYPE_ARM_EXHAUSTIVE_CANDISPLAY=EXACT_196608_OF_196608
+P2B_JDK8_CHARWIDTH_STYLE_INVARIANCE=EXACT_1376256_OF_1376256
 P2B_Miyoo_FREETYPE_VERSION=2.11.1
 P2B_Miyoo_FREETYPE_SAMPLED_WIDTH_BOUNDS=EXACT
 P2B_Miyoo_FREETYPE_SAMPLED_RASTER=RESIDUAL_17_OF_144
+P2B_Miyoo_FREETYPE_EXHAUSTIVE_CHARWIDTH=RESIDUAL_57_OF_196608
+P2B_Miyoo_FREETYPE_EXHAUSTIVE_CANDISPLAY=RESIDUAL_48_OF_196608
 P2B_JDK8_CMAP_CONTROL_RULE=SOURCE_MATCHED
-P2B_JDK8U504_FREETYPE_ARM_EXHAUSTIVE_CHARWIDTH=NOT_YET_TESTED
-P2B_FREETYPE_CHARWIDTH_BACKING=PARTIAL
+P2B_FREETYPE_CHARWIDTH_BACKING=PROVEN_WITH_JDK8U504_SOURCE_ENGINE
 P2B_FREETYPE_RAW_DROPIN_BACKEND=REJECTED
 P2B_HARFBUZZ_DROPIN_COMPLEX_BACKEND=REJECTED
 
+P2B_SIMPLE_STRING_METRIC_PATH=SOURCE_IDENTIFIED_NOT_YET_DIFFERENTIALLY_PROVEN
+P2B_COMPLEX_TEXTLAYOUT_PATH=PARTIAL
 P2B_BACKEND_SEMANTIC_SYNTHESIS=PARTIAL
 P2B_MINIMUM_REQUIRED_DELTA=PARTIAL
 P2B_FILES_ALLOWED_TO_CHANGE=PARTIAL
@@ -474,14 +538,15 @@ SPECULATIVE_OPTIMIZATION=NO
 
 Do **not** create a runtime font backend yet.
 
-The next approved audit-only unit is now narrower:
+The next approved audit-only unit is now the **string measurement/layout split**:
 
-1. rerun the exact 196,608-case BMP `FontMetrics.charWidth` + `Font.canDisplay` table using the proven JDK8u504 vendored FreeType ARMv5/uClibC build;
-2. require exact width/display equality or classify every remaining mismatch by exact JDK source semantics before any implementation design;
-3. if the exhaustive table becomes exact, correct the older 57-mismatch conclusion so it is explicitly scoped to the Miyoo FreeType 2.11.1 engine;
-4. then decompose JDK8 simple-string versus complex/string-level layout behavior without replacing it with an always-additive character loop or raw HarfBuzz output;
-5. define the minimum owner-scoped interface and files only after both metric and string-layout semantics are proven;
-6. resolve compliant runtime font provisioning/packaging without assuming redistribution permission.
+1. prove the simple-string `FontDesignMetrics.stringWidth` path against the exact JDK8u504 vendored FreeType ARM engine using source-equivalent advances and one final round, not summed integer `charWidth` values;
+2. partition the existing JDK shaping corpus using exact `FontUtilities.isNonSimpleChar` / surrogate trigger rules;
+3. prove which simple strings are fully reproducible without `TextLayout` and classify draw-string raster separately from metric width;
+4. for non-simple strings, trace the exact JDK8 `TextLayout` / glyph-layout path and identify the minimum shaping behavior actually required by the pinned Miyoo contract;
+5. do not substitute raw HarfBuzz unless a source-matched differential proves the required fields exact;
+6. define the minimum owner-scoped runtime interface/files only after metric and string-layout semantics are complete;
+7. resolve compliant runtime font provisioning/packaging without assuming redistribution permission.
 
 Only after those fields are resolved may a P2B runtime candidate be designed.
 
@@ -495,4 +560,4 @@ P2B_DEVICE_PACKAGE=FORBIDDEN
 P2B_PHYSICAL_TEST=NOT_TESTED
 ```
 
-Reason: sampled JDK8 scaler raster portability to ARMv5/uClibC is now proven exact, but exhaustive `charWidth/canDisplay`, string-layout semantics, minimum owner-scoped runtime interface, and final font provisioning contract remain `PARTIAL`.
+Reason: sampled raster portability and exhaustive `charWidth/canDisplay` are now proven exact for the JDK8u504 source-compatible ARM engine, but simple-string final-rounding, complex `TextLayout` semantics, minimum owner-scoped runtime interface, and final font provisioning contract remain `PARTIAL`.
