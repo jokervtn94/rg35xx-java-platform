@@ -167,10 +167,18 @@ chmod 0755 "$OUT/runtime/bin/jamvm"
 
 "$READELF" -h "$OUT/runtime/bin/jamvm" > "$OUT/jamvm.readelf.txt"
 "$READELF" -A "$OUT/runtime/bin/jamvm" > "$OUT/jamvm.attributes.txt" || true
+cat "$OUT/jamvm.attributes.txt"
 grep -q 'Class:.*ELF32' "$OUT/jamvm.readelf.txt" || fail "JamVM is not ELF32"
 grep -q 'Machine:.*ARM' "$OUT/jamvm.readelf.txt" || fail "JamVM is not ARM"
 grep -q 'Version5 EABI' "$OUT/jamvm.readelf.txt" || fail "JamVM is not EABI5"
-grep -q 'soft-float ABI' "$OUT/jamvm.attributes.txt" || fail "JamVM is not soft-float ABI"
+if grep -Eq 'Tag_ABI_VFP_args:.*VFP registers|Tag_ABI_HardFP_use:[[:space:]]*[1-9]' "$OUT/jamvm.attributes.txt"; then
+  fail "JamVM is hard-float ABI"
+fi
+if grep -Eq 'Tag_ABI_VFP_args:.*Base AAPCS' "$OUT/jamvm.attributes.txt"; then
+  echo "ABI_SOFT_FLOAT=EXPLICIT_BASE_AAPCS"
+else
+  echo "ABI_SOFT_FLOAT=NO_HARD_FLOAT_MARKERS"
+fi
 
 JAMVM_OUT_SHA="$(sha256sum "$OUT/runtime/bin/jamvm" | awk '{print tolower($1)}')"
 GLIBJ_OUT_SHA="$(sha256sum "$OUT/runtime/share/classpath/glibj.zip" | awk '{print tolower($1)}')"
