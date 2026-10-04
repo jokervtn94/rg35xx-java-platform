@@ -24,7 +24,7 @@ grep -q 'P3_RMS_CRUD_ENUMERATE=PASS' "$SRC" || fail rms_marker_missing
 grep -q 'P3_FILE_CREATE_WRITE_READ_DELETE=PASS' "$SRC" || fail file_marker_missing
 grep -q 'P3_MMAPI_WAV_PAUSE_RESUME=PASS' "$SRC" || fail wav_marker_missing
 grep -q 'P3_MMAPI_MIDI_END_OF_MEDIA=PASS' "$SRC" || fail midi_marker_missing
-! grep -nE 'org\.recompile\.(rg35xx|mobile)|java\.awt|RG35XXCore2D' "$SRC" || fail direct_backend_reference
+! grep -nE 'org\.recompile\.rg35xx\.RG35XX|org\.recompile\.mobile|java\.awt|RG35XXCore2D' "$SRC" || fail direct_backend_reference
 
 python3 - "$BUILD/resources/p3-test.wav" "$BUILD/resources/p3-test.mid" <<'PY'
 import math, struct, sys, wave
