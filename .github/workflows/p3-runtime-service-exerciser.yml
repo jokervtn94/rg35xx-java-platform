@@ -7,7 +7,9 @@ on:
       - ".github/workflows/p3-runtime-service-exerciser.yml"
       - "scripts/build-p3-runtime-service-exerciser.sh"
       - "scripts/build-p3-runtime-service-physical-package.sh"
+      - "scripts/build-p3-rg35xx-audio-platform.sh"
       - "tests/p3/RG35XXP3RuntimeServiceExerciser.java"
+      - "adapter/java/org/recompile/rg35xx/RG35XXLauncher.java"
 
 permissions:
   contents: read
@@ -65,6 +67,22 @@ jobs:
           echo "P3_PLATFORM=$PAYLOAD/freej2me-rg35xx.jar" >> "$GITHUB_ENV"
           sha256sum "$PAYLOAD/freej2me-rg35xx.jar"
 
+      - name: Build P3 RG35XX audio-loader platform overlay
+        run: |
+          set -euo pipefail
+          chmod +x scripts/build-p3-rg35xx-audio-platform.sh
+          JAVA8="$JAVA_HOME" P3_BASE_PAYLOAD="$P3_BASE_PAYLOAD" \
+            bash scripts/build-p3-rg35xx-audio-platform.sh | tee P3-AUDIO-PLATFORM-BUILD.log
+          grep -q '^P3_AUDIO_PLATFORM_BUILD=PASS$' P3-AUDIO-PLATFORM-BUILD.log
+          test -f out/p3-audio-platform/freej2me-rg35xx.jar
+          rm -rf /tmp/p3-base-payload
+          mkdir -p /tmp/p3-base-payload
+          cp -a "$P3_BASE_PAYLOAD/." /tmp/p3-base-payload/
+          cp out/p3-audio-platform/freej2me-rg35xx.jar /tmp/p3-base-payload/freej2me-rg35xx.jar
+          echo "P3_BASE_PAYLOAD=/tmp/p3-base-payload" >> "$GITHUB_ENV"
+          echo "P3_PLATFORM=/tmp/p3-base-payload/freej2me-rg35xx.jar" >> "$GITHUB_ENV"
+          echo "P3_EXPECTED_PLATFORM=$(sha256sum out/p3-audio-platform/freej2me-rg35xx.jar | awk '{print $1}')" >> "$GITHUB_ENV"
+
       - name: Build P3 service exerciser JAR
         run: |
           set -euo pipefail
@@ -79,7 +97,8 @@ jobs:
         run: |
           set -euo pipefail
           chmod +x scripts/build-p3-runtime-service-physical-package.sh
-          P3_BASE_PAYLOAD="$P3_BASE_PAYLOAD" bash scripts/build-p3-runtime-service-physical-package.sh | tee P3-RUNTIME-SERVICE-PACKAGE-BUILD.log
+          P3_BASE_PAYLOAD="$P3_BASE_PAYLOAD" P3_EXPECTED_PLATFORM="$P3_EXPECTED_PLATFORM" \
+            bash scripts/build-p3-runtime-service-physical-package.sh | tee P3-RUNTIME-SERVICE-PACKAGE-BUILD.log
           grep -q '^P3_PHYSICAL_PACKAGE_BUILD=PASS$' P3-RUNTIME-SERVICE-PACKAGE-BUILD.log
           grep -q '^P3_PHYSICAL_TEST=NOT_TESTED$' P3-RUNTIME-SERVICE-PACKAGE-BUILD.log
           test -f out/p3-runtime-service-physical/RG35XX-P3-RUNTIME-SERVICE-PHYSICAL-R1.zip
@@ -90,7 +109,9 @@ jobs:
           name: RG35XX-P3-RUNTIME-SERVICE-EXERCISER-${{ github.sha }}
           path: |
             out/p3-runtime-service-exerciser/
+            out/p3-audio-platform/
             out/p3-runtime-service-physical/RG35XX-P3-RUNTIME-SERVICE-PHYSICAL-R1.zip
             P3-RUNTIME-SERVICE-EXERCISER-BUILD.log
             P3-RUNTIME-SERVICE-PACKAGE-BUILD.log
+            P3-AUDIO-PLATFORM-BUILD.log
           if-no-files-found: error

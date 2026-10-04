@@ -1,7 +1,7 @@
 # P3 — Runtime service module audit
 
 **Date:** 2026-10-04  
-**Status:** `AUDIT_PASS / PACKAGE_BUILT / DEVICE_TEST=NOT_TESTED`
+**Status:** `AUDIT_PASS / PACKAGE_BUILT / DEVICE_TEST=FAIL_AUDIO_NATIVE_BRIDGE`
 **Predecessor:** P2C input/frontend physical acceptance  
 **Canonical:** `aweigit/freej2me-miyoomini@ca11dfe8ea1cc273d92460f9a83bbf192023fa63`
 
@@ -59,6 +59,28 @@ P3_RUNTIME_GLIBJ_SHA256=c85b3af3728c89c090bf5feccdf402fc86474e99a2d61fd02142aa3c
 P3_PHYSICAL_TEST=NOT_TESTED
 DEVICE_PASS=NO
 ```
+
+## Latest original-RG35XX result
+
+The candidate runtime was installed from `Roms/APPS` and the launcher hash gate
+passed on the device. Lifecycle, RMS CRUD, reopen/delete, and FileConnection
+all passed. The first media operation stopped at the native audio boundary:
+
+```text
+P3_RUNTIME_HASH_GATE_BEFORE=PASS
+P3_TEST_BOOT=PASS
+P3_RMS_CRUD_ENUMERATE=PASS
+P3_RMS_REOPEN_DELETE=PASS
+P3_FILE_CREATE_WRITE_READ_DELETE=PASS
+P3_RUNTIME_SERVICE_RESULT=FAIL_EXCEPTION
+java.lang.UnsatisfiedLinkError: sdlMixerInit
+```
+
+The P3 parent platform jar had not loaded `libaudio.so` before the canonical
+`SdlMixerManager` call. The next package therefore adds an RG35XXLauncher-only
+audio-loader overlay. It leaves the canonical MMAPI, `PlatformPlayer`, and
+`SdlMixerManager` classes unchanged and keeps the rebuilt candidate runtime
+unchanged.
 
 ## Required next implementation unit
 
