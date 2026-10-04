@@ -1,0 +1,40 @@
+name: P4 EGL GLES Capability Probe
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/p4-capability-probe.yml"
+      - "scripts/build-p4-capability-probe-package.sh"
+      - "docs/RG35XX-PLATFORM-SOURCE-COVERAGE-AUDIT-v1.md"
+      - "docs/RG35XX-CAPABILITY-PROVIDER-MATRIX-v1.tsv"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Build read-only P4 probe package
+        run: |
+          set -euo pipefail
+          chmod +x scripts/build-p4-capability-probe-package.sh
+          bash scripts/build-p4-capability-probe-package.sh | tee P4-CAPABILITY-PROBE-BUILD.log
+          grep -q '^P4_CAPABILITY_PROBE_BUILD=PASS$' P4-CAPABILITY-PROBE-BUILD.log
+          test -f out/p4-capability-probe/RG35XX-P4-CAPABILITY-PROBE.zip
+          grep -q '^M3G_REENABLED=NO$' out/p4-capability-probe/RG35XX-P4-CAPABILITY-PROBE/P4-CAPABILITY-PROBE-IDENTITY.txt
+          grep -q '^P4_DEVICE_RESULT=REVIEW_REQUIRED$' out/p4-capability-probe/RG35XX-P4-CAPABILITY-PROBE/P4-CAPABILITY-PROBE-IDENTITY.txt
+
+      - name: Upload P4 probe package
+        uses: actions/upload-artifact@v4
+        with:
+          name: RG35XX-P4-CAPABILITY-PROBE-${{ github.sha }}
+          path: |
+            out/p4-capability-probe/
+            P4-CAPABILITY-PROBE-BUILD.log
+          if-no-files-found: error

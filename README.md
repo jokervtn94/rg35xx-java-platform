@@ -33,10 +33,10 @@ CANONICAL_AWEIGIT_PIN=ca11dfe8ea1cc273d92460f9a83bbf192023fa63
 P1A_GRAPHICS_MODULE_PHYSICAL_ACCEPTANCE=PASS
 P2A_IMAGE_DECODE_MODULE_PHYSICAL_ACCEPTANCE=PASS
 P2B_FONT_TEXT_MODULE_PHYSICAL_ACCEPTANCE=PASS
-CURRENT_PHASE=P3
-CURRENT_MODULE=P3_RUNTIME_SERVICE_MODULES
+CURRENT_PHASE=P4
+CURRENT_MODULE=P4_3D_CAPABILITY_DECISION
 CURRENT_PHYSICAL_ACCEPTED_SCOPE=P2C_INPUT_FRONTEND
-CURRENT_PHYSICAL_ACCEPTED_BRANCH_HEAD=02d49e8bf9cea1957ab5071704e30ae99a474854
+CURRENT_PHYSICAL_ACCEPTED_BRANCH_HEAD=8cd4f6b
 P2=PASS
 RG35XX_PLATFORM_BASELINE_DEVICE_PASS=NO
 STABLE=NO
@@ -64,8 +64,8 @@ Accepted physical records:
 | P2A — Image Decode | `PASS` | 150 fixtures × 3 public frontends = 450/450 device decode cases PASS; protected hashes preserved. |
 | P2B — Font/Text | `PASS` | Host/module gates PASS; original RG35XX 360/360 cases PASS, protected hashes PASS, green PASS screen, normal GarlicOS return. |
 | P2C — Input / Frontend contract | `PASS` | Original RG35XX programmatic run passed all three phases, including custom keymap, pointer 6,6 and rotation 1→2→0. |
-| P3 — Runtime service modules | `NOT_TESTED` | Source audit and CI package build PASS; original-RG35XX module run remains required. |
-| P4 — Deferred capabilities | `NOT_TESTED` | M3G/Mascot/LWJGL/OpenGL require explicit capability decisions; no blind re-enable. |
+| P3 — Runtime service modules | `PASS (scoped)` | Original RG35XX passed lifecycle, RMS, FileConnection, WAV/MIDI API paths, audible output, shutdown and protected hashes. |
+| P4 — Deferred capabilities | `NOT_TESTED` | Next: read-only EGL/GLES hardware probe and source-call mapping; no blind M3G/Mascot/LWJGL/OpenGL re-enable. |
 | P5 — Generic installer/platform | `NOT_TESTED` | One generic FreeJ2ME-RG35XX installer/launcher, no game-name runtime logic. |
 | P6 — Full platform exerciser | `NOT_TESTED` | Full declared platform contract suite. |
 | P7 — Tier-0 physical regression | `NOT_TESTED` | Vua Cướp Biển + God of War, including protected audible GoW audio expectation. |
@@ -100,29 +100,30 @@ P2B_R2_PACKAGE_SHA256=7df059c07a3867eef5e6a00348b19b18ee6901cffd4bf7b53caefbbebb
 
 No second physical run is required for that helper-only revision because the tested SD runtime payload is unchanged byte-for-byte.
 
-## Next legal work unit — P3 Runtime service modules
+## Next legal work unit — P4 EGL/GLES capability decision
 
-P2C is physically accepted. The next module is **P3 RUNTIME-SERVICE-MODULES**, covering the remaining platform services without changing the accepted input/frontend owner:
+P3 is now physically accepted as a scoped runtime-service module without changing the accepted input/frontend owner. The next module is **P4 EGL/GLES CAPABILITY DECISION**:
 
-- lifecycle and normal return behavior;
-- RMS/file service boundaries;
-- media/audio service boundaries;
-- Java runtime service compatibility on the RG35XX candidate runtime.
+- inventory actual EGL/GLES libraries, symbols and device providers on original RG35XX/GarlicOS;
+- map the canonical Aweigit M3G/MascotCapsule/LWJGL native call surface to those measured providers;
+- record a capability decision before any 3D source is staged or re-enabled.
 
-The source audit and CI build are complete. The generated physical package uses the byte-exact accepted P2C R11 payload as its parent; no P2C, video, JamVM or glibj owner was rebuilt or changed. The next action is the original-RG35XX module run, including manual audible confirmation for WAV/MIDI.
+The P3 source audit, CI build and original-RG35XX physical run are complete. The P3 package used the accepted P2C payload plus an RG35XXLauncher-only audio-loader overlay; the candidate JamVM/glibj runtime and accepted input/video/font/audio native owners remain protected. No 3D implementation is authorized yet.
 
-The P3 audit definition and CI-only source gate are recorded in
-`docs/P3-RUNTIME-SERVICE-MODULE-AUDIT-20261004.md`. This checkpoint is not a
-physical device acceptance and does not change the production runtime.
+The P3 audit and physical acceptance are recorded in
+`docs/P3-RUNTIME-SERVICE-MODULE-AUDIT-20261004.md`. The next evidence package
+must be a read-only P4 hardware capability probe; it must not modify the
+production runtime or re-enable deferred 3D classes.
 
 The latest CI package is available from GitHub Actions Run #3:
 
 ```text
-RUN=https://github.com/jokervtn94/rg35xx-java-platform/actions/runs/37206803198
-ARTIFACT=RG35XX-P3-RUNTIME-SERVICE-EXERCISER-ee2f73e739fbed303d91741c512b5b1a66b3e72c
-ARTIFACT_SHA256=2d8329978c3b6a9aeebb88a6e04f30d549ff77f4888497915ed48b5cc94f189a
-P3_PHYSICAL_TEST=NOT_TESTED
-DEVICE_PASS=NO
+RUN=https://github.com/jokervtn94/rg35xx-java-platform/actions/runs/37211752518
+ARTIFACT=RG35XX-P3-RUNTIME-SERVICE-EXERCISER-4fe82701dc98f29b96585e85deb146093ac14cc3
+P3_PLATFORM_SHA256=a72df91165616bb87d1821ab9fb8641bd2c168b53175043ccd691bffe9504f00
+P3_PHYSICAL_TEST=PASS
+P3_AUDIO_AUDIBLE_DEVICE=CONFIRMED_BY_USER
+P3_DEVICE_PROGRAMMATIC_RESULT=PASS
 ```
 
 ## Protected RG35XX runtime identities

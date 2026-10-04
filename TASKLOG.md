@@ -60,15 +60,15 @@ OFFICIAL_ACCEPTED_RUNTIME_COMMIT=2f18b78e9b0aa1660b7fd2f5904dd697fcef5830
 P2B_PHYSICAL_ACCEPTANCE_COMMIT=4c8e10f3d96288deda6b9b6d000125cea59e3919
 P2B_ACCEPTED_BRANCH_HEAD=6cc7461897dedeafa3d71848854341d41c533b5d
 
-CURRENT_PHASE=P3
-CURRENT_MODULE=P3_RUNTIME_SERVICE_MODULES
+CURRENT_PHASE=P4
+CURRENT_MODULE=P4_3D_CAPABILITY_DECISION
 CURRENT_PHYSICAL_ACCEPTED_SCOPE=P2C_INPUT_FRONTEND
-CURRENT_PHYSICAL_ACCEPTED_BRANCH_HEAD=02d49e8bf9cea1957ab5071704e30ae99a474854
+CURRENT_PHYSICAL_ACCEPTED_BRANCH_HEAD=8cd4f6b
 
 P0=PASS
 P1=PASS
 P2=PASS
-P3=NOT_TESTED
+P3=PASS
 P4=NOT_TESTED
 P5=NOT_TESTED
 P6=NOT_TESTED
@@ -86,20 +86,24 @@ NEW_TIER1_FIX_BEFORE_P8=NO
 ### NEXT_LEGAL_ACTION
 
 ```text
-NEXT_LEGAL_ACTION=P3_RUNTIME_SERVICE_MODULE_PHYSICAL_TEST
+NEXT_LEGAL_ACTION=P4_EGL_GLES_HARDWARE_CAPABILITY_PROBE
 EXACT_ACCEPTED_RUNTIME_PARENT=2f18b78e9b0aa1660b7fd2f5904dd697fcef5830
 PHYSICAL_ACCEPTED_PREDECESSOR=P2C_INPUT_FRONTEND
 EXPECTED_PHYSICAL_MODULE=RUNTIME-SERVICE-MODULES
 P3_AUDIT_DEFINITION=docs/P3-RUNTIME-SERVICE-MODULE-AUDIT-20261004.md
 P3_AUDIT_WORKFLOW=.github/workflows/p3-runtime-service-audit.yml
 P3_EXERCISER_WORKFLOW=.github/workflows/p3-runtime-service-exerciser.yml
-P3_EXERCISER_WORKFLOW_RUN=37206803198
-P3_EXERCISER_ARTIFACT_SHA256=2d8329978c3b6a9aeebb88a6e04f30d549ff77f4888497915ed48b5cc94f189a
-P3_PHYSICAL_TEST=NOT_TESTED
-DEVICE_PASS=NO
+P3_EXERCISER_WORKFLOW_RUN=37211752518
+P3_EXERCISER_ARTIFACT=RG35XX-P3-RUNTIME-SERVICE-EXERCISER-4fe82701dc98f29b96585e85deb146093ac14cc3
+P3_PLATFORM_SHA256=a72df91165616bb87d1821ab9fb8641bd2c168b53175043ccd691bffe9504f00
+P3_PHYSICAL_TEST=PASS
+P3_AUDIO_AUDIBLE_DEVICE=CONFIRMED_BY_USER
+P3_DEVICE_PROGRAMMATIC_RESULT=PASS
+P4=NOT_TESTED
+DEVICE_PASS=P3_SCOPED_ONLY
 ```
 
-P2C is physically accepted by the original-RG35XX three-phase device run. The P3 source audit and CI package build now pass. The next legal action is to install the generated P3 package on the original RG35XX, run the complete module, review the log and manually confirm audible WAV/MIDI output. Keep the accepted P2C input/frontend owner and protected Miyoo/JamVM/glibj identities unchanged unless new P3 evidence identifies a specific boundary owner.
+P2C is physically accepted by the original-RG35XX three-phase device run. P3 is now physically accepted as a scoped runtime-service module: lifecycle, RMS, FileConnection, WAV/MIDI API paths, audible output, shutdown and protected hashes all passed. The next legal action is a read-only P4 EGL/GLES capability probe on the original RG35XX. Do not re-enable M3G, MascotCapsule/Micro3D or LWJGL/OpenGL until the device probe and source-call mapping provide evidence.
 
 ---
 
