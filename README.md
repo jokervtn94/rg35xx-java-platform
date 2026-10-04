@@ -126,6 +126,20 @@ P3_AUDIO_AUDIBLE_DEVICE=CONFIRMED_BY_USER
 P3_DEVICE_PROGRAMMATIC_RESULT=PASS
 ```
 
+The P4 read-only probe package is built and installed on the SD:
+
+```text
+P4_RUN=https://github.com/jokervtn94/rg35xx-java-platform/actions/runs/37214748433
+P4_ARTIFACT=RG35XX-P4-CAPABILITY-PROBE-cc29ad2f92666f26256a8c4a6850a4ec19b92276
+P4_ARTIFACT_SHA256=f877a9214accd4d328d59c0944a61a4f209fdeb54164d99766c08332791b099b
+P4_DEVICE_RESULT=REVIEW_REQUIRED
+```
+
+Run `Roms/APPS/RG35XX-P4-CAPABILITY-PROBE.sh` and return
+`RG35XX-P4-CAPABILITY-EVIDENCE/P4-EGL-GLES-PROBE.log`. The probe is read-only
+and must not be treated as 3D support until its provider and symbols are mapped
+to the canonical Aweigit call surface.
+
 ## Protected RG35XX runtime identities
 
 ```text

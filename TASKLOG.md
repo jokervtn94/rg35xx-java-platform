@@ -101,9 +101,12 @@ P3_AUDIO_AUDIBLE_DEVICE=CONFIRMED_BY_USER
 P3_DEVICE_PROGRAMMATIC_RESULT=PASS
 P4=NOT_TESTED
 DEVICE_PASS=P3_SCOPED_ONLY
+P4_PROBE_WORKFLOW_RUN=37214748433
+P4_PROBE_ARTIFACT=RG35XX-P4-CAPABILITY-PROBE-cc29ad2f92666f26256a8c4a6850a4ec19b92276
+P4_PROBE_ARTIFACT_SHA256=f877a9214accd4d328d59c0944a61a4f209fdeb54164d99766c08332791b099b
 ```
 
-P2C is physically accepted by the original-RG35XX three-phase device run. P3 is now physically accepted as a scoped runtime-service module: lifecycle, RMS, FileConnection, WAV/MIDI API paths, audible output, shutdown and protected hashes all passed. The next legal action is a read-only P4 EGL/GLES capability probe on the original RG35XX. Do not re-enable M3G, MascotCapsule/Micro3D or LWJGL/OpenGL until the device probe and source-call mapping provide evidence.
+P2C is physically accepted by the original-RG35XX three-phase device run. P3 is now physically accepted as a scoped runtime-service module: lifecycle, RMS, FileConnection, WAV/MIDI API paths, audible output, shutdown and protected hashes all passed. The read-only P4 EGL/GLES capability probe is built and installed on the SD; the next action is to run it on the original RG35XX and review its evidence. Do not re-enable M3G, MascotCapsule/Micro3D or LWJGL/OpenGL until the device probe and source-call mapping provide evidence.
 
 ---
 
