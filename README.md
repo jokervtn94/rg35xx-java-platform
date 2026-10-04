@@ -64,7 +64,7 @@ Accepted physical records:
 | P2A — Image Decode | `PASS` | 150 fixtures × 3 public frontends = 450/450 device decode cases PASS; protected hashes preserved. |
 | P2B — Font/Text | `PASS` | Host/module gates PASS; original RG35XX 360/360 cases PASS, protected hashes PASS, green PASS screen, normal GarlicOS return. |
 | P2C — Input / Frontend contract | `PASS` | Original RG35XX programmatic run passed all three phases, including custom keymap, pointer 6,6 and rotation 1→2→0. |
-| P3 — Runtime service modules | `NOT_TESTED` | Next legal work unit. Reconstruct and test runtime service boundaries while preserving protected JamVM/glibj and Miyoo parent behavior. |
+| P3 — Runtime service modules | `NOT_TESTED` | Source audit and CI package build PASS; original-RG35XX module run remains required. |
 | P4 — Deferred capabilities | `NOT_TESTED` | M3G/Mascot/LWJGL/OpenGL require explicit capability decisions; no blind re-enable. |
 | P5 — Generic installer/platform | `NOT_TESTED` | One generic FreeJ2ME-RG35XX installer/launcher, no game-name runtime logic. |
 | P6 — Full platform exerciser | `NOT_TESTED` | Full declared platform contract suite. |
@@ -109,11 +109,21 @@ P2C is physically accepted. The next module is **P3 RUNTIME-SERVICE-MODULES**, c
 - media/audio service boundaries;
 - Java runtime service compatibility on the RG35XX candidate runtime.
 
-The next action is **audit/reconstruction first**, not broad implementation first. Existing accepted input/frontend, video, JamVM and glibj owners remain protected until evidence identifies a missing P3 contract or RG35XX boundary owner.
+The source audit and CI build are complete. The generated physical package uses the byte-exact accepted P2C R11 payload as its parent; no P2C, video, JamVM or glibj owner was rebuilt or changed. The next action is the original-RG35XX module run, including manual audible confirmation for WAV/MIDI.
 
 The P3 audit definition and CI-only source gate are recorded in
 `docs/P3-RUNTIME-SERVICE-MODULE-AUDIT-20261004.md`. This checkpoint is not a
 physical device acceptance and does not change the production runtime.
+
+The latest CI package is available from GitHub Actions Run #3:
+
+```text
+RUN=https://github.com/jokervtn94/rg35xx-java-platform/actions/runs/37206803198
+ARTIFACT=RG35XX-P3-RUNTIME-SERVICE-EXERCISER-ee2f73e739fbed303d91741c512b5b1a66b3e72c
+ARTIFACT_SHA256=2d8329978c3b6a9aeebb88a6e04f30d549ff77f4888497915ed48b5cc94f189a
+P3_PHYSICAL_TEST=NOT_TESTED
+DEVICE_PASS=NO
+```
 
 ## Protected RG35XX runtime identities
 

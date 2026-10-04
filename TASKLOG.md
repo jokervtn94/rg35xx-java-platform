@@ -86,15 +86,20 @@ NEW_TIER1_FIX_BEFORE_P8=NO
 ### NEXT_LEGAL_ACTION
 
 ```text
-NEXT_LEGAL_ACTION=P3_RUNTIME_SERVICE_MODULE_AUDIT
+NEXT_LEGAL_ACTION=P3_RUNTIME_SERVICE_MODULE_PHYSICAL_TEST
 EXACT_ACCEPTED_RUNTIME_PARENT=2f18b78e9b0aa1660b7fd2f5904dd697fcef5830
 PHYSICAL_ACCEPTED_PREDECESSOR=P2C_INPUT_FRONTEND
 EXPECTED_PHYSICAL_MODULE=RUNTIME-SERVICE-MODULES
 P3_AUDIT_DEFINITION=docs/P3-RUNTIME-SERVICE-MODULE-AUDIT-20261004.md
 P3_AUDIT_WORKFLOW=.github/workflows/p3-runtime-service-audit.yml
+P3_EXERCISER_WORKFLOW=.github/workflows/p3-runtime-service-exerciser.yml
+P3_EXERCISER_WORKFLOW_RUN=37206803198
+P3_EXERCISER_ARTIFACT_SHA256=2d8329978c3b6a9aeebb88a6e04f30d549ff77f4888497915ed48b5cc94f189a
+P3_PHYSICAL_TEST=NOT_TESTED
+DEVICE_PASS=NO
 ```
 
-P2C is physically accepted by the original-RG35XX three-phase device run. Begin P3 with an audit/reconstruction pass; keep the accepted P2C input/frontend owner and protected Miyoo/JamVM/glibj identities unchanged unless new P3 evidence identifies a specific boundary owner.
+P2C is physically accepted by the original-RG35XX three-phase device run. The P3 source audit and CI package build now pass. The next legal action is to install the generated P3 package on the original RG35XX, run the complete module, review the log and manually confirm audible WAV/MIDI output. Keep the accepted P2C input/frontend owner and protected Miyoo/JamVM/glibj identities unchanged unless new P3 evidence identifies a specific boundary owner.
 
 ---
 
@@ -233,8 +238,8 @@ P2C must not casually replace any accepted owner. Input/video/lifecycle changes 
 |---|---|---|
 | **P0 — Exact Golden authority** | `PASS` | Exact Golden/protected lineage retained. |
 | **P1 — Core 2D platform completion** | `PASS` | P1A physical module acceptance completed. |
-| **P2 — Image / font / frontend contract** | `PARTIAL` | P2A Image Decode PASS and P2B Font/Text PASS. Remaining `INPUT-FRONTEND-MODULE` is not yet audited/accepted. |
-| **P3 — Runtime service modules** | `NOT_TESTED` | Historical Golden RMS/media/audio/lifecycle evidence is protected, but platform-first P3 is not closed. |
+| **P2 — Image / font / frontend contract** | `PASS` | P2A Image Decode, P2B Font/Text and P2C Input/Frontend module are physically accepted on the original RG35XX. |
+| **P3 — Runtime service modules** | `NOT_TESTED` | Audit and CI package build PASS; original-RG35XX module test and audible review remain. |
 | **P4 — Deferred capability decision** | `NOT_TESTED` | M3G/Mascot/LWJGL/OpenGL/hardware capability inventory required. |
 | **P5 — Generic installer/platform** | `NOT_TESTED` | One generic installer/launcher required. |
 | **P6 — Full platform exerciser** | `NOT_TESTED` | Full declared platform contract suite required. |
@@ -336,7 +341,7 @@ CURRENT_MODULE=P3_RUNTIME_SERVICE_MODULES
 CANONICAL_SOURCE=aweigit/freej2me-miyoomini@ca11dfe8ea1cc273d92460f9a83bbf192023fa63
 EXACT_ACCEPTED_RUNTIME_PARENT=2f18b78e9b0aa1660b7fd2f5904dd697fcef5830
 HARDWARE_EVIDENCE=P1A_PASS_PLUS_P2A_PASS_PLUS_P2B_PASS_ON_ORIGINAL_RG35XX
-NEXT_LEGAL_ACTION=P3_RUNTIME_SERVICE_MODULE_AUDIT
+NEXT_LEGAL_ACTION=P3_RUNTIME_SERVICE_MODULE_PHYSICAL_TEST
 A9_PARENT=NO
 GAME_SPECIFIC_CODE=NO
 ```

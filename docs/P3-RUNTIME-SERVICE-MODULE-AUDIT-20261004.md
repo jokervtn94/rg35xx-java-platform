@@ -1,7 +1,7 @@
 # P3 — Runtime service module audit
 
 **Date:** 2026-10-04  
-**Status:** `AUDIT_DEFINED / DEVICE_TEST=NOT_TESTED`  
+**Status:** `AUDIT_PASS / PACKAGE_BUILT / DEVICE_TEST=NOT_TESTED`
 **Predecessor:** P2C input/frontend physical acceptance  
 **Canonical:** `aweigit/freej2me-miyoomini@ca11dfe8ea1cc273d92460f9a83bbf192023fa63`
 
@@ -43,6 +43,19 @@ The gate emits `P3_RUNTIME_SERVICE_AUDIT=PASS` only for this source audit. It
 also emits `P3_RUNTIME_SERVICE_DEVICE_TEST=NOT_TESTED` until an original-RG35XX
 module run is reviewed.
 
+The source gate passed in GitHub Actions Run #2. The complete P3 exerciser and
+physical package passed in Run #3 without rebuilding the P2C parent chain:
+
+```text
+P3_WORKFLOW_RUN=37206803198
+P3_COMMIT=ee2f73e739fbed303d91741c512b5b1a66b3e72c
+P3_ARTIFACT=RG35XX-P3-RUNTIME-SERVICE-EXERCISER-ee2f73e739fbed303d91741c512b5b1a66b3e72c
+P3_ARTIFACT_SHA256=2d8329978c3b6a9aeebb88a6e04f30d549ff77f4888497915ed48b5cc94f189a
+P3_PACKAGE_BUILD=PASS
+P3_PHYSICAL_TEST=NOT_TESTED
+DEVICE_PASS=NO
+```
+
 ## Required next implementation unit
 
 After the audit gate passes in GitHub Actions, create one P3 exerciser and one
@@ -71,7 +84,7 @@ input/frontend owner and these protected identities must remain unchanged:
 ```text
 JAMVM_SHA256=eea1b97cebfaca67b69ed365e966d80cdac22d8ff245c7a556137cfb2898ea34
 GLIBJ_SHA256=d7abe888d2980329434c30f18c0eec124be1f02284bf9ed28e88d7242a1f2bea
-INPUT_NATIVE_SHA256=69a8aeb3940bfbc234f3a562a7ae4bcaea10b50f8a8f2c38ad229a5430930f6d
+INPUT_NATIVE_SHA256=6eaf5e23a63fa346782f35dff340d625238a89db4e54cce56d34ba5db5a4064c
 VIDEO_NATIVE_SHA256=c6687c0a43b24b425af0727c928afb5414da811ecbcbbe3538928470abe8bd0d
 AUDIO_NATIVE_SHA256=4522157846c33c150a85c50b4bed6f68351f1c62d54b8cd7805cbb97c5727644
 P2C_PHYSICAL_ACCEPTANCE=PASS
