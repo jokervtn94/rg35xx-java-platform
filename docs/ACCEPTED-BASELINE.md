@@ -1,8 +1,8 @@
 # RG35XX FreeJ2ME Port — Accepted Baseline Ledger
 
-Lock date: **2026-10-03**
+Lock date: **2026-10-04**
 
-This ledger records the latest **physically accepted runtime lineage** and separates it from work that remains incomplete. A module-level physical acceptance does not imply full-platform stability.
+This ledger records the latest **physically accepted runtime lineage** and separates it from active work that is not yet accepted. A host/module PASS, package PASS, or module-level physical acceptance does not imply full-platform stability.
 
 ## Official accepted runtime baseline
 
@@ -26,7 +26,7 @@ GAME_SPECIFIC_CODE=NO
 NEW_TIER1_FIX_BEFORE_P8=NO
 ```
 
-`main` tracks accepted work. P8 full-platform promotion has **not** occurred.
+`main` is the repository/tracking branch, but the latest **accepted runtime semantics** are still P2B. P2C work is documented on `main` for handoff visibility only and is not an accepted runtime until its original-RG35XX physical module gate passes.
 
 ## Authority and ancestry
 
@@ -39,9 +39,15 @@ P1A GRAPHICS PHYSICAL MODULE ACCEPTANCE
         ↓
 P2A IMAGE DECODE PHYSICAL MODULE ACCEPTANCE
         ↓
-P2B FONT/TEXT PHYSICAL MODULE ACCEPTANCE
+P2B FONT/TEXT PHYSICAL MODULE ACCEPTANCE   ← latest accepted runtime
         ↓
-P2C INPUT/FRONTEND CONTRACT — NEXT WORK UNIT
+P2C INPUT/FRONTEND CANDIDATE
+        ↓
+HOST/MODULE PASS
+        ↓
+PHYSICAL R3 PACKAGE READY
+        ↓
+ORIGINAL-RG35XX PHYSICAL MODULE TEST       ← current missing gate
 ```
 
 A9 and game-specific experimental branches remain diagnostic/history only.
@@ -112,6 +118,7 @@ P2B_HOST_COMPLEX_LAYOUT_GATE=PASS
 P1A_GRAPHICS_PARENT_REGRESSION=PASS
 P2A_IMAGE_PARENT_REGRESSION=PASS
 P2B_MODULE_GATE=PASS
+P2B_HOST_MODULE_GATE=PASS
 ```
 
 Original RG35XX physical evidence:
@@ -163,38 +170,78 @@ This packaging-only revision does not require a second physical acceptance becau
 
 Evidence: `docs/P2B-WINDOWS-INSTALLER-R2-HYGIENE-CHECKPOINT-20261003.md`.
 
-## Protected runtime identities
+## Protected accepted runtime identities
 
 ```text
 JAMVM_SHA256=eea1b97cebfaca67b69ed365e966d80cdac22d8ff245c7a556137cfb2898ea34
 GLIBJ_SHA256=d7abe888d2980329434c30f18c0eec124be1f02284bf9ed28e88d7242a1f2bea
-INPUT_NATIVE_SHA256=69a8aeb3940bfbc234f3a562a7ae4bcaea10b50f8a8f2c38ad229a5430930f6d
+P2B_ACCEPTED_INPUT_NATIVE_SHA256=69a8aeb3940bfbc234f3a562a7ae4bcaea10b50f8a8f2c38ad229a5430930f6d
 VIDEO_NATIVE_SHA256=c6687c0a43b24b425af0727c928afb5414da811ecbcbbe3538928470abe8bd0d
 AUDIO_NATIVE_SHA256=4522157846c33c150a85c50b4bed6f68351f1c62d54b8cd7805cbb97c5727644
 ```
 
-These owners remain protected during P2C unless evidence specifically identifies one as the owner of a missing P2 input/frontend contract.
+P2C deliberately has a candidate input-native delta after measured original-RG35XX evidence established L2/R2 ownership. That candidate identity must not be described as the accepted P2B input identity before P2C physical acceptance.
 
-## P2C — Input/Frontend next work unit
+## P2C — Active work, not yet accepted
 
-The locked P2 contract still requires one `INPUT-FRONTEND-MODULE` covering:
-
-- complete physical input mapping;
-- keymap/frontend policy;
-- logical resolution configuration;
-- pointer/touch policy;
-- rotation policy if supported.
-
-Current state:
+The P2C contract audit and hardware prerequisite are complete. Original-RG35XX evidence established all 14 controls, including:
 
 ```text
-P2C_INPUT_FRONTEND_AUDIT=NOT_TESTED
-P2C_RUNTIME_CANDIDATE=NOT_TESTED
-P2C_HOST_MODULE_GATE=NOT_TESTED
+KEYMAP_COUNT=14
+L2=JS0_AXIS2_BASELINE_-32767_PRESS_32767_BIT12
+R2=JS0_AXIS5_BASELINE_-32767_PRESS_32767_BIT13
+```
+
+The owner-scoped runtime candidate is:
+
+```text
+P2C_RUNTIME_CANDIDATE_COMMIT=0738281012b83d748cfb88ba063d21248a3f9c97
+P2C_HOST_GATE_HEAD=0851cfde1da41c955997a693ac6df34557d76093
+P2C_HOST_MODULE_CHECKPOINT=7f8b3bdeadd7b1cd2201f1bf62d8c29ecfb54eac
+P2C_HOST_MODULE_GATE=PASS
+P2C_INPUT_NATIVE_CANDIDATE_SHA256=6eaf5e23a63fa346782f35dff340d625238a89db4e54cce56d34ba5db5a4064c
+```
+
+The exact physical package is READY but not device accepted:
+
+```text
+PHYSICAL_BRANCH=physical-test/p2c-input-frontend-20261003-r3
+PHYSICAL_R3_SOURCE_HEAD=ceca509b39f95f2d172c4b20119ab644522be55b
+P2C_READY_DOC_COMMIT=286e4ebbea850a56db27165aec3e40d1ddf97380
+WORKFLOW_RUN=37145570672
+WORKFLOW_JOB=111268672854
+ACTIONS_ARTIFACT_ID=11281889195
+ACTIONS_ARTIFACT_SHA256=f6215e37a3c07bf218f7b3db1243f14ae37fb5146d860e2b6c9b675b238689df
+RAW_PACKAGE_FILENAME=RG35XX-P2C-INPUT-FRONTEND-PHYSICAL-R1.zip
+RAW_PACKAGE_SHA256=014c7f7b96f24aae62610fec7b1157c23a2c844777fb5b70b9b524a818962e36
+P2C_PHYSICAL_PACKAGE_GATE=PASS
 P2C_PHYSICAL_TEST=NOT_TESTED
 ```
 
-The next legal action is contract reconstruction/audit. No implementation is authorized until the exact canonical ownership, current RG35XX behavior, gap, owner and minimum delta are documented.
+Detailed evidence:
+
+- `docs/P2C-INPUT-FRONTEND-HOST-MODULE-CHECKPOINT-20261003.md`
+- `docs/P2C-INPUT-FRONTEND-PHYSICAL-R3-READY-20261004.md`
+- `CURRENT-CHECKPOINT.md`
+
+The only legal next action is:
+
+```text
+NEXT_LEGAL_ACTION=P2C_ORIGINAL_RG35XX_PHYSICAL_MODULE_TEST_AND_EVIDENCE_REVIEW
+EVIDENCE_DIR=/mnt/mmc/RG35XX-P2C-INPUT-FRONTEND-EVIDENCE
+```
+
+Until that evidence is reviewed:
+
+```text
+P2C_INPUT_FRONTEND_MODULE_PHYSICAL_ACCEPTANCE=NOT_TESTED
+P2=PARTIAL
+DEVICE_PASS=NO
+RG35XX_PLATFORM_BASELINE_DEVICE_PASS=NO
+STABLE=NO
+```
+
+Do not promote P2C, begin P3, substitute P7 games for the module gate, or begin P9 compatibility work.
 
 ## Remaining platform phases
 
@@ -211,12 +258,13 @@ P8=NOT_TESTED
 P9=NOT_TESTED
 ```
 
-P2 remains `PARTIAL` only because the remaining Input/Frontend contract is not yet formally accepted. P9 work is not authorized before P8.
+P2 remains `PARTIAL` only because P2C physical module acceptance is still `NOT_TESTED`. P9 work is not authorized before P8.
 
-## New-chat rule
+## New-session rule
 
-1. Read `TASKLOG.md` first.
-2. Treat this ledger and the locked rule files as authority.
-3. Verify exact accepted parent before changing runtime code.
-4. Continue only the recorded `NEXT_LEGAL_ACTION` unless the user explicitly changes project direction.
-5. Never use A9 or a game-specific experimental branch as a production parent.
+1. Read `CODEX-START-HERE.md` and `AGENTS.md` first.
+2. Read all four locked rule files.
+3. Use `CURRENT-CHECKPOINT.md` for the current active gate and this file for accepted-runtime authority.
+4. Read `MASTER-TASKLOG.md` for chronology and `CHECK-TASK.md` before taking action.
+5. Never infer accepted runtime state from the newest branch or SHA.
+6. Never use A9 or a game-specific experimental branch as a production parent.
