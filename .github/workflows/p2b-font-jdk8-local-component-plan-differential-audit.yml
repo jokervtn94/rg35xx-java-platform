@@ -1,0 +1,339 @@
+name: P2B Font JDK8 Local Component Plan Differential Audit
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - audit/p2b-font-text
+    paths:
+      - '.github/workflows/p2b-font-jdk8-local-component-plan-differential-audit.yml'
+      - 'tests/p2b/diagnostic/RG35XXP2BLocalComponentPlanDiagnostic.java'
+
+permissions:
+  contents: read
+
+jobs:
+  p2b-jdk8-local-component-plan-differential:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    env:
+      BASE: 77a36526e0f6d875c57c7e9a973e0c1a05573721
+      EXPECTED_FONT_SHA256: 1a5f4112daaa9473747c6834041646cc9b2c338cb40ab5dbb2f0161f8968ca10
+      EXPECTED_FONT_SIZE: '8092724'
+      JDK8U_TAG: jdk8u504-b01
+      JDK8U_COMMIT: 4efe36434f44bafb854e602ccbbe1b5696fce1a2
+      BIDI_BLOB: 3d0e1381adb1cb11cbd45d2f8e09c4830aa1fba8
+      BIDIBASE_BLOB: 6485bea94e69f1cb3f054360fb5caad461a60ef8
+      BIDILINE_BLOB: 1d54867ad42b486857693e63a3cf15fbe99354e9
+      BIDIRUN_BLOB: 07519db3934eb47a566ad0e597611bcfa8ed2b67
+      UBIDIPROPS_BLOB: c7ac9aeac61a3abcf6f9fc28105585ff3110f61f
+      ICUDATA_BLOB: 20c21a583d6689356e1d3c65aecfd37aca223521
+      ICUBINARY_BLOB: 20984d3b8fbd9d3523a9de7a9df05caff0e9be55
+      TRIE_BLOB: 0430bf5e955db100512d6f366b509b97bd07f51d
+      CHARTRIE_BLOB: 9726e8932f6ddeacf7ff4f0f3faf08d2b908777f
+      UTF16_BLOB: 934eecca8ff9aaf6f4ac8f80fe33cc5285a895e1
+      UCHAR_BLOB: bad507e2ee03b22e1c72680c4b60ca0787fd30b3
+      UCHARPROP_BLOB: 0149140feab974541f5ca1e56027b864aa9e803d
+      UBIDI_RESOURCE_BLOB: 3c545bd7a450e407f4755effb75f68886faa43e5
+      UBIDI_RESOURCE_SIZE: '19924'
+      UBIDI_RESOURCE_SHA256: 38b96789a88870d20c0eb1392cb8fc2bd58e2c31cfff3326bea1e00a52ec9889
+      SCRIPT_BLOB: 155ab07d93cacf854c19187e020a66ef63921e52
+      SCRIPTRUNDATA_BLOB: e72c85624242ce7c486d78dbf800c91facb2cfbf
+      SCRIPTRUN_BLOB: e719fc335605f957f6bd713da226700aba15b8c9
+      BIDIUTILS_BLOB: 41d6acd02b95656b3644e669443b3230b950eb08
+      TEXTLINE_BLOB: 9efcdc32de2f3f75f73669e7468f9ec8787e8cdf
+      TEXTLABELFACTORY_BLOB: 1f9ba94159cb6f8f0696199c7ab7855db724797c
+      GLYPHLAYOUT_BLOB: bff5f4a94f9e05342f836fd7789f8d755814efcd
+      UNICODEDATA_BLOB: 3ed5585528adace2cf0627b8125708b9afff6cf4
+      REFERENCE_DIAG_BLOB: 8504c92128b47b3d153a1cd0daadcc5bb66a1aef
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Verify audit-only ancestry and protected scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git merge-base HEAD "$BASE")" = "$BASE"
+          if git diff --name-only "$BASE"...HEAD | grep -E '^(adapter/|native/|upstream/|packaging/|runtime/|patches/|scripts/stage-|scripts/build-)'; then
+            echo 'P2B_RUNTIME_DELTA=FAIL'; exit 1
+          fi
+          test "$(git -C upstream/freej2me-miyoomini rev-parse HEAD)" = ca11dfe8ea1cc273d92460f9a83bbf192023fa63
+          test "$(git hash-object tests/p2b/diagnostic/RG35XXP2BJdkTextLayoutExpandedPlanReference.java)" = "$REFERENCE_DIAG_BLOB"
+          mkdir -p out/p2b-local-plan
+          {
+            echo 'P2B_LOCAL_PLAN_AUDIT_SCOPE=PASS'
+            echo 'P2B_RUNTIME_DELTA=NONE'
+            echo 'P2B_PROTECTED_JAMVM_GLIBJ_CHANGE=NO'
+          } | tee out/p2b-local-plan/SCOPE.txt
+
+      - name: Pin exact JDK8 planner sources and resources
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/jdk8u
+          git clone --filter=blob:none --no-checkout https://github.com/adoptium/jdk8u.git /tmp/jdk8u
+          git -C /tmp/jdk8u fetch --depth 1 origin tag "$JDK8U_TAG"
+          git -C /tmp/jdk8u checkout --detach "$JDK8U_TAG"
+          test "$(git -C /tmp/jdk8u rev-parse HEAD)" = "$JDK8U_COMMIT"
+          check_blob(){ test "$(git -C /tmp/jdk8u rev-parse HEAD:"$1")" = "$2"; }
+          check_blob jdk/src/share/classes/java/text/Bidi.java "$BIDI_BLOB"
+          check_blob jdk/src/share/classes/sun/text/bidi/BidiBase.java "$BIDIBASE_BLOB"
+          check_blob jdk/src/share/classes/sun/text/bidi/BidiLine.java "$BIDILINE_BLOB"
+          check_blob jdk/src/share/classes/sun/text/bidi/BidiRun.java "$BIDIRUN_BLOB"
+          check_blob jdk/src/share/classes/sun/text/normalizer/UBiDiProps.java "$UBIDIPROPS_BLOB"
+          check_blob jdk/src/share/classes/sun/text/normalizer/ICUData.java "$ICUDATA_BLOB"
+          check_blob jdk/src/share/classes/sun/text/normalizer/ICUBinary.java "$ICUBINARY_BLOB"
+          check_blob jdk/src/share/classes/sun/text/normalizer/Trie.java "$TRIE_BLOB"
+          check_blob jdk/src/share/classes/sun/text/normalizer/CharTrie.java "$CHARTRIE_BLOB"
+          check_blob jdk/src/share/classes/sun/text/normalizer/UTF16.java "$UTF16_BLOB"
+          check_blob jdk/src/share/classes/sun/text/normalizer/UCharacter.java "$UCHAR_BLOB"
+          check_blob jdk/src/share/classes/sun/text/normalizer/UCharacterProperty.java "$UCHARPROP_BLOB"
+          check_blob jdk/src/share/classes/sun/text/resources/ubidi.icu "$UBIDI_RESOURCE_BLOB"
+          check_blob jdk/src/share/classes/sun/font/Script.java "$SCRIPT_BLOB"
+          check_blob jdk/src/share/classes/sun/font/ScriptRunData.java "$SCRIPTRUNDATA_BLOB"
+          check_blob jdk/src/share/classes/sun/font/ScriptRun.java "$SCRIPTRUN_BLOB"
+          check_blob jdk/src/share/classes/sun/font/BidiUtils.java "$BIDIUTILS_BLOB"
+          check_blob jdk/src/share/classes/java/awt/font/TextLine.java "$TEXTLINE_BLOB"
+          check_blob jdk/src/share/classes/sun/font/TextLabelFactory.java "$TEXTLABELFACTORY_BLOB"
+          check_blob jdk/src/share/classes/sun/font/GlyphLayout.java "$GLYPHLAYOUT_BLOB"
+          check_blob jdk/make/data/unicodedata/UnicodeData.txt "$UNICODEDATA_BLOB"
+          test "$(wc -c </tmp/jdk8u/jdk/src/share/classes/sun/text/resources/ubidi.icu | tr -d ' ')" = "$UBIDI_RESOURCE_SIZE"
+          test "$(sha256sum /tmp/jdk8u/jdk/src/share/classes/sun/text/resources/ubidi.icu | awk '{print $1}')" = "$UBIDI_RESOURCE_SHA256"
+          grep -Fq 'while (++start < limit && direction[start] == dir) {}' /tmp/jdk8u/jdk/src/share/classes/java/awt/font/TextLine.java
+          grep -Fq 'if ((level & 0x1) != 0) layoutFlags |= 1;' /tmp/jdk8u/jdk/src/share/classes/sun/font/TextLabelFactory.java
+          grep -Fq 'if ((linedir & 0x1) != 0) layoutFlags |= 8;' /tmp/jdk8u/jdk/src/share/classes/sun/font/TextLabelFactory.java
+          grep -Fq 'this.eflags = 0x4;' /tmp/jdk8u/jdk/src/share/classes/sun/font/GlyphLayout.java
+          {
+            echo "OPENJDK8_TAG=$JDK8U_TAG"
+            echo "OPENJDK8_COMMIT=$JDK8U_COMMIT"
+            echo "BIDI_BLOB=$BIDI_BLOB"
+            echo "SCRIPTRUN_BLOB=$SCRIPTRUN_BLOB"
+            echo "BIDIUTILS_BLOB=$BIDIUTILS_BLOB"
+            echo "TEXTLINE_BLOB=$TEXTLINE_BLOB"
+            echo "TEXTLABELFACTORY_BLOB=$TEXTLABELFACTORY_BLOB"
+            echo "GLYPHLAYOUT_BLOB=$GLYPHLAYOUT_BLOB"
+            echo "UNICODEDATA_BLOB=$UNICODEDATA_BLOB"
+            echo 'P2B_LOCAL_PLAN_SOURCE_PROVENANCE=PASS'
+          } | tee out/p2b-local-plan/PROVENANCE.txt
+
+      - name: Materialize exact Miyoo MiSans and generate fresh JDK8 reference
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL='https://github.com/aweigit/freej2me-miyoomini/releases/download/2.0/miyoomini-freej2me.zip'
+          curl -fL --retry 3 --retry-delay 2 "$URL" -o /tmp/miyoomini-freej2me.zip
+          ENTRY=$(unzip -Z1 /tmp/miyoomini-freej2me.zip | grep -Ei '(^|/)font\.ttf$')
+          test "$(printf '%s\n' "$ENTRY" | wc -l | tr -d ' ')" = 1
+          unzip -p /tmp/miyoomini-freej2me.zip "$ENTRY" > /tmp/p2b-font.ttf
+          test "$(sha256sum /tmp/p2b-font.ttf | awk '{print $1}')" = "$EXPECTED_FONT_SHA256"
+          test "$(wc -c </tmp/p2b-font.ttf | tr -d ' ')" = "$EXPECTED_FONT_SIZE"
+          rm -rf /tmp/p2b-ref-classes && mkdir -p /tmp/p2b-ref-classes
+          javac -encoding UTF-8 -source 1.6 -target 1.6 -d /tmp/p2b-ref-classes \
+            tests/p2b/diagnostic/RG35XXP2BJdkTextLayoutExpandedPlanReference.java
+          java -Djava.awt.headless=true -cp /tmp/p2b-ref-classes \
+            RG35XXP2BJdkTextLayoutExpandedPlanReference /tmp/p2b-font.ttf \
+            out/p2b-local-plan/REFERENCE.tsv | tee out/p2b-local-plan/REFERENCE.log
+          grep -Fq 'P2B_JDK8_EXPANDED_PLAN_CASES=24' out/p2b-local-plan/REFERENCE.log
+          grep -Fq 'P2B_JDK8_EXPANDED_PLAN_TOTAL_COMPONENTS=52' out/p2b-local-plan/REFERENCE.log
+          grep -Fq 'P2B_JDK8_EXPANDED_PLAN_SCRIPT_RUNS=65' out/p2b-local-plan/REFERENCE.log
+          grep -Fq 'P2B_JDK8_EXPANDED_PLAN_REFERENCE_RESULT=PASS' out/p2b-local-plan/REFERENCE.log
+          echo 'P2B_LOCAL_PLAN_REFERENCE=PASS' | tee out/p2b-local-plan/REFERENCE-STATUS.txt
+
+      - name: Stage source-derived Java6 Bidi ScriptRun BidiUtils and mark classifier
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf out/p2b-local-plan/src out/p2b-local-plan/classes
+          python3 - /tmp/jdk8u out/p2b-local-plan <<'PY'
+          from pathlib import Path
+          import sys
+          j=Path(sys.argv[1]); out=Path(sys.argv[2]); root=out/'src'
+          p_text='org.recompile.rg35xx.p2b.jdk8.text'
+          p_bidi='org.recompile.rg35xx.p2b.jdk8.bidi'
+          p_norm='org.recompile.rg35xx.p2b.jdk8.normalizer'
+          p_script='org.recompile.rg35xx.p2b.jdk8.script'
+          p_font='org.recompile.rg35xx.p2b.jdk8.font'
+          changes=[]
+          def read(rel): return (j/rel).read_text(encoding='utf-8')
+          def write(pkg,name,s):
+              d=root/Path(pkg.replace('.','/')); d.mkdir(parents=True,exist_ok=True); (d/name).write_text(s,encoding='utf-8')
+          def once(s,old,new,label):
+              n=s.count(old)
+              if n!=1: raise SystemExit('P2B_LOCAL_PLAN_STAGE_FAIL '+label+' count='+str(n))
+              changes.append(label); return s.replace(old,new,1)
+
+          s=read('jdk/src/share/classes/java/text/Bidi.java')
+          s=once(s,'package java.text;','package '+p_text+';','Bidi-package')
+          s=once(s,'import sun.text.bidi.BidiBase;', 'import '+p_bidi+'.BidiBase;\nimport java.text.AttributedCharacterIterator;\nimport java.text.AttributedString;', 'Bidi-import-relocation')
+          write(p_text,'Bidi.java',s)
+
+          for name in ('BidiBase.java','BidiLine.java','BidiRun.java'):
+              s=read('jdk/src/share/classes/sun/text/bidi/'+name)
+              s=once(s,'package sun.text.bidi;','package '+p_bidi+';',name+'-package')
+              if 'import java.text.Bidi;' in s: s=once(s,'import java.text.Bidi;','import '+p_text+'.Bidi;',name+'-Bidi-import')
+              if name=='BidiBase.java':
+                  for cls in ('UBiDiProps','UCharacter','UTF16'):
+                      s=once(s,'import sun.text.normalizer.'+cls+';','import '+p_norm+'.'+cls+';',name+'-'+cls+'-import')
+                  old='''            } catch (NoSuchFieldException | IllegalAccessException x) {\n                throw new AssertionError(x);\n            }'''
+                  new='''            } catch (NoSuchFieldException x) {\n                throw new AssertionError(x);\n            } catch (IllegalAccessException x) {\n                throw new AssertionError(x);\n            }'''
+                  s=once(s,old,new,'BidiBase-Java6-multicatch-split')
+              write(p_bidi,name,s)
+
+          for name in ('UBiDiProps.java','ICUData.java','ICUBinary.java','Trie.java','CharTrie.java'):
+              s=read('jdk/src/share/classes/sun/text/normalizer/'+name)
+              s=once(s,'package sun.text.normalizer;','package '+p_norm+';',name+'-package')
+              if name=='CharTrie.java':
+                  dead='''    /**\n     * Java friend implementation\n     * To store the index and data array into the argument.\n     * @param friend java friend UCharacterProperty object to store the array\n     */\n    public void putIndexData(UCharacterProperty friend)\n    {\n        friend.setIndexData(m_friendAgent_);\n    }\n\n'''
+                  s=once(s,dead,'','CharTrie-unreachable-UCharacterProperty-friend-excluded')
+              write(p_norm,name,s)
+
+          s=read('jdk/src/share/classes/sun/text/normalizer/UTF16.java')
+          s=once(s,'package sun.text.normalizer;','package '+p_norm+';','UTF16-package')
+          needle='UCharacterProperty.getRawSupplementary('; n=s.count(needle)
+          if n<1: raise SystemExit('P2B_LOCAL_PLAN_STAGE_FAIL UTF16 raw refs')
+          s=s.replace(needle,'rawSupplementary(')
+          pos=s.rfind('\n}')
+          helper='''\n    private static int rawSupplementary(char lead, char trail)\n    {\n        final int leadSurrogateShift = 10;\n        final int surrogateOffset = SUPPLEMENTARY_MIN_VALUE -\n            (SURROGATE_MIN_VALUE << leadSurrogateShift) - TRAIL_SURROGATE_MIN_VALUE;\n        return (lead << leadSurrogateShift) + trail + surrogateOffset;\n    }\n'''
+          s=s[:pos]+helper+s[pos:]; changes.append('UTF16-source-extracted-rawSupplementary')
+          write(p_norm,'UTF16.java',s)
+
+          uchar='''package %s;\nimport java.io.IOException;\npublic final class UCharacter {\n  public static final int MAX_VALUE=UTF16.CODEPOINT_MAX_VALUE;\n  private static final UBiDiProps gBdp;\n  static { UBiDiProps b; try { b=UBiDiProps.getSingleton(); } catch(IOException e) { b=UBiDiProps.getDummy(); } gBdp=b; }\n  private UCharacter() { }\n  public static int getDirection(int ch) { return gBdp.getClass(ch); }\n}\n''' % p_norm
+          write(p_norm,'UCharacter.java',uchar); changes.append('UCharacter-source-extraction')
+
+          for name in ('Script.java','ScriptRunData.java','ScriptRun.java'):
+              raw=read('jdk/src/share/classes/sun/font/'+name)
+              staged=once(raw,'package sun.font;','package '+p_script+';',name+'-package')
+              restored=staged.replace('package '+p_script+';','package sun.font;',1)
+              if restored!=raw: raise SystemExit('P2B_LOCAL_PLAN_SCRIPTRUN_RESTORE_FAIL '+name)
+              write(p_script,name,staged)
+
+          s=read('jdk/src/share/classes/sun/font/BidiUtils.java')
+          s=once(s,'package sun.font;','package '+p_font+';','BidiUtils-package')
+          s=once(s,'import java.text.Bidi;','import '+p_text+'.Bidi;','BidiUtils-Bidi-import')
+          write(p_font,'BidiUtils.java',s)
+
+          # Generate the exact compact JDK8 Mn/Mc/Me predicate proven in mark-classifier v3.
+          u=(j/'jdk/make/data/unicodedata/UnicodeData.txt').read_text(encoding='utf-8').splitlines()
+          cats={'Mn','Mc','Me'}; marks=set(); pending=None
+          for raw in u:
+              if not raw or raw.startswith('#'): continue
+              f=raw.split(';'); cp=int(f[0],16); name=f[1]; cat=f[2]
+              if name.endswith(', First>'): pending=(cp,cat); continue
+              if name.endswith(', Last>'):
+                  if pending is None: raise SystemExit('P2B_LOCAL_PLAN_MARK_LAST_WITHOUT_FIRST')
+                  st,pcat=pending
+                  if pcat!=cat: raise SystemExit('P2B_LOCAL_PLAN_MARK_RANGE_CATEGORY')
+                  if cat in cats: marks.update(range(st,cp+1))
+                  pending=None; continue
+              if pending is not None: raise SystemExit('P2B_LOCAL_PLAN_MARK_UNTERMINATED_FIRST')
+              if cat in cats: marks.add(cp)
+          vals=sorted(marks); ranges=[]
+          if vals:
+              st=pr=vals[0]
+              for cp in vals[1:]:
+                  if cp==pr+1: pr=cp
+                  else: ranges.append((st,pr)); st=pr=cp
+              ranges.append((st,pr))
+          flat=[]
+          for a,b in ranges: flat.extend((a,b))
+          chunks=[]
+          for i in range(0,len(flat),12): chunks.append('    '+', '.join('0x%X'%x for x in flat[i:i+12]))
+          mark='''package org.recompile.rg35xx.p2b.jdk8.mark;\npublic final class Jdk8MarkClassifier {\n  private static final int[] RANGES=new int[]{\n%s\n  };\n  private Jdk8MarkClassifier() { }\n  public static boolean isEngineMark(int cp) { int lo=0,hi=RANGES.length/2-1; while(lo<=hi){int m=(lo+hi)>>>1,st=RANGES[m*2],en=RANGES[m*2+1]; if(cp<st)hi=m-1; else if(cp>en)lo=m+1; else return true;} return false; }\n}\n''' % (',\n'.join(chunks))
+          write('org.recompile.rg35xx.p2b.jdk8.mark','Jdk8MarkClassifier.java',mark)
+          (out/'STAGE.txt').write_text('\n'.join([
+            'P2B_LOCAL_PLAN_STAGE=PASS',
+            'P2B_LOCAL_PLAN_BIDI_SOURCE_DERIVED=YES',
+            'P2B_LOCAL_PLAN_SCRIPTRUN_SOURCE_DELTA=PACKAGE_DECLARATION_ONLY',
+            'P2B_LOCAL_PLAN_BIDIUTILS_SOURCE_DELTA=PACKAGE_AND_BIDI_IMPORT_ONLY',
+            'P2B_LOCAL_PLAN_MARK_CODEPOINT_COUNT='+str(len(vals)),
+            'P2B_LOCAL_PLAN_MARK_RANGE_COUNT='+str(len(ranges)),
+            'P2B_LOCAL_PLAN_STAGE_CHANGE_COUNT='+str(len(changes))])+'\n',encoding='utf-8')
+          print((out/'STAGE.txt').read_text(),end='')
+          PY
+
+      - name: Compile Java6 local planner and compare field by field
+        shell: bash
+        run: |
+          set -euo pipefail
+          JAVA8="$JAVA_HOME"
+          CLASSES=out/p2b-local-plan/classes
+          mkdir -p "$CLASSES/sun/text/resources"
+          cp /tmp/jdk8u/jdk/src/share/classes/sun/text/resources/ubidi.icu "$CLASSES/sun/text/resources/ubidi.icu"
+          find out/p2b-local-plan/src -name '*.java' -print | sort > out/p2b-local-plan/sources.list
+          printf '%s\n' tests/p2b/diagnostic/RG35XXP2BLocalComponentPlanDiagnostic.java >> out/p2b-local-plan/sources.list
+          "$JAVA8/bin/javac" -encoding UTF-8 -source 1.6 -target 1.6 \
+            -bootclasspath "$JAVA8/jre/lib/rt.jar" -d "$CLASSES" @out/p2b-local-plan/sources.list
+          python3 - "$CLASSES" <<'PY'
+          from pathlib import Path
+          import sys
+          root=Path(sys.argv[1]); bad=[]; majors=set(); count=0
+          for p in root.rglob('*.class'):
+              b=p.read_bytes(); m=int.from_bytes(b[6:8],'big'); majors.add(m); count+=1
+              if m>50: bad.append((str(p),m))
+          if bad: raise SystemExit('P2B_LOCAL_PLAN_JAVA6_FAIL '+repr(bad))
+          print('P2B_LOCAL_PLAN_CLASS_COUNT='+str(count))
+          print('P2B_LOCAL_PLAN_CLASS_MAJORS='+','.join(map(str,sorted(majors))))
+          print('P2B_LOCAL_PLAN_JAVA6_GATE=PASS')
+          PY
+          "$JAVA8/bin/java" -cp "$CLASSES" RG35XXP2BLocalComponentPlanDiagnostic \
+            out/p2b-local-plan/REFERENCE.tsv | tee out/p2b-local-plan/DIFFERENTIAL.log
+          grep -Fq 'P2B_LOCAL_COMPONENT_PLAN_CASES=24' out/p2b-local-plan/DIFFERENTIAL.log
+          grep -Fq 'P2B_LOCAL_COMPONENT_PLAN_TOTAL_COMPONENTS=52' out/p2b-local-plan/DIFFERENTIAL.log
+          grep -Fq 'P2B_LOCAL_COMPONENT_PLAN_SCRIPT_RUNS=65' out/p2b-local-plan/DIFFERENTIAL.log
+          grep -Fq 'P2B_LOCAL_COMPONENT_PLAN_LINE_MISMATCH_COUNT=0' out/p2b-local-plan/DIFFERENTIAL.log
+          grep -Fq 'P2B_LOCAL_COMPONENT_PLAN_LEVELS_MISMATCH_COUNT=0' out/p2b-local-plan/DIFFERENTIAL.log
+          grep -Fq 'P2B_LOCAL_COMPONENT_PLAN_L2V_MISMATCH_COUNT=0' out/p2b-local-plan/DIFFERENTIAL.log
+          grep -Fq 'P2B_LOCAL_COMPONENT_PLAN_ORDER_MISMATCH_COUNT=0' out/p2b-local-plan/DIFFERENTIAL.log
+          grep -Fq 'P2B_LOCAL_COMPONENT_PLAN_COMPONENTS_MISMATCH_COUNT=0' out/p2b-local-plan/DIFFERENTIAL.log
+          grep -Fq 'P2B_LOCAL_COMPONENT_PLAN_MISMATCH_COUNT=0' out/p2b-local-plan/DIFFERENTIAL.log
+          grep -Fq 'P2B_LOCAL_COMPONENT_PLAN_DIFFERENTIAL=PASS' out/p2b-local-plan/DIFFERENTIAL.log
+          {
+            echo 'P2B_PLANNER_BIDI=PASS'
+            echo 'P2B_PLANNER_SCRIPTRUN=PASS'
+            echo 'P2B_PLANNER_MARK_CLASSIFIER=PASS'
+            echo 'P2B_PLANNER_COMPONENT_BOUNDARIES_FLAGS_ORDER=PASS'
+            echo 'P2B_PLANNER_FULL_LAYOUT_PLAN=PASS_FOR_EXPANDED_CORPUS'
+            echo 'P2B_RUNTIME_PATCH=FORBIDDEN'
+            echo 'P2B_DEVICE_PACKAGE=FORBIDDEN'
+            echo 'DEVICE_TEST=NOT_REQUESTED'
+            echo 'STABLE=NO'
+          } | tee out/p2b-local-plan/STATUS.txt
+
+      - name: Cleanup private/source/class bytes and enforce evidence-only artifact
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/jdk8u /tmp/p2b-ref-classes
+          rm -f /tmp/p2b-font.ttf /tmp/miyoomini-freej2me.zip
+          rm -rf out/p2b-local-plan/src out/p2b-local-plan/classes
+          rm -f out/p2b-local-plan/sources.list
+          if find out/p2b-local-plan -type f | grep -Ei '\.(ttf|otf|class|jar|zip|so|a|o|icu|java)$'; then
+            echo 'P2B_LOCAL_PLAN_EVIDENCE_LEAK=FAIL'; exit 1
+          fi
+          echo 'P2B_LOCAL_PLAN_EVIDENCE_LEAK=NO' | tee out/p2b-local-plan/CLEANUP.txt
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: RG35XX-P2B-JDK8-LOCAL-COMPONENT-PLAN-${{ github.sha }}
+          path: |
+            out/p2b-local-plan/SCOPE.txt
+            out/p2b-local-plan/PROVENANCE.txt
+            out/p2b-local-plan/REFERENCE-STATUS.txt
+            out/p2b-local-plan/REFERENCE.log
+            out/p2b-local-plan/REFERENCE.tsv
+            out/p2b-local-plan/STAGE.txt
+            out/p2b-local-plan/DIFFERENTIAL.log
+            out/p2b-local-plan/STATUS.txt
+            out/p2b-local-plan/CLEANUP.txt
+          if-no-files-found: warn

@@ -1,0 +1,127 @@
+name: P2B Font JDK8 Complex Trigger Sweep
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - audit/p2b-font-text
+    paths:
+      - '.github/workflows/p2b-font-jdk-complex-sweep-audit.yml'
+      - 'tests/p2b/diagnostic/RG35XXP2BJdkComplexTriggerSweep.java'
+
+permissions:
+  contents: read
+
+jobs:
+  p2b-jdk-complex-sweep:
+    runs-on: ubuntu-latest
+    env:
+      BASE: 77a36526e0f6d875c57c7e9a973e0c1a05573721
+      EXPECTED_FONT_SHA256: 1a5f4112daaa9473747c6834041646cc9b2c338cb40ab5dbb2f0161f8968ca10
+      EXPECTED_FONT_SIZE: '8092724'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Verify audit-only ancestry and scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git merge-base HEAD "$BASE")" = "$BASE"
+          git diff --name-only "$BASE"...HEAD | tee /tmp/p2b-complex-files.txt
+          if grep -Ev '^(docs/P2B-FONT-TEXT-AUDIT-v1\.md|tests/p2b/diagnostic/[^/]+|\.github/workflows/p2b-font-[^/]+-audit\.yml)$' /tmp/p2b-complex-files.txt | grep -q .; then
+            echo 'P2B_COMPLEX_SWEEP_SCOPE=FAIL'; exit 1
+          fi
+          if git diff --name-only "$BASE"...HEAD | grep -E '^(adapter/|native/|upstream/|packaging/|scripts/stage-|scripts/build-)'; then
+            echo 'P2B_RUNTIME_DELTA=FAIL'; exit 1
+          fi
+          test "$(git -C upstream/freej2me-miyoomini rev-parse HEAD)" = ca11dfe8ea1cc273d92460f9a83bbf192023fa63
+          echo 'P2B_COMPLEX_SWEEP_SCOPE=PASS'
+          echo 'P2B_RUNTIME_DELTA=NONE'
+
+      - name: Materialize exact Miyoo MiSans
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out/classes
+          URL='https://github.com/aweigit/freej2me-miyoomini/releases/download/2.0/miyoomini-freej2me.zip'
+          curl -fL --retry 3 --retry-delay 2 "$URL" -o out/miyoomini-freej2me.zip
+          ENTRY=$(unzip -Z1 out/miyoomini-freej2me.zip | grep -Ei '(^|/)font\.ttf$')
+          test "$(printf '%s\n' "$ENTRY" | wc -l | tr -d ' ')" = 1
+          unzip -p out/miyoomini-freej2me.zip "$ENTRY" > out/font.ttf
+          test "$(sha256sum out/font.ttf | awk '{print $1}')" = "$EXPECTED_FONT_SHA256"
+          test "$(wc -c < out/font.ttf | tr -d ' ')" = "$EXPECTED_FONT_SIZE"
+          echo 'P2B_COMPLEX_SWEEP_FONT_IDENTITY=PASS'
+
+      - name: Run exhaustive exact JDK8 complex-trigger sweep
+        shell: bash
+        run: |
+          set -euo pipefail
+          javac -encoding UTF-8 -source 1.6 -target 1.6 -d out/classes tests/p2b/diagnostic/RG35XXP2BJdkComplexTriggerSweep.java
+          java -Djava.awt.headless=true -cp out/classes RG35XXP2BJdkComplexTriggerSweep out/font.ttf | tee out/P2B-JDK8-COMPLEX-SWEEP.log
+          grep -F 'P2B_JDK_COMPLEX_SWEEP_RESULT=PASS' out/P2B-JDK8-COMPLEX-SWEEP.log
+          test "$(sed -n 's/^P2B_JDK_COMPLEX_EXCEPTION_CASES=//p' out/P2B-JDK8-COMPLEX-SWEEP.log)" = 0
+          java -version 2>&1 | tee out/JAVA-VERSION.txt
+
+      - name: Summarize divergent code units and ranges
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' | tee out/P2B-JDK8-COMPLEX-SUMMARY.txt
+          import re
+          path='out/P2B-JDK8-COMPLEX-SWEEP.log'
+          pat=re.compile(r'^P2B_JDK_COMPLEX_DIFF SIZE=(\d+) CP=U\+([0-9A-F]{4}) .* WIDTH_DELTA=(-?\d+) ')
+          by={}
+          for line in open(path,encoding='utf-8',errors='replace'):
+              m=pat.match(line)
+              if m:
+                  size=int(m.group(1)); cp=int(m.group(2),16); d=int(m.group(3)); by.setdefault(cp,[]).append((size,d))
+          cps=sorted(by)
+          print('P2B_COMPLEX_SUMMARY_PARSE=PASS')
+          print('P2B_COMPLEX_DIVERGENT_UNITS=%d'%len(cps))
+          ranges=[]
+          if cps:
+              a=b=cps[0]
+              for cp in cps[1:]:
+                  if cp==b+1: b=cp
+                  else: ranges.append((a,b)); a=b=cp
+              ranges.append((a,b))
+          print('P2B_COMPLEX_DIVERGENT_RANGES=%d'%len(ranges))
+          for a,b in ranges:
+              print('P2B_COMPLEX_RANGE=U+%04X-U+%04X COUNT=%d'%(a,b,b-a+1))
+          for cp in cps:
+              vals=','.join('%d:%+d'%x for x in by[cp])
+              print('P2B_COMPLEX_UNIT=U+%04X DELTAS=%s'%(cp,vals))
+          print('P2B_COMPLEX_SUMMARY_RESULT=PASS')
+          PY
+          grep -F 'P2B_COMPLEX_SUMMARY_RESULT=PASS' out/P2B-JDK8-COMPLEX-SUMMARY.txt
+
+      - name: Remove font bytes and record audit-only status
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f out/font.ttf out/miyoomini-freej2me.zip
+          if find out -type f | grep -Ei '\.(ttf|otf)$'; then echo 'P2B_FONT_BYTE_LEAK=FAIL'; exit 1; fi
+          {
+            echo 'P2B_FONT_BYTE_LEAK=NO'
+            echo 'P2B_RUNTIME_PATCH=FORBIDDEN'
+            echo 'DEVICE_TEST=NOT_REQUESTED'
+            echo 'RG35XX_PLATFORM_BASELINE_DEVICE_PASS=NO'
+            echo 'STABLE=NO'
+          } | tee out/P2B-COMPLEX-SWEEP-STATUS.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RG35XX-P2B-JDK-COMPLEX-SWEEP-${{ github.sha }}
+          path: |
+            out/P2B-JDK8-COMPLEX-SWEEP.log
+            out/P2B-JDK8-COMPLEX-SUMMARY.txt
+            out/P2B-COMPLEX-SWEEP-STATUS.txt
+            out/JAVA-VERSION.txt
+          if-no-files-found: error

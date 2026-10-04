@@ -1,0 +1,129 @@
+name: P2B Font JDK8 Whole Raster Reference Audit
+
+on:
+  push:
+    branches:
+      - audit/p2b-font-text
+    paths:
+      - 'tests/p2b/diagnostic/RG35XXP2BJdkWholeStringRasterDiagnostic.java'
+      - '.github/workflows/p2b-font-jdk8-whole-raster-reference-audit.yml'
+  workflow_dispatch:
+
+jobs:
+  p2b-jdk8-whole-raster-reference:
+    runs-on: ubuntu-24.04
+    env:
+      BASE: 77a36526e0f6d875c57c7e9a973e0c1a05573721
+      EXPECTED_FONT_SHA256: 1a5f4112daaa9473747c6834041646cc9b2c338cb40ab5dbb2f0161f8968ca10
+      EXPECTED_FONT_SIZE: '8092724'
+      JDK8U_TAG: jdk8u504-b01
+      JDK8U_COMMIT: 4efe36434f44bafb854e602ccbbe1b5696fce1a2
+      JDK8_GLYPHLIST_BLOB: 6cc39ada49575486e1bc772fa1aead296ea5ae88
+      JDK8_GLYPHLISTPIPE_BLOB: 0b107b0befae2be6651d84a03c54d8784127c4f0
+      JDK8_GLYPHLAYOUT_BLOB: bff5f4a94f9e05342f836fd7789f8d755814efcd
+      JDK8_SUNLAYOUT_CPP_BLOB: ab65748eec5de20229657e0f270a39e58434910f
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Verify audit-only ancestry and scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git merge-base HEAD "$BASE")" = "$BASE"
+          git diff --name-only "$BASE"...HEAD | tee /tmp/p2b-whole-raster-reference-files.txt
+          if grep -Ev '^(docs/P2B-[^/]+\.md|tests/p2b/diagnostic/[^/]+|\.github/workflows/p2b-font-[^/]+-audit\.yml)$' /tmp/p2b-whole-raster-reference-files.txt | grep -q .; then
+            echo 'P2B_WHOLE_RASTER_REFERENCE_AUDIT_SCOPE=FAIL'; exit 1
+          fi
+          if git diff --name-only "$BASE"...HEAD | grep -E '^(adapter/|native/|upstream/|packaging/|scripts/stage-|scripts/build-)'; then
+            echo 'P2B_RUNTIME_DELTA=FAIL'; exit 1
+          fi
+          test "$(git -C upstream/freej2me-miyoomini rev-parse HEAD)" = ca11dfe8ea1cc273d92460f9a83bbf192023fa63
+          echo 'P2B_WHOLE_RASTER_REFERENCE_AUDIT_SCOPE=PASS'
+          echo 'P2B_RUNTIME_DELTA=NONE'
+
+      - name: Pin exact JDK8 draw/layout sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          rm -rf /tmp/jdk8u
+          git clone --filter=blob:none --no-checkout https://github.com/adoptium/jdk8u.git /tmp/jdk8u
+          git -C /tmp/jdk8u fetch --depth 1 origin tag "$JDK8U_TAG"
+          git -C /tmp/jdk8u checkout --detach "$JDK8U_TAG"
+          test "$(git -C /tmp/jdk8u rev-parse HEAD)" = "$JDK8U_COMMIT"
+          test "$(git -C /tmp/jdk8u rev-parse HEAD:jdk/src/share/classes/sun/font/GlyphList.java)" = "$JDK8_GLYPHLIST_BLOB"
+          test "$(git -C /tmp/jdk8u rev-parse HEAD:jdk/src/share/classes/sun/java2d/pipe/GlyphListPipe.java)" = "$JDK8_GLYPHLISTPIPE_BLOB"
+          test "$(git -C /tmp/jdk8u rev-parse HEAD:jdk/src/share/classes/sun/font/GlyphLayout.java)" = "$JDK8_GLYPHLAYOUT_BLOB"
+          test "$(git -C /tmp/jdk8u rev-parse HEAD:jdk/src/share/native/sun/font/layout/SunLayoutEngine.cpp)" = "$JDK8_SUNLAYOUT_CPP_BLOB"
+          {
+            echo "P2B_JDK8U_COMMIT=$JDK8U_COMMIT"
+            echo "P2B_JDK8_GLYPHLIST_BLOB=$JDK8_GLYPHLIST_BLOB"
+            echo "P2B_JDK8_GLYPHLISTPIPE_BLOB=$JDK8_GLYPHLISTPIPE_BLOB"
+            echo "P2B_JDK8_GLYPHLAYOUT_BLOB=$JDK8_GLYPHLAYOUT_BLOB"
+            echo "P2B_JDK8_SUNLAYOUT_CPP_BLOB=$JDK8_SUNLAYOUT_CPP_BLOB"
+            echo 'P2B_WHOLE_RASTER_REFERENCE_SOURCE_PROVENANCE=PASS'
+          } | tee out/P2B-WHOLE-RASTER-REFERENCE-SOURCE-PROVENANCE.txt
+
+      - name: Materialize exact Miyoo MiSans for diagnostics
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL='https://github.com/aweigit/freej2me-miyoomini/releases/download/2.0/miyoomini-freej2me.zip'
+          curl -fL --retry 3 --retry-delay 2 "$URL" -o /tmp/miyoomini-freej2me.zip
+          ENTRY=$(unzip -Z1 /tmp/miyoomini-freej2me.zip | grep -Ei '(^|/)font\.ttf$')
+          test "$(printf '%s\n' "$ENTRY" | wc -l | tr -d ' ')" = 1
+          unzip -p /tmp/miyoomini-freej2me.zip "$ENTRY" > /tmp/p2b-font.ttf
+          test "$(sha256sum /tmp/p2b-font.ttf | awk '{print $1}')" = "$EXPECTED_FONT_SHA256"
+          test "$(wc -c < /tmp/p2b-font.ttf | tr -d ' ')" = "$EXPECTED_FONT_SIZE"
+          echo 'P2B_WHOLE_RASTER_REFERENCE_FONT_IDENTITY=PASS' | tee out/P2B-WHOLE-RASTER-REFERENCE-FONT-IDENTITY.txt
+
+      - name: Run exact JDK8 whole-string raster reference
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/p2b-whole-raster-classes && mkdir -p /tmp/p2b-whole-raster-classes
+          javac -encoding UTF-8 -source 1.6 -target 1.6 -d /tmp/p2b-whole-raster-classes \
+            tests/p2b/diagnostic/RG35XXP2BJdkWholeStringRasterDiagnostic.java
+          java -Djava.awt.headless=true -cp /tmp/p2b-whole-raster-classes \
+            RG35XXP2BJdkWholeStringRasterDiagnostic /tmp/p2b-font.ttf /tmp/p2b-jdk8-whole-raster.tsv \
+            | tee out/P2B-JDK8-WHOLE-RASTER.log
+          test "$(($(wc -l < /tmp/p2b-jdk8-whole-raster.tsv)-1))" = 336
+          grep -F 'P2B_JDK8_WHOLE_RASTER_CASES=336' out/P2B-JDK8-WHOLE-RASTER.log
+          grep -F 'P2B_JDK8_WHOLE_RASTER_RESULT=PASS' out/P2B-JDK8-WHOLE-RASTER.log
+          cp /tmp/p2b-jdk8-whole-raster.tsv out/P2B-JDK8-WHOLE-RASTER.tsv
+          {
+            echo 'P2B_RUNTIME_PATCH=FORBIDDEN'
+            echo 'DEVICE_TEST=NOT_REQUESTED'
+            echo 'RG35XX_PLATFORM_BASELINE_DEVICE_PASS=NO'
+            echo 'STABLE=NO'
+          } | tee out/P2B-WHOLE-RASTER-REFERENCE-STATUS.txt
+
+      - name: Remove font/source before evidence upload
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/jdk8u /tmp/p2b-whole-raster-classes
+          rm -f /tmp/p2b-font.ttf /tmp/miyoomini-freej2me.zip /tmp/p2b-jdk8-whole-raster.tsv
+          if find out -type f | grep -Ei '\.(ttf|otf|class|jar|so|a|o)$'; then
+            echo 'P2B_WHOLE_RASTER_REFERENCE_BYTE_LEAK=FAIL'; exit 1
+          fi
+          echo 'P2B_WHOLE_RASTER_REFERENCE_BYTE_LEAK=NO' | tee out/P2B-WHOLE-RASTER-REFERENCE-CLEANUP.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RG35XX-P2B-JDK8-WHOLE-RASTER-REFERENCE-${{ github.sha }}
+          path: |
+            out/P2B-WHOLE-RASTER-REFERENCE-SOURCE-PROVENANCE.txt
+            out/P2B-WHOLE-RASTER-REFERENCE-FONT-IDENTITY.txt
+            out/P2B-JDK8-WHOLE-RASTER.log
+            out/P2B-JDK8-WHOLE-RASTER.tsv
+            out/P2B-WHOLE-RASTER-REFERENCE-STATUS.txt
+            out/P2B-WHOLE-RASTER-REFERENCE-CLEANUP.txt

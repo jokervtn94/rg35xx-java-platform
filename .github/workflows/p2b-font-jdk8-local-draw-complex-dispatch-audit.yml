@@ -1,0 +1,151 @@
+name: P2B Font JDK8 Local Draw Complex Dispatch Audit
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - audit/p2b-font-text
+    paths:
+      - '.github/workflows/p2b-font-jdk8-local-draw-complex-dispatch-audit.yml'
+      - 'tests/p2b/diagnostic/RG35XXP2BLocalDrawComplexDispatchDiagnostic.java'
+
+permissions:
+  contents: read
+
+jobs:
+  p2b-jdk8-local-draw-complex-dispatch:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    env:
+      BASE: 77a36526e0f6d875c57c7e9a973e0c1a05573721
+      JDK8U_TAG: jdk8u504-b01
+      JDK8U_COMMIT: 4efe36434f44bafb854e602ccbbe1b5696fce1a2
+      FONTUTILITIES_BLOB: 3f6bc7db4d09d97d7bccceb219b1e8d9051f509d
+      TRUETYPEGLYPHMAPPER_BLOB: 41262146fa6684348c999713987b8cbda6ef6959
+      EXPECTED_FONT_SHA256: 1a5f4112daaa9473747c6834041646cc9b2c338cb40ab5dbb2f0161f8968ca10
+      EXPECTED_FONT_SIZE: '8092724'
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Verify audit-only ancestry and protected scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git merge-base HEAD "$BASE")" = "$BASE"
+          if git diff --name-only "$BASE"...HEAD | grep -E '^(adapter/|native/|upstream/|packaging/|runtime/|patches/|scripts/stage-|scripts/build-)'; then
+            echo 'P2B_RUNTIME_DELTA=FAIL'; exit 1
+          fi
+          test "$(git -C upstream/freej2me-miyoomini rev-parse HEAD)" = ca11dfe8ea1cc273d92460f9a83bbf192023fa63
+          mkdir -p out/p2b-draw-dispatch
+          echo 'P2B_LOCAL_DRAW_COMPLEX_AUDIT_SCOPE=PASS' | tee out/p2b-draw-dispatch/SCOPE.txt
+          echo 'P2B_RUNTIME_DELTA=NONE' >> out/p2b-draw-dispatch/SCOPE.txt
+          echo 'P2B_PROTECTED_JAMVM_GLIBJ_CHANGE=NO' >> out/p2b-draw-dispatch/SCOPE.txt
+
+      - name: Pin exact JDK8 draw-dispatch sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/jdk8u
+          git clone --filter=blob:none --no-checkout https://github.com/adoptium/jdk8u.git /tmp/jdk8u
+          git -C /tmp/jdk8u fetch --depth 1 origin tag "$JDK8U_TAG"
+          git -C /tmp/jdk8u checkout --detach "$JDK8U_TAG"
+          test "$(git -C /tmp/jdk8u rev-parse HEAD)" = "$JDK8U_COMMIT"
+          test "$(git -C /tmp/jdk8u rev-parse HEAD:jdk/src/share/classes/sun/font/FontUtilities.java)" = "$FONTUTILITIES_BLOB"
+          test "$(git -C /tmp/jdk8u rev-parse HEAD:jdk/src/share/classes/sun/font/TrueTypeGlyphMapper.java)" = "$TRUETYPEGLYPHMAPPER_BLOB"
+          grep -Fq 'public static final int MIN_LAYOUT_CHARCODE = 0x0300;' /tmp/jdk8u/jdk/src/share/classes/sun/font/FontUtilities.java
+          grep -Fq 'public static boolean isComplexCharCode(int code)' /tmp/jdk8u/jdk/src/share/classes/sun/font/FontUtilities.java
+          grep -Fq 'public boolean charsToGlyphsNS(int count, char[] unicodes, int[] glyphs)' /tmp/jdk8u/jdk/src/share/classes/sun/font/TrueTypeGlyphMapper.java
+          grep -Fq 'else if (FontUtilities.isComplexCharCode(code))' /tmp/jdk8u/jdk/src/share/classes/sun/font/TrueTypeGlyphMapper.java
+          {
+            echo "OPENJDK8_TAG=$JDK8U_TAG"
+            echo "OPENJDK8_COMMIT=$JDK8U_COMMIT"
+            echo "FONTUTILITIES_BLOB=$FONTUTILITIES_BLOB"
+            echo "TRUETYPEGLYPHMAPPER_BLOB=$TRUETYPEGLYPHMAPPER_BLOB"
+            echo 'P2B_LOCAL_DRAW_COMPLEX_SOURCE_PROVENANCE=PASS'
+          } | tee out/p2b-draw-dispatch/PROVENANCE.txt
+
+      - name: Materialize exact Miyoo MiSans
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL='https://github.com/aweigit/freej2me-miyoomini/releases/download/2.0/miyoomini-freej2me.zip'
+          curl -fL --retry 3 --retry-delay 2 "$URL" -o /tmp/miyoomini-freej2me.zip
+          ENTRY=$(unzip -Z1 /tmp/miyoomini-freej2me.zip | grep -Ei '(^|/)font\.ttf$')
+          test "$(printf '%s\n' "$ENTRY" | wc -l | tr -d ' ')" = 1
+          unzip -p /tmp/miyoomini-freej2me.zip "$ENTRY" > /tmp/p2b-font.ttf
+          test "$(sha256sum /tmp/p2b-font.ttf | awk '{print $1}')" = "$EXPECTED_FONT_SHA256"
+          test "$(wc -c </tmp/p2b-font.ttf | tr -d ' ')" = "$EXPECTED_FONT_SIZE"
+          echo 'P2B_LOCAL_DRAW_COMPLEX_FONT_IDENTITY=PASS' | tee out/p2b-draw-dispatch/FONT.txt
+
+      - name: Compile Java6 and run local draw-dispatch differential
+        shell: bash
+        run: |
+          set -euo pipefail
+          CLASSES=/tmp/p2b-draw-dispatch-classes
+          rm -rf "$CLASSES" && mkdir -p "$CLASSES"
+          javac -encoding UTF-8 -source 1.6 -target 1.6 -d "$CLASSES" \
+            tests/p2b/diagnostic/RG35XXP2BLocalDrawComplexDispatchDiagnostic.java
+          python3 - "$CLASSES" <<'PY'
+          from pathlib import Path
+          import sys
+          bad=[]; majors=set(); count=0
+          for p in Path(sys.argv[1]).rglob('*.class'):
+              b=p.read_bytes(); m=int.from_bytes(b[6:8],'big'); majors.add(m); count+=1
+              if m>50: bad.append((str(p),m))
+          if bad: raise SystemExit('P2B_LOCAL_DRAW_COMPLEX_JAVA6_FAIL '+repr(bad))
+          print('P2B_LOCAL_DRAW_COMPLEX_CLASS_COUNT='+str(count))
+          print('P2B_LOCAL_DRAW_COMPLEX_CLASS_MAJORS='+','.join(map(str,sorted(majors))))
+          print('P2B_LOCAL_DRAW_COMPLEX_JAVA6_GATE=PASS')
+          PY
+          java -Djava.awt.headless=true -cp "$CLASSES" \
+            RG35XXP2BLocalDrawComplexDispatchDiagnostic /tmp/p2b-font.ttf \
+            | tee out/p2b-draw-dispatch/DIFFERENTIAL.log
+          grep -Fq 'P2B_LOCAL_DRAW_COMPLEX_CODE_MISMATCH_COUNT=0' out/p2b-draw-dispatch/DIFFERENTIAL.log
+          grep -Fq 'P2B_LOCAL_DRAW_COMPLEX_BMP_MISMATCH_COUNT=0' out/p2b-draw-dispatch/DIFFERENTIAL.log
+          grep -Fq 'P2B_LOCAL_DRAW_COMPLEX_FIXED_MISMATCH_COUNT=0' out/p2b-draw-dispatch/DIFFERENTIAL.log
+          grep -Fq 'P2B_LOCAL_DRAW_COMPLEX_RANDOM_MISMATCH_COUNT=0' out/p2b-draw-dispatch/DIFFERENTIAL.log
+          grep -Fq 'P2B_LOCAL_DRAW_COMPLEX_MISMATCH_COUNT=0' out/p2b-draw-dispatch/DIFFERENTIAL.log
+          grep -Fq 'P2B_LOCAL_DRAW_COMPLEX_DIFFERENTIAL=PASS' out/p2b-draw-dispatch/DIFFERENTIAL.log
+          {
+            echo 'P2B_LOCAL_DRAW_COMPLEX_RESULT=PASS'
+            echo 'P2B_LOCAL_DRAW_COMPLEX_GENERIC_SOURCE_DERIVED=YES'
+            echo 'P2B_COMBINED_LOCAL_PLANNER_TO_ARM_BACKEND_336=NOT_YET_RUN'
+            echo 'P2B_RUNTIME_PATCH=FORBIDDEN'
+            echo 'P2B_DEVICE_PACKAGE=FORBIDDEN'
+            echo 'DEVICE_TEST=NOT_REQUESTED'
+            echo 'STABLE=NO'
+          } | tee out/p2b-draw-dispatch/STATUS.txt
+
+      - name: Cleanup private/source/class bytes and enforce evidence-only artifact
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/jdk8u /tmp/p2b-draw-dispatch-classes
+          rm -f /tmp/p2b-font.ttf /tmp/miyoomini-freej2me.zip
+          if find out/p2b-draw-dispatch -type f | grep -Ei '\.(ttf|otf|class|java|jar|zip|so|a|o|icu)$'; then
+            echo 'P2B_LOCAL_DRAW_COMPLEX_EVIDENCE_LEAK=FAIL'; exit 1
+          fi
+          echo 'P2B_LOCAL_DRAW_COMPLEX_EVIDENCE_LEAK=NO' | tee out/p2b-draw-dispatch/CLEANUP.txt
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: RG35XX-P2B-JDK8-LOCAL-DRAW-COMPLEX-${{ github.sha }}
+          path: |
+            out/p2b-draw-dispatch/SCOPE.txt
+            out/p2b-draw-dispatch/PROVENANCE.txt
+            out/p2b-draw-dispatch/FONT.txt
+            out/p2b-draw-dispatch/DIFFERENTIAL.log
+            out/p2b-draw-dispatch/STATUS.txt
+            out/p2b-draw-dispatch/CLEANUP.txt
+          if-no-files-found: warn

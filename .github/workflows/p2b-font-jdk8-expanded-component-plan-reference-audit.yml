@@ -1,0 +1,145 @@
+name: P2B Font JDK8 Expanded Component Plan Reference Audit
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - audit/p2b-font-text
+    paths:
+      - '.github/workflows/p2b-font-jdk8-expanded-component-plan-reference-audit.yml'
+      - 'tests/p2b/diagnostic/RG35XXP2BJdkTextLayoutExpandedPlanReference.java'
+
+permissions:
+  contents: read
+
+jobs:
+  p2b-jdk8-expanded-component-plan-reference:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      BASE: 77a36526e0f6d875c57c7e9a973e0c1a05573721
+      EXPECTED_FONT_SHA256: 1a5f4112daaa9473747c6834041646cc9b2c338cb40ab5dbb2f0161f8968ca10
+      EXPECTED_FONT_SIZE: '8092724'
+      JDK8U_TAG: jdk8u504-b01
+      JDK8U_COMMIT: 4efe36434f44bafb854e602ccbbe1b5696fce1a2
+      JDK8_TEXTLINE_BLOB: 9efcdc32de2f3f75f73669e7468f9ec8787e8cdf
+      JDK8_TEXTLABELFACTORY_BLOB: 1f9ba94159cb6f8f0696199c7ab7855db724797c
+      JDK8_BIDIUTILS_BLOB: 41d6acd02b95656b3644e669443b3230b950eb08
+      JDK8_SCRIPTRUN_BLOB: e719fc335605f957f6bd713da226700aba15b8c9
+      JDK8_BIDI_BLOB: 3d0e1381adb1cb11cbd45d2f8e09c4830aa1fba8
+      JDK8_BIDIBASE_BLOB: 6485bea94e69f1cb3f054360fb5caad461a60ef8
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Verify audit-only ancestry and protected scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git merge-base HEAD "$BASE")" = "$BASE"
+          if git diff --name-only "$BASE"...HEAD | grep -E '^(adapter/|native/|upstream/|packaging/|scripts/stage-|scripts/build-)'; then
+            echo 'P2B_RUNTIME_DELTA=FAIL'; exit 1
+          fi
+          test "$(git -C upstream/freej2me-miyoomini rev-parse HEAD)" = ca11dfe8ea1cc273d92460f9a83bbf192023fa63
+          echo 'P2B_EXPANDED_PLAN_REFERENCE_AUDIT_SCOPE=PASS'
+          echo 'P2B_RUNTIME_DELTA=NONE'
+          echo 'P2B_PROTECTED_JAMVM_GLIBJ_CHANGE=NO'
+
+      - name: Pin exact JDK8 planner reference sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/jdk8u out/p2b-expanded-plan-reference
+          mkdir -p out/p2b-expanded-plan-reference
+          git clone --filter=blob:none --no-checkout https://github.com/adoptium/jdk8u.git /tmp/jdk8u
+          git -C /tmp/jdk8u fetch --depth 1 origin tag "$JDK8U_TAG"
+          git -C /tmp/jdk8u checkout --detach "$JDK8U_TAG"
+          test "$(git -C /tmp/jdk8u rev-parse HEAD)" = "$JDK8U_COMMIT"
+          check_blob(){ test "$(git -C /tmp/jdk8u rev-parse HEAD:"$1")" = "$2"; }
+          check_blob jdk/src/share/classes/java/awt/font/TextLine.java "$JDK8_TEXTLINE_BLOB"
+          check_blob jdk/src/share/classes/sun/font/TextLabelFactory.java "$JDK8_TEXTLABELFACTORY_BLOB"
+          check_blob jdk/src/share/classes/sun/font/BidiUtils.java "$JDK8_BIDIUTILS_BLOB"
+          check_blob jdk/src/share/classes/sun/font/ScriptRun.java "$JDK8_SCRIPTRUN_BLOB"
+          check_blob jdk/src/share/classes/java/text/Bidi.java "$JDK8_BIDI_BLOB"
+          check_blob jdk/src/share/classes/sun/text/bidi/BidiBase.java "$JDK8_BIDIBASE_BLOB"
+          {
+            echo "OPENJDK8_TAG=$JDK8U_TAG"
+            echo "OPENJDK8_COMMIT=$JDK8U_COMMIT"
+            echo "TEXTLINE_BLOB=$JDK8_TEXTLINE_BLOB"
+            echo "TEXTLABELFACTORY_BLOB=$JDK8_TEXTLABELFACTORY_BLOB"
+            echo "BIDIUTILS_BLOB=$JDK8_BIDIUTILS_BLOB"
+            echo "SCRIPTRUN_BLOB=$JDK8_SCRIPTRUN_BLOB"
+            echo "BIDI_BLOB=$JDK8_BIDI_BLOB"
+            echo "BIDIBASE_BLOB=$JDK8_BIDIBASE_BLOB"
+            echo 'P2B_EXPANDED_PLAN_REFERENCE_SOURCE_PROVENANCE=PASS'
+          } | tee out/p2b-expanded-plan-reference/PROVENANCE.txt
+
+      - name: Materialize exact Miyoo MiSans for diagnostics
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL='https://github.com/aweigit/freej2me-miyoomini/releases/download/2.0/miyoomini-freej2me.zip'
+          curl -fL --retry 3 --retry-delay 2 "$URL" -o /tmp/miyoomini-freej2me.zip
+          ENTRY=$(unzip -Z1 /tmp/miyoomini-freej2me.zip | grep -Ei '(^|/)font\.ttf$')
+          test "$(printf '%s\n' "$ENTRY" | wc -l | tr -d ' ')" = 1
+          unzip -p /tmp/miyoomini-freej2me.zip "$ENTRY" > /tmp/p2b-font.ttf
+          test "$(sha256sum /tmp/p2b-font.ttf | awk '{print $1}')" = "$EXPECTED_FONT_SHA256"
+          test "$(wc -c </tmp/p2b-font.ttf | tr -d ' ')" = "$EXPECTED_FONT_SIZE"
+          echo 'P2B_EXPANDED_PLAN_REFERENCE_FONT_IDENTITY=PASS' | tee out/p2b-expanded-plan-reference/FONT.txt
+
+      - name: Run expanded exact JDK8 component and ScriptRun reference
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/p2b-expanded-plan-classes
+          javac -encoding UTF-8 -source 1.6 -target 1.6 \
+            -d /tmp/p2b-expanded-plan-classes \
+            tests/p2b/diagnostic/RG35XXP2BJdkTextLayoutExpandedPlanReference.java
+          java -Djava.awt.headless=true -cp /tmp/p2b-expanded-plan-classes \
+            RG35XXP2BJdkTextLayoutExpandedPlanReference \
+            /tmp/p2b-font.ttf out/p2b-expanded-plan-reference/REFERENCE.tsv \
+            | tee out/p2b-expanded-plan-reference/REFERENCE.log
+          grep -F 'P2B_JDK8_EXPANDED_PLAN_CASES=24' out/p2b-expanded-plan-reference/REFERENCE.log
+          grep -F 'P2B_JDK8_EXPANDED_PLAN_CORPUS_COVERAGE=PASS' out/p2b-expanded-plan-reference/REFERENCE.log
+          grep -F 'P2B_JDK8_EXPANDED_PLAN_REFERENCE_RESULT=PASS' out/p2b-expanded-plan-reference/REFERENCE.log
+          {
+            echo 'P2B_EXPANDED_PLAN_REFERENCE=PASS'
+            echo 'P2B_LOCAL_COMPONENT_PLAN_DIFFERENTIAL=NOT_RUN_IN_REFERENCE_GATE'
+            echo 'P2B_RUNTIME_PATCH=FORBIDDEN'
+            echo 'P2B_DEVICE_PACKAGE=FORBIDDEN'
+            echo 'DEVICE_TEST=NOT_REQUESTED'
+            echo 'STABLE=NO'
+          } | tee out/p2b-expanded-plan-reference/STATUS.txt
+
+      - name: Cleanup private font and classes
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/jdk8u /tmp/p2b-expanded-plan-classes
+          rm -f /tmp/p2b-font.ttf /tmp/miyoomini-freej2me.zip
+          if find out/p2b-expanded-plan-reference -type f | grep -Ei '\.(ttf|otf|class|jar|zip|so|a|o|icu)$'; then
+            echo 'P2B_EXPANDED_PLAN_REFERENCE_BYTE_LEAK=FAIL'; exit 1
+          fi
+          echo 'P2B_EXPANDED_PLAN_REFERENCE_BYTE_LEAK=NO' | tee out/p2b-expanded-plan-reference/CLEANUP.txt
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: RG35XX-P2B-JDK8-EXPANDED-COMPONENT-PLAN-REFERENCE-${{ github.sha }}
+          path: |
+            out/p2b-expanded-plan-reference/PROVENANCE.txt
+            out/p2b-expanded-plan-reference/FONT.txt
+            out/p2b-expanded-plan-reference/REFERENCE.tsv
+            out/p2b-expanded-plan-reference/REFERENCE.log
+            out/p2b-expanded-plan-reference/STATUS.txt
+            out/p2b-expanded-plan-reference/CLEANUP.txt
+          if-no-files-found: warn
