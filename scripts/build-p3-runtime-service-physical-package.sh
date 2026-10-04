@@ -100,9 +100,10 @@ STABLE=NO
 EOF_SUMMARY
 
 fail(){ echo "P3_DEVICE_RESULT=FAIL:$1" >> "$MASTER"; echo "P3_DEVICE_RESULT=FAIL:$1" >> "$SUMMARY"; sync; exit 20; }
-for f in freej2me-rg35xx.jar librg35xx_input.so librg35xx_video.so librg35xx_font.so libaudio.so font.ttf "$EXERCISER" P3-RUNTIME-SERVICE-IDENTITY.txt; do
+for f in freej2me-rg35xx.jar librg35xx_input.so librg35xx_video.so librg35xx_font.so libaudio.so font.ttf P3-RUNTIME-SERVICE-IDENTITY.txt; do
   [ -f "$PKG/$f" ] || fail "MISSING:$f"
 done
+[ -f "$EXERCISER" ] || fail "MISSING:$EXERCISER"
 [ -x "$JAMVM" ] || fail JAMVM_MISSING
 [ -f "$GLIBJ" ] || fail GLIBJ_MISSING
 
