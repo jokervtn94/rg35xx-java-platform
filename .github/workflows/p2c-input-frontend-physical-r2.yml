@@ -5,6 +5,7 @@ on:
     branches:
       - physical-test/p2c-input-frontend-20261003-r3
       - physical-test/p2c-input-frontend-20261004-r5
+      - physical-test/p2c-input-frontend-20261004-r6
   workflow_dispatch:
 
 permissions:
@@ -47,7 +48,7 @@ jobs:
           test "$(git merge-base "$EXACT_PARENT" "$RUNTIME_CANDIDATE")" = "$EXACT_PARENT"
           test "$(git -C upstream/freej2me-miyoomini rev-parse HEAD)" = "$CANONICAL_AWEIGIT"
           changed="$(git diff --name-only "$HOST_MODULE_CHECKPOINT"..HEAD | LC_ALL=C sort)"
-          expected=$'.github/workflows/p2c-input-frontend-physical-r1.yml\n.github/workflows/p2c-input-frontend-physical-r2.yml\nadapter/java/org/recompile/rg35xx/RG35XXKeyDispatcher.java\nscripts/build-p2c-input-frontend-exerciser.sh\nscripts/build-p2c-input-frontend-physical-package-v2.sh\nscripts/build-p2c-input-frontend-physical-package-v3.sh\nscripts/build-p2c-input-frontend-physical-package.sh\nscripts/p2c-semantic-jar-digest.py\ntests/p2c/exerciser/RG35XXP2CInputFrontendExerciser.java'
+          expected=$'.github/workflows/p2c-input-frontend-physical-r1.yml\n.github/workflows/p2c-input-frontend-physical-r2.yml\nadapter/java/org/recompile/rg35xx/RG35XXKeyDispatcher.java\nscripts/build-p2c-input-frontend-exerciser.sh\nscripts/build-p2c-input-frontend-physical-package-v2.sh\nscripts/build-p2c-input-frontend-physical-package-v3.sh\nscripts/build-p2c-input-frontend-physical-package.sh\nscripts/p2c-semantic-jar-digest.py\ntests/p2c/RG35XXP2CFrontendHostGate.java\ntests/p2c/exerciser/RG35XXP2CInputFrontendExerciser.java'
           test "$changed" = "$expected" || { echo "P2C_PHYSICAL_R3_SCOPE_FAIL=$changed"; exit 1; }
           ! git diff --name-only "$HOST_MODULE_CHECKPOINT"..HEAD | grep -E '^(upstream/|packaging/|scripts/stage-|scripts/build-a[0-9])'
           test -z "$(git -C upstream/freej2me-miyoomini status --porcelain --untracked-files=no)"

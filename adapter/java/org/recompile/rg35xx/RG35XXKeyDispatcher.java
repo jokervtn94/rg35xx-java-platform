@@ -22,7 +22,6 @@ public final class RG35XXKeyDispatcher {
     private int suppressedBits;
     /* Keep a recognized SELECT chord latched until both physical keys are up. */
     private int chordLatchMask;
-    private boolean suppressSelectRelease;
     private final long[] nextRepeat = new long[15];
     private final int[] activeKey = new int[15];
 
@@ -47,16 +46,24 @@ public final class RG35XXKeyDispatcher {
 
         int rising = state & ~previous;
         boolean selectDown = isDown(state, SELECT);
+        boolean startDown = isDown(state, START);
 
-        if (selectDown && chordLatchMask == 0 && (rising & bit(START)) != 0 && !policy.isPointerMode()) {
+        if (chordLatchMask == 0 &&
+                ((selectDown && (rising & bit(START)) != 0) ||
+                 (startDown && (rising & bit(SELECT)) != 0)) &&
+                !policy.isPointerMode()) {
             armChord(START);
             policy.cyclePhoneMode();
         }
-        if (selectDown && chordLatchMask == 0 && (rising & bit(B)) != 0) {
+        if (chordLatchMask == 0 &&
+                ((selectDown && (rising & bit(B)) != 0) ||
+                 (isDown(state, B) && (rising & bit(SELECT)) != 0))) {
             armChord(B);
             policy.cycleRotation();
         }
-        if (selectDown && chordLatchMask == 0 && (rising & bit(Y)) != 0) {
+        if (chordLatchMask == 0 &&
+                ((selectDown && (rising & bit(Y)) != 0) ||
+                 (isDown(state, Y) && (rising & bit(SELECT)) != 0))) {
             armChord(Y);
             boolean entering = !policy.isPointerMode();
             if (entering) releaseAllActiveKeysExcept(SELECT);
@@ -81,13 +88,6 @@ public final class RG35XXKeyDispatcher {
                 activeKey[id] = 0;
                 continue;
             }
-            if (id == SELECT && suppressSelectRelease) {
-                if (!isDown) suppressSelectRelease = false;
-                nextRepeat[id] = 0;
-                activeKey[id] = 0;
-                continue;
-            }
-
             if (policy.isPointerMode()) {
                 if (id == X) {
                     if (wasDown != isDown) policy.setPointerConfirm(isDown);
@@ -132,18 +132,18 @@ public final class RG35XXKeyDispatcher {
         previous = state;
     }
 
-    private void releaseSelectForChord() {
-        if (activeKey[SELECT] != 0) {
-            platform.keyReleased(activeKey[SELECT]);
-            activeKey[SELECT] = 0;
-        }
-        nextRepeat[SELECT] = 0;
-        suppressSelectRelease = true;
+    private void armChord(int partner) {
+        releaseActiveKey(SELECT);
+        if (partner != SELECT) releaseActiveKey(partner);
+        chordLatchMask |= bit(SELECT) | bit(partner);
     }
 
-    private void armChord(int partner) {
-        releaseSelectForChord();
-        chordLatchMask |= bit(SELECT) | bit(partner);
+    private void releaseActiveKey(int id) {
+        if (activeKey[id] != 0) {
+            platform.keyReleased(activeKey[id]);
+            activeKey[id] = 0;
+        }
+        nextRepeat[id] = 0;
     }
 
     private void releaseAllActiveKeysExcept(int except) {

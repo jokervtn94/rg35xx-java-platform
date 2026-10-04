@@ -154,6 +154,14 @@ public final class RG35XXP2CFrontendHostGate {
         eq("KR:" + Mobile.KEY_STAR, events.get(1), "select release");
 
         events.clear();
+        d.dispatchState(bit(RG35XXKeyDispatcher.START), t++);
+        d.dispatchState(bit(RG35XXKeyDispatcher.START) | bit(RG35XXKeyDispatcher.SELECT), t++);
+        d.dispatchState(bit(RG35XXKeyDispatcher.START), t++);
+        d.dispatchState(0, t++);
+        eq('e', p.getPhoneMode(), "reverse-order hotkey phone cycle");
+        eq(2, events.size(), "balanced reverse-order chord events");
+
+        events.clear();
         d.dispatchState(bit(RG35XXKeyDispatcher.UP), t++);
         d.dispatchState(0, t++);
         eq("KP:" + Mobile.NOKIA_UP, events.get(0), "n-mode dispatcher up press");

@@ -294,7 +294,7 @@ public final class RG35XXP2CInputFrontendExerciser extends MIDlet {
                 if (stage == 25) return "Press X, leave n persisted";
             } else if (phase == 2) {
                 if (stage == 0) return "Persisted n: press B";
-                if (stage >= 1 && stage <= 4) return "SELECT+START cycle " + stage + "/4";
+                if (stage >= 1 && stage <= 4) return "SELECT+START either order " + stage + "/4";
                 if (stage == 5) return "Custom map: press A";
                 if (stage == 6) return "Custom map: press Y";
                 if (stage == 7) return "Custom map: press B";
