@@ -1,6 +1,6 @@
 # RG35XX FreeJ2ME Platform Port — TASKLOG / New-Chat Handoff
 
-Last updated: **2026-10-03**
+Last updated: **2026-10-04**
 
 Purpose: this is the first checkpoint to read when a new ChatGPT conversation starts. It records exact accepted ancestry, protected identities, current phase status, and the only legal next work unit.
 
@@ -60,12 +60,14 @@ OFFICIAL_ACCEPTED_RUNTIME_COMMIT=2f18b78e9b0aa1660b7fd2f5904dd697fcef5830
 P2B_PHYSICAL_ACCEPTANCE_COMMIT=4c8e10f3d96288deda6b9b6d000125cea59e3919
 P2B_ACCEPTED_BRANCH_HEAD=6cc7461897dedeafa3d71848854341d41c533b5d
 
-CURRENT_PHASE=P2
-CURRENT_MODULE=P2C_INPUT_FRONTEND
+CURRENT_PHASE=P3
+CURRENT_MODULE=P3_RUNTIME_SERVICE_MODULES
+CURRENT_PHYSICAL_ACCEPTED_SCOPE=P2C_INPUT_FRONTEND
+CURRENT_PHYSICAL_ACCEPTED_BRANCH_HEAD=02d49e8bf9cea1957ab5071704e30ae99a474854
 
 P0=PASS
 P1=PASS
-P2=PARTIAL
+P2=PASS
 P3=NOT_TESTED
 P4=NOT_TESTED
 P5=NOT_TESTED
@@ -84,13 +86,13 @@ NEW_TIER1_FIX_BEFORE_P8=NO
 ### NEXT_LEGAL_ACTION
 
 ```text
-NEXT_LEGAL_ACTION=P2C_INPUT_FRONTEND_CONTRACT_AUDIT
+NEXT_LEGAL_ACTION=P3_RUNTIME_SERVICE_MODULE_AUDIT
 EXACT_ACCEPTED_RUNTIME_PARENT=2f18b78e9b0aa1660b7fd2f5904dd697fcef5830
-PHYSICAL_ACCEPTED_PREDECESSOR=P2B_FONT_TEXT
-EXPECTED_PHYSICAL_MODULE=INPUT-FRONTEND-MODULE
+PHYSICAL_ACCEPTED_PREDECESSOR=P2C_INPUT_FRONTEND
+EXPECTED_PHYSICAL_MODULE=RUNTIME-SERVICE-MODULES
 ```
 
-Do **not** begin P3. Do **not** edit input/video/lifecycle/frontend runtime code yet. First reconstruct the remaining P2 input/frontend contract from pinned Miyoo behavior, current accepted RG35XX behavior and locked Golden evidence.
+P2C is physically accepted by the original-RG35XX three-phase device run. Begin P3 with an audit/reconstruction pass; keep the accepted P2C input/frontend owner and protected Miyoo/JamVM/glibj identities unchanged unless new P3 evidence identifies a specific boundary owner.
 
 ---
 
@@ -240,7 +242,7 @@ P2C must not casually replace any accepted owner. Input/video/lifecycle changes 
 
 ---
 
-## 5. P2C Input/Frontend contract to reconstruct
+## 5. P2C Input/Frontend accepted checkpoint
 
 The locked P2 rule defines the remaining scope as one physical module:
 
@@ -261,18 +263,18 @@ rotation policy if supported
 Current state:
 
 ```text
-P2C_INPUT_FRONTEND_AUDIT=NOT_TESTED
-P2C_CANONICAL_DIFF_VERIFIED=NOT_TESTED
-P2C_OWNER_SCOPE_VERIFIED=NOT_TESTED
-P2C_RUNTIME_CANDIDATE=NOT_TESTED
-P2C_PARENT_REGRESSION=NOT_TESTED
-P2C_MODULE_GATE=NOT_TESTED
-P2C_PHYSICAL_TEST=NOT_TESTED
+P2C_INPUT_FRONTEND_AUDIT=PASS
+P2C_CANONICAL_DIFF_VERIFIED=PASS
+P2C_OWNER_SCOPE_VERIFIED=PASS
+P2C_RUNTIME_CANDIDATE=PASS
+P2C_PARENT_REGRESSION=PASS
+P2C_MODULE_GATE=PASS
+P2C_PHYSICAL_TEST=PASS
 ```
 
 ### Required audit questions
 
-Before any code change, establish from pinned Miyoo and accepted RG35XX sources:
+The completed audit established from pinned Miyoo and accepted RG35XX sources:
 
 1. Which layer owns raw hardware acquisition (`/dev/input/js0`) versus MIDP logical key semantics?
 2. Exact keycode/game-action mapping expected by canonical Miyoo behavior.
@@ -298,12 +300,12 @@ canonical Miyoo/frontend/input inventory
 -> human physical acceptance
 ```
 
-Until the audit closes:
+The accepted P2C module records:
 
 ```text
-P2C_RUNTIME_EDIT_AUTHORIZED=NO
-P2C_DEVICE_PACKAGE=NOT_TESTED
-P2C_PHYSICAL_TEST=NOT_TESTED
+P2C_RUNTIME_EDIT_AUTHORIZED=YES_FOR_P2C_MODULE_ONLY
+P2C_DEVICE_PACKAGE=PASS
+P2C_PHYSICAL_TEST=PASS
 ```
 
 ---
@@ -328,11 +330,11 @@ Before runtime edits verify:
 
 ```text
 CURRENT_PHASE=P2
-CURRENT_MODULE=P2C_INPUT_FRONTEND
+CURRENT_MODULE=P3_RUNTIME_SERVICE_MODULES
 CANONICAL_SOURCE=aweigit/freej2me-miyoomini@ca11dfe8ea1cc273d92460f9a83bbf192023fa63
 EXACT_ACCEPTED_RUNTIME_PARENT=2f18b78e9b0aa1660b7fd2f5904dd697fcef5830
 HARDWARE_EVIDENCE=P1A_PASS_PLUS_P2A_PASS_PLUS_P2B_PASS_ON_ORIGINAL_RG35XX
-NEXT_LEGAL_ACTION=P2C_INPUT_FRONTEND_CONTRACT_AUDIT
+NEXT_LEGAL_ACTION=P3_RUNTIME_SERVICE_MODULE_AUDIT
 A9_PARENT=NO
 GAME_SPECIFIC_CODE=NO
 ```
@@ -343,7 +345,7 @@ If a future chat sees a newer branch/SHA, first establish whether it is a formal
 
 ## 8. Definition of completion
 
-The project is not complete at P2B.
+The project is not complete at P2C.
 
 ```text
 P0 PASS

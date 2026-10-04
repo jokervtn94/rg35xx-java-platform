@@ -20,7 +20,7 @@ ORIGINAL RG35XX PHYSICAL ACCEPTANCE
 
 ## Official repository baseline
 
-As of **2026-10-03**, the latest physically accepted runtime module lineage is **P2B Font/Text**.
+As of **2026-10-04**, P2C Input/Frontend has passed its original-RG35XX physical module gate. The official `main` promotion remains separate from this physical-test branch.
 
 ```text
 OFFICIAL_REPOSITORY_BRANCH=main
@@ -33,9 +33,11 @@ CANONICAL_AWEIGIT_PIN=ca11dfe8ea1cc273d92460f9a83bbf192023fa63
 P1A_GRAPHICS_MODULE_PHYSICAL_ACCEPTANCE=PASS
 P2A_IMAGE_DECODE_MODULE_PHYSICAL_ACCEPTANCE=PASS
 P2B_FONT_TEXT_MODULE_PHYSICAL_ACCEPTANCE=PASS
-CURRENT_PHASE=P2
-CURRENT_MODULE=P2C_INPUT_FRONTEND
-P2=PARTIAL
+CURRENT_PHASE=P3
+CURRENT_MODULE=P3_RUNTIME_SERVICE_MODULES
+CURRENT_PHYSICAL_ACCEPTED_SCOPE=P2C_INPUT_FRONTEND
+CURRENT_PHYSICAL_ACCEPTED_BRANCH_HEAD=02d49e8bf9cea1957ab5071704e30ae99a474854
+P2=PASS
 RG35XX_PLATFORM_BASELINE_DEVICE_PASS=NO
 STABLE=NO
 A9_PARENT=NO
@@ -50,6 +52,7 @@ Accepted physical records:
 - `docs/P2A-IMAGE-DECODE-PHYSICAL-ACCEPTANCE-20261003.md`
 - `docs/P2B-FONT-TEXT-PHYSICAL-ACCEPTANCE-20261003.md`
 - `docs/P2B-WINDOWS-INSTALLER-R2-HYGIENE-CHECKPOINT-20261003.md`
+- `docs/P2C-INPUT-FRONTEND-PHYSICAL-ACCEPTANCE-20261004.md`
 
 ## Current progress
 
@@ -59,8 +62,8 @@ Accepted physical records:
 | P1 / P1A — Core 2D Graphics | `PASS` | Host/module gates and original-RG35XX graphics physical acceptance completed. |
 | P2A — Image Decode | `PASS` | 150 fixtures × 3 public frontends = 450/450 device decode cases PASS; protected hashes preserved. |
 | P2B — Font/Text | `PASS` | Host/module gates PASS; original RG35XX 360/360 cases PASS, protected hashes PASS, green PASS screen, normal GarlicOS return. |
-| P2C — Input / Frontend contract | `NOT_TESTED` | Next legal work unit. Audit complete physical input mapping, keymap/frontend policy, logical resolution, pointer/touch and rotation policy before runtime changes. |
-| P3 — Runtime service modules | `NOT_TESTED` | Platform-first module acceptance still required even though historical Golden behavior remains protected evidence. |
+| P2C — Input / Frontend contract | `PASS` | Original RG35XX programmatic run passed all three phases, including custom keymap, pointer 6,6 and rotation 1→2→0. |
+| P3 — Runtime service modules | `NOT_TESTED` | Next legal work unit. Reconstruct and test runtime service boundaries while preserving protected JamVM/glibj and Miyoo parent behavior. |
 | P4 — Deferred capabilities | `NOT_TESTED` | M3G/Mascot/LWJGL/OpenGL require explicit capability decisions; no blind re-enable. |
 | P5 — Generic installer/platform | `NOT_TESTED` | One generic FreeJ2ME-RG35XX installer/launcher, no game-name runtime logic. |
 | P6 — Full platform exerciser | `NOT_TESTED` | Full declared platform contract suite. |
@@ -96,17 +99,16 @@ P2B_R2_PACKAGE_SHA256=7df059c07a3867eef5e6a00348b19b18ee6901cffd4bf7b53caefbbebb
 
 No second physical run is required for that helper-only revision because the tested SD runtime payload is unchanged byte-for-byte.
 
-## Next legal work unit — P2C Input/Frontend
+## Next legal work unit — P3 Runtime service modules
 
-The locked P2 contract still requires one **INPUT-FRONTEND-MODULE** covering:
+P2C is physically accepted. The next module is **P3 RUNTIME-SERVICE-MODULES**, covering the remaining platform services without changing the accepted input/frontend owner:
 
-- complete physical input mapping;
-- keymap/frontend policy;
-- logical resolution configuration;
-- pointer/touch policy;
-- rotation policy if supported.
+- lifecycle and normal return behavior;
+- RMS/file service boundaries;
+- media/audio service boundaries;
+- Java runtime service compatibility on the RG35XX candidate runtime.
 
-The next action is **audit/reconstruction first**, not implementation first. Existing accepted input/video/lifecycle owners remain protected until evidence identifies a missing contract or RG35XX boundary owner.
+The next action is **audit/reconstruction first**, not broad implementation first. Existing accepted input/frontend, video, JamVM and glibj owners remain protected until evidence identifies a missing P3 contract or RG35XX boundary owner.
 
 ## Protected RG35XX runtime identities
 
