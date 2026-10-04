@@ -87,6 +87,7 @@ public final class RG35XXFrontendPolicy {
     public int getRotation() { return rotation; }
     public char getPhoneMode() { return phoneMode; }
     public boolean isOkPhysical(int physicalId) { return roleForPhysical(physicalId) == ROLE_OK; }
+    public int mapStarToMobileKey() { return roleToMobileKey(ROLE_STAR); }
 
     public void cyclePhoneMode() {
         switch (phoneMode) {

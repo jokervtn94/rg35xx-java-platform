@@ -133,31 +133,35 @@ public final class RG35XXKeyDispatcher {
     }
 
     private void armChord(int partner) {
-        boolean selectWasActive = releaseActiveKey(SELECT);
-        if (partner != SELECT) releaseActiveKey(partner);
         /*
-         * The public-MIDP exerciser advances a hotkey step on the SELECT
-         * release marker.  SELECT is intentionally ignored while pointer
-         * mode is active, and partner-first input can also reach this point
-         * before SELECT has an active ordinary key.  Preserve the marker in
-         * both cases without generating a SELECT press.
+         * Chords must expose one canonical release marker, independent of
+         * which physical key arrived first and independent of a custom
+         * keymap.  A partner-first edge may already have emitted a normal
+         * keyPressed event; close that event before the marker only when its
+         * code is different.  If it is the same code, discard it so the
+         * marker is not delivered twice.
          */
-        if (!selectWasActive) {
-            int marker = policy.mapPhysicalToMobileKey(SELECT);
-            if (marker != 0) platform.keyReleased(marker);
-        }
+        int marker = partner == START
+                ? policy.mapStarToMobileKey()
+                : policy.mapPhysicalToMobileKey(SELECT);
+        releaseChordKeyBeforeMarker(SELECT, marker);
+        if (partner != SELECT) releaseChordKeyBeforeMarker(partner, marker);
+        /*
+         * The public-MIDP exerciser advances a hotkey step on this release
+         * marker.  SELECT is intentionally ignored while pointer mode is
+         * active, and partner-first input can reach this point before SELECT
+         * has an active ordinary key.  Preserve exactly one marker in both
+         * cases without generating a second ordinary release.
+         */
+        if (marker != 0) platform.keyReleased(marker);
         chordLatchMask |= bit(SELECT) | bit(partner);
     }
 
-    private boolean releaseActiveKey(int id) {
-        if (activeKey[id] != 0) {
-            platform.keyReleased(activeKey[id]);
-            activeKey[id] = 0;
-            nextRepeat[id] = 0;
-            return true;
-        }
+    private void releaseChordKeyBeforeMarker(int id, int marker) {
+        int key = activeKey[id];
+        if (key != 0 && key != marker) platform.keyReleased(key);
+        activeKey[id] = 0;
         nextRepeat[id] = 0;
-        return false;
     }
 
     private void releaseAllActiveKeysExcept(int except) {
