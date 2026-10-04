@@ -1,0 +1,45 @@
+name: P4 EGL GLES Context Probe
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/p4-context-probe.yml"
+      - "scripts/build-p4-context-probe-package.sh"
+      - "tests/p4/rg35xx_egl_gles_context_probe.c"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Install ARM cross compilers
+        run: |
+          set -euo pipefail
+          sudo apt-get update >/dev/null
+          sudo apt-get install -y --no-install-recommends gcc-arm-linux-gnueabihf gcc-arm-linux-gnueabi zip binutils >/dev/null
+
+      - name: Build P4.1 context probe package
+        run: |
+          set -euo pipefail
+          chmod +x scripts/build-p4-context-probe-package.sh
+          bash scripts/build-p4-context-probe-package.sh | tee P4-CONTEXT-PROBE-BUILD.log
+          grep -q '^P4_CONTEXT_PROBE_BUILD=PASS$' P4-CONTEXT-PROBE-BUILD.log
+          test -f out/p4-context-probe/RG35XX-P4-CONTEXT-PROBE.zip
+          test -x out/p4-context-probe/RG35XX-P4-CONTEXT-PROBE/SD/Roms/APPS/RG35XX-P4-CONTEXT-PROBE/p4-egl-gles-context-probe-hardfloat
+          test -x out/p4-context-probe/RG35XX-P4-CONTEXT-PROBE/SD/Roms/APPS/RG35XX-P4-CONTEXT-PROBE/p4-egl-gles-context-probe-softfloat
+
+      - name: Upload P4.1 context probe package
+        uses: actions/upload-artifact@v4
+        with:
+          name: RG35XX-P4-CONTEXT-PROBE-${{ github.sha }}
+          path: |
+            out/p4-context-probe/
+            P4-CONTEXT-PROBE-BUILD.log
+          if-no-files-found: error
