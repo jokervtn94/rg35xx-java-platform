@@ -1,0 +1,209 @@
+# Current Checkpoint — RG35XX FreeJ2ME Platform Port
+
+Last updated: **2026-10-04**
+
+Purpose: single authoritative snapshot for ChatGPT/Codex/new agents. This file distinguishes **accepted official runtime**, **in-progress candidate**, **physical-package source**, and **docs-only READY checkpoint** so they are never conflated.
+
+## 1. Official accepted state
+
+```text
+REPOSITORY=jokervtn94/rg35xx-java-platform
+OFFICIAL_BRANCH=main
+OFFICIAL_ACCEPTED_RUNTIME_SCOPE=P2B_FONT_TEXT
+OFFICIAL_ACCEPTED_RUNTIME_COMMIT=2f18b78e9b0aa1660b7fd2f5904dd697fcef5830
+P2B_PHYSICAL_ACCEPTANCE_COMMIT=4c8e10f3d96288deda6b9b6d000125cea59e3919
+P2B_ACCEPTED_BRANCH_HEAD=6cc7461897dedeafa3d71848854341d41c533b5d
+```
+
+`main` is accepted through P2B only. P2C is not yet an official accepted runtime.
+
+## 2. Phase ledger
+
+```text
+P0=PASS
+P1=PASS
+P2=PARTIAL
+P3=NOT_TESTED
+P4=NOT_TESTED
+P5=NOT_TESTED
+P6=NOT_TESTED
+P7=NOT_TESTED
+P8=NOT_TESTED
+P9=NOT_TESTED
+
+CURRENT_PHASE=P2
+CURRENT_MODULE=P2C_INPUT_FRONTEND
+RG35XX_PLATFORM_BASELINE_DEVICE_PASS=NO
+STABLE=NO
+A9_PARENT=NO
+GAME_SPECIFIC_CODE=NO
+NEW_TIER1_FIX_BEFORE_P8=NO
+```
+
+Accepted P2 submodules:
+
+```text
+P2A_IMAGE_DECODE=PASS
+P2B_FONT_TEXT=PASS
+P2C_INPUT_FRONTEND=PARTIAL
+```
+
+For P2C, host/module and physical-package gates are PASS, but physical module acceptance is `NOT_TESTED`.
+
+## 3. P2C hardware prerequisite evidence
+
+Original RG35XX diagnostic established the 14-control hardware inventory and closed the L2/R2 owner gap:
+
+```text
+KEYMAP_COUNT=14
+L2=JS0_AXIS2_BASELINE_-32767_PRESS_32767_BIT12
+R2=JS0_AXIS5_BASELINE_-32767_PRESS_32767_BIT13
+```
+
+This evidence authorized an owner-scoped P2C input-native delta. It did not itself constitute P2C module acceptance.
+
+## 4. P2C runtime candidate — not accepted yet
+
+```text
+P2C_RUNTIME_BRANCH=module/p2c-input-frontend-candidate-r1
+P2C_RUNTIME_CANDIDATE_COMMIT=0738281012b83d748cfb88ba063d21248a3f9c97
+P2C_HOST_GATE_HEAD=0851cfde1da41c955997a693ac6df34557d76093
+P2C_HOST_MODULE_CHECKPOINT=7f8b3bdeadd7b1cd2201f1bf62d8c29ecfb54eac
+P2C_HOST_MODULE_GATE=PASS
+```
+
+Runtime candidate identities:
+
+```text
+P2C_HOST_PLATFORM_JAR_SHA256=533442c7e67965c8ac095898bfb32c9fcdd233471cd19e64ca2012ceaca00c60
+P2C_INPUT_NATIVE_SHA256=6eaf5e23a63fa346782f35dff340d625238a89db4e54cce56d34ba5db5a4064c
+P2C_FONT_NATIVE_SHA256=29d19de922e9b3b24b93dca2db73886a32fd9e51ef1c9215b820d12324b8c84b
+P2C_VIDEO_NATIVE_SHA256=c6687c0a43b24b425af0727c928afb5414da811ecbcbbe3538928470abe8bd0d
+```
+
+Host/module CI authority:
+
+```text
+RUN_ID=37141905525
+JOB_ID=111257926132
+RUN_RESULT=PASS
+ARTIFACT_ID=11280473640
+ARTIFACT_DIGEST_SHA256=d0e8677bb5c73e08a540b0cea6c66dfa21efe53d855b90cea6f38fa504e35ee0
+```
+
+Host gates cover canonical diff, owner scope, Java 6, default mapping, phone modes, keymap config, hotkeys, pointer, rotation, 14 controls including L2/R2, ARM input native build, parent class/native identities, and launch-time logical resolution.
+
+## 5. P2C physical R3 package — READY, not device accepted
+
+Exact source used to build the physical package:
+
+```text
+PHYSICAL_BRANCH=physical-test/p2c-input-frontend-20261003-r3
+PHYSICAL_R3_SOURCE_HEAD=ceca509b39f95f2d172c4b20119ab644522be55b
+P2C_READY_DOC_COMMIT=286e4ebbea850a56db27165aec3e40d1ddf97380
+RUNTIME_CANDIDATE_COMMIT=0738281012b83d748cfb88ba063d21248a3f9c97
+RUNTIME_SEMANTIC_DELTA_FROM_HOST_CANDIDATE=NONE
+```
+
+R3 CI:
+
+```text
+WORKFLOW_RUN=37145570672
+WORKFLOW_JOB=111268672854
+P2C_PHYSICAL_R3_HOST_MODULE_REBUILD=PASS
+P2C_PHYSICAL_R3_PROTECTED_AUDIO_DEPENDENCY_GATE=PASS
+P2C_EXERCISER_PLATFORM_SEMANTIC_GATE=PASS
+P2C_EXERCISER_BUILD=PASS
+P2C_EXERCISER_JAVA6_GATE=PASS
+P2C_EXERCISER_PUBLIC_MIDP_ONLY=YES
+P2C_EXERCISER_DIRECT_BACKEND_CALL=NO
+P2C_PHYSICAL_R3_EXERCISER_GATE=PASS
+P2C_PHYSICAL_R3_ONE_PACKAGE_GATE=PASS
+P2C_PHYSICAL_PACKAGE_GATE=PASS
+```
+
+Exact Actions artifact:
+
+```text
+ARTIFACT_NAME=RG35XX-P2C-INPUT-FRONTEND-PHYSICAL-R3-ceca509b39f95f2d172c4b20119ab644522be55b
+ARTIFACT_ID=11281889195
+ARTIFACT_SIZE_BYTES=6432986
+ARTIFACT_ZIP_SHA256=f6215e37a3c07bf218f7b3db1243f14ae37fb5146d860e2b6c9b675b238689df
+```
+
+Exact raw device package:
+
+```text
+RAW_PACKAGE_FILENAME=RG35XX-P2C-INPUT-FRONTEND-PHYSICAL-R1.zip
+RAW_PACKAGE_SHA256=014c7f7b96f24aae62610fec7b1157c23a2c844777fb5b70b9b524a818962e36
+P2C_PLATFORM_JAR_RAW_SHA256=471152544509fe0e4822e782b53fdcbda3288a57ac2fb29a2efe7032e283d9a9
+P2C_PLATFORM_JAR_SEMANTIC_SHA256=0a4f197bdbf39b7102c69bb2e560c6e469c32c20ae58c8fb688fadbcecf1c6c6
+P2C_INPUT_NATIVE_SHA256=6eaf5e23a63fa346782f35dff340d625238a89db4e54cce56d34ba5db5a4064c
+P2C_FONT_NATIVE_SHA256=29d19de922e9b3b24b93dca2db73886a32fd9e51ef1c9215b820d12324b8c84b
+P2C_VIDEO_NATIVE_SHA256=c6687c0a43b24b425af0727c928afb5414da811ecbcbbe3538928470abe8bd0d
+P2C_AUDIO_NATIVE_SHA256=4522157846c33c150a85c50b4bed6f68351f1c62d54b8cd7805cbb97c5727644
+EXERCISER_SHA256=baed252f0d68736867b3a6d4f50f3a30199f7705050e5ac898403218bc9784ac
+```
+
+Public-MIDP device exerciser contract:
+
+```text
+LOGICAL_RESOLUTION=176x208
+PHASE_COUNT=3
+PHASE1=DEFAULT_14_CONTROLS+PHONE_MODE_CYCLE+PERSIST_N
+PHASE2=PERSISTENCE+CUSTOM_KEYMAP+POINTER+ROTATION
+PHASE3=INVALID_KEYMAP_FAILSAFE
+POINTER_EXPECTED_COORDINATE=6,6
+ROTATION_SEQUENCE=0,1,2,0
+COMMERCIAL_GAME_CONTENT=NO
+```
+
+## 6. Physical acceptance still missing
+
+Current locked status:
+
+```text
+P2C_HOST_MODULE_GATE=PASS
+P2C_PHYSICAL_PACKAGE_GATE=PASS
+P2C_PHYSICAL_TEST=NOT_TESTED
+P2C_INPUT_FRONTEND_MODULE_PHYSICAL_ACCEPTANCE=NOT_TESTED
+DEVICE_PASS=NO
+RG35XX_PLATFORM_BASELINE_DEVICE_PASS=NO
+STABLE=NO
+```
+
+Required physical evidence directory:
+
+```text
+/mnt/mmc/RG35XX-P2C-INPUT-FRONTEND-EVIDENCE
+```
+
+Programmatic evidence must establish at minimum:
+
+```text
+P2C_PHASE1_EXIT_CODE=0
+P2C_PHASE2_EXIT_CODE=0
+P2C_PHASE3_EXIT_CODE=0
+P2C_PROTECTED_HASHES=PASS
+P2C_DEVICE_PROGRAMMATIC_RESULT=PASS
+```
+
+Human observation must independently confirm:
+
+```text
+ROTATION_VISUAL_0_TO_1_TO_2_TO_0=PASS
+NORMAL_RETURN_TO_GARLICOS=PASS
+```
+
+The generated `MANUAL-OBSERVATION.txt` begins as `NOT_TESTED` by design and must not be auto-promoted by CI.
+
+## 7. Only legal next action
+
+```text
+NEXT_LEGAL_ACTION=P2C_ORIGINAL_RG35XX_PHYSICAL_MODULE_TEST_AND_EVIDENCE_REVIEW
+PHYSICAL_TEST_LEVEL=MODULE
+```
+
+If no physical evidence is available, stop here. Do not promote P2C and do not begin P3/P7/P9.
+
+If valid physical evidence is supplied, the next engineering action is to verify exact package/runtime identity, all generated markers, rotation observation, and normal GarlicOS return; then create a P2C physical-acceptance record/branch without changing runtime semantics.
