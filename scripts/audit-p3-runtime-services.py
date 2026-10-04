@@ -20,6 +20,7 @@ REQUIRED = {
     "lifecycle": [
         "src/org/recompile/mobile/MobilePlatform.java",
         "src/org/recompile/mobile/MIDletLoader.java",
+        "src/javax/microedition/midlet/MIDlet.java",
     ],
     "rms-filesystem": [
         "src/javax/microedition/rms/RecordStore.java",
@@ -86,7 +87,7 @@ def main():
     if missing:
         fail("required-source-missing:%s" % ",".join(missing))
 
-    lifecycle = read(upstream / REQUIRED["lifecycle"][0])
+    lifecycle = "\n".join(read(upstream / relative) for relative in REQUIRED["lifecycle"])
     loader = read(upstream / REQUIRED["lifecycle"][1])
     rms = read(upstream / REQUIRED["rms-filesystem"][1])
     file_connection = read(upstream / REQUIRED["rms-filesystem"][2])
@@ -115,7 +116,7 @@ def main():
         REQUIRED["media-audio"][0],
     ]:
         content = read(upstream / relative)
-        if re.search(r"java\\.nio\\.file|new\\s+[^;]+<>\\s*\\(|try\\s*\\(", content):
+        if re.search(r"java\.nio\.file|new\s+[^;]+<>\s*\(|try\s*\(", content):
             java6_risk.append(relative)
     print("P3_JAVA6_RISK_FILES=%s" % ",".join(java6_risk))
     print("P3_RUNTIME_SERVICE_AUDIT=PASS")
