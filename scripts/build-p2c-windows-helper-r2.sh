@@ -22,6 +22,7 @@ fail(){ echo "P2C_WINDOWS_HELPER_R2_FAIL=$*" >&2; exit 1; }
 
 rm -rf "$OUT_DIR"
 mkdir -p "$OUT_DIR/work"
+OUT_DIR="$(cd "$OUT_DIR" && pwd)"
 unzip -q "$INPUT_ZIP" -d "$OUT_DIR/work"
 PKGROOT="$OUT_DIR/work/RG35XX-P2C-INPUT-FRONTEND-PHYSICAL-R1"
 [ -d "$PKGROOT/SD" ] || fail sd_missing
