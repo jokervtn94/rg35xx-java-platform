@@ -125,6 +125,8 @@ echo "== GNU Classpath 0.99 =="
 )
 
 echo "== JamVM 2.0.0 =="
+STAGED_RUNTIME="$BUILD/stage$RUNTIME_DEVICE_ROOT"
+[ -f "$STAGED_RUNTIME/share/classpath/glibj.zip" ] || fail "staged glibj.zip missing before JamVM build"
 (
   cd "$BUILD/jamvm-build"
   CC="$CC" AR="$AR" RANLIB="$RANLIB" \
@@ -137,11 +139,17 @@ echo "== JamVM 2.0.0 =="
     --with-classpath-install-dir="$RUNTIME_DEVICE_ROOT" \
     --disable-ffi \
     --enable-zip
+
+  # JamVM's GNU Classpath helper classes are compiled on the host runner.
+  # Keep the device path in configure/config.h, but use the staged glibj.zip
+  # as javac's bootclasspath during this build.
+  JAMVM_GNUCP_MAKEFILE="$BUILD/jamvm-build/src/classlib/gnuclasspath/lib/Makefile"
+  [ -f "$JAMVM_GNUCP_MAKEFILE" ] || fail "JamVM GNU Classpath Makefile missing"
+  sed -i "s|^CP_LIB_DIR = .*|CP_LIB_DIR = $STAGED_RUNTIME/share/classpath|" "$JAMVM_GNUCP_MAKEFILE"
   make -j"${JOBS:-2}"
   make DESTDIR="$BUILD/stage" install
 )
 
-STAGED_RUNTIME="$BUILD/stage$RUNTIME_DEVICE_ROOT"
 [ -x "$STAGED_RUNTIME/bin/jamvm" ] || fail "staged jamvm missing"
 [ -f "$STAGED_RUNTIME/share/classpath/glibj.zip" ] || fail "staged glibj.zip missing"
 
