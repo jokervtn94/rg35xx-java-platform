@@ -28,6 +28,11 @@ need make
 need sha256sum
 need tar
 need zip
+need autoconf
+need autoheader
+need automake
+need aclocal
+need libtoolize
 
 JAVA8="${JAVA8:-${JAVA_HOME:-}}"
 [ -n "$JAVA8" ] || fail "JAVA8/JAVA_HOME is required; use JDK 8"
@@ -73,6 +78,14 @@ JAMVM_SRC="$(find "$BUILD/source" -mindepth 1 -maxdepth 1 -type d -name 'jamvm-*
 CLASSPATH_SRC="$(find "$BUILD/source" -mindepth 1 -maxdepth 1 -type d -name 'classpath-*' | head -n 1)"
 [ -n "$JAMVM_SRC" ] || fail "JamVM source directory not found"
 [ -n "$CLASSPATH_SRC" ] || fail "GNU Classpath source directory not found"
+
+# The pinned JamVM GitHub source archive is generated from the repository and
+# intentionally does not carry a pre-generated configure script.  Regenerate
+# it inside the disposable build tree before the cross configure step.
+(
+  cd "$JAMVM_SRC"
+  NOCONFIGURE=yes ./autogen.sh
+)
 
 # The device image is soft-float ARM/uClibc.  Keep all compile flags explicit
 # so a host-default hard-float or ARMv7 build cannot silently pass this stage.
