@@ -306,14 +306,14 @@ public final class RG35XXP2CInputFrontendExerciser extends MIDlet {
                 if (stage == 13) return "Custom map: press R2";
                 if (stage == 14) return "Custom map: press L2";
                 if (stage == 15) return "Custom map: press UP";
-                if (stage == 16) return "SELECT+Y -> pointer ON";
+                if (stage == 16) return "SELECT+Y either order -> pointer ON";
                 if (stage == 17) return "RIGHT, DOWN, then X";
-                if (stage == 18) return "SELECT+Y -> pointer OFF";
-                if (stage == 19) return "SELECT+B -> rotation 1";
+                if (stage == 18) return "SELECT+Y either order -> pointer OFF";
+                if (stage == 19) return "SELECT+B either order -> rotation 1";
                 if (stage == 20) return "Press physical UP";
-                if (stage == 21) return "SELECT+B -> rotation 2";
+                if (stage == 21) return "SELECT+B either order -> rotation 2";
                 if (stage == 22) return "Press physical UP";
-                if (stage == 23) return "SELECT+B -> rotation 0";
+                if (stage == 23) return "SELECT+B either order -> rotation 0";
                 if (stage == 24) return "Press physical UP";
             } else if (phase == 3) {
                 String[] names = {"A", "Y", "X", "B", "L2", "R2"};

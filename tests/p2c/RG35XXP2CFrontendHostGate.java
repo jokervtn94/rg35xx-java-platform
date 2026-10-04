@@ -192,11 +192,13 @@ public final class RG35XXP2CFrontendHostGate {
         int changed = 0; for (int i = 0; i < px.length; i++) if (px[i] != 0) changed++;
         check(changed > 0, "pointer cursor visible");
 
-        d.dispatchState(bit(RG35XXKeyDispatcher.SELECT), t++);
-        d.dispatchState(bit(RG35XXKeyDispatcher.SELECT) | bit(RG35XXKeyDispatcher.Y), t++);
-        d.dispatchState(bit(RG35XXKeyDispatcher.SELECT), t++);
+        events.clear();
+        d.dispatchState(bit(RG35XXKeyDispatcher.Y), t++);
+        d.dispatchState(bit(RG35XXKeyDispatcher.Y) | bit(RG35XXKeyDispatcher.SELECT), t++);
+        d.dispatchState(bit(RG35XXKeyDispatcher.Y), t++);
         d.dispatchState(0, t++);
         check(!p.isPointerMode(), "pointer disabled");
+        eq("KR:" + Mobile.KEY_STAR, events.get(events.size()-1), "pointer-off chord marker");
 
         events.clear();
         d.dispatchState(bit(RG35XXKeyDispatcher.SELECT), t++);

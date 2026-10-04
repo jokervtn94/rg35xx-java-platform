@@ -133,17 +133,31 @@ public final class RG35XXKeyDispatcher {
     }
 
     private void armChord(int partner) {
-        releaseActiveKey(SELECT);
+        boolean selectWasActive = releaseActiveKey(SELECT);
         if (partner != SELECT) releaseActiveKey(partner);
+        /*
+         * The public-MIDP exerciser advances a hotkey step on the SELECT
+         * release marker.  SELECT is intentionally ignored while pointer
+         * mode is active, and partner-first input can also reach this point
+         * before SELECT has an active ordinary key.  Preserve the marker in
+         * both cases without generating a SELECT press.
+         */
+        if (!selectWasActive) {
+            int marker = policy.mapPhysicalToMobileKey(SELECT);
+            if (marker != 0) platform.keyReleased(marker);
+        }
         chordLatchMask |= bit(SELECT) | bit(partner);
     }
 
-    private void releaseActiveKey(int id) {
+    private boolean releaseActiveKey(int id) {
         if (activeKey[id] != 0) {
             platform.keyReleased(activeKey[id]);
             activeKey[id] = 0;
+            nextRepeat[id] = 0;
+            return true;
         }
         nextRepeat[id] = 0;
+        return false;
     }
 
     private void releaseAllActiveKeysExcept(int except) {
