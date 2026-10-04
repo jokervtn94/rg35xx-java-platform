@@ -1,7 +1,7 @@
 # P3 — Runtime service module audit
 
 **Date:** 2026-10-04  
-**Status:** `AUDIT_PASS / PACKAGE_BUILT / DEVICE_TEST=FAIL_AUDIO_NATIVE_BRIDGE`
+**Status:** `AUDIT_PASS / PACKAGE_BUILT / DEVICE_TEST=PASS / AUDIO_HEARD_ON_DEVICE`
 **Predecessor:** P2C input/frontend physical acceptance  
 **Canonical:** `aweigit/freej2me-miyoomini@ca11dfe8ea1cc273d92460f9a83bbf192023fa63`
 
@@ -77,10 +77,31 @@ java.lang.UnsatisfiedLinkError: sdlMixerInit
 ```
 
 The P3 parent platform jar had not loaded `libaudio.so` before the canonical
-`SdlMixerManager` call. The next package therefore adds an RG35XXLauncher-only
-audio-loader overlay. It leaves the canonical MMAPI, `PlatformPlayer`, and
-`SdlMixerManager` classes unchanged and keeps the rebuilt candidate runtime
-unchanged.
+`SdlMixerManager` call. The accepted package therefore adds an
+RG35XXLauncher-only audio-loader overlay. It leaves the canonical MMAPI,
+`PlatformPlayer`, and `SdlMixerManager` classes unchanged and keeps the rebuilt
+candidate runtime unchanged.
+
+The follow-up package was run on the original RG35XX. All programmatic gates
+passed and the user confirmed audible WAV and MIDI output:
+
+```text
+P3_RUNTIME_HASH_GATE_BEFORE=PASS
+RG35XX_A7_AUDIO_BRIDGE=LOADED DEVICE_INIT=LAZY BACKEND=SDL1_MIXER
+P3_TEST_BOOT=PASS
+P3_RMS_CRUD_ENUMERATE=PASS
+P3_RMS_REOPEN_DELETE=PASS
+P3_FILE_CREATE_WRITE_READ_DELETE=PASS
+P3_MMAPI_WAV_START=PASS
+P3_MMAPI_WAV_PAUSE_RESUME=PASS
+P3_MMAPI_MIDI_START=PASS
+P3_MMAPI_MIDI_END_OF_MEDIA=PASS
+P3_RUNTIME_SERVICE_RESULT=PASS
+P3_DEVICE_PROGRAMMATIC_RESULT=PASS
+RG35XX_A7_AUDIO_SHUTDOWN=PASS VIDEO_SDL_OWNER_PRESERVED=YES
+P3_AUDIO_AUDIBLE_DEVICE=CONFIRMED_BY_USER
+P3_PHYSICAL_ACCEPTANCE=PASS
+```
 
 ## Required next implementation unit
 
@@ -116,8 +137,9 @@ INPUT_NATIVE_SHA256=6eaf5e23a63fa346782f35dff340d625238a89db4e54cce56d34ba5db5a4
 VIDEO_NATIVE_SHA256=c6687c0a43b24b425af0727c928afb5414da811ecbcbbe3538928470abe8bd0d
 AUDIO_NATIVE_SHA256=4522157846c33c150a85c50b4bed6f68351f1c62d54b8cd7805cbb97c5727644
 P2C_PHYSICAL_ACCEPTANCE=PASS
-P3_PHYSICAL_ACCEPTANCE=NOT_TESTED
+P3_PHYSICAL_ACCEPTANCE=PASS
 ```
 
-This checkpoint is documentation and audit scope only; it does not claim
-`DEVICE-PASS=YES`, `STABLE=YES` or baseline promotion.
+This checkpoint accepts the P3 runtime-service module on the tested original
+RG35XX. It does not promote a different runtime, change the protected P2C
+owners, or claim broad game-library stability.
