@@ -11,18 +11,19 @@ SRC="$ROOT/tests/p4/rg35xx_egl_gles_context_probe.c"
 
 fail(){ echo "P4_CONTEXT_PROBE_BUILD_FAIL=$*" >&2; exit 1; }
 
-command -v arm-linux-gnueabihf-gcc >/dev/null 2>&1 || fail arm-linux-gnueabihf-gcc_missing
-command -v arm-linux-gnueabi-gcc >/dev/null 2>&1 || fail arm-linux-gnueabi-gcc_missing
 test -f "$SRC" || fail source_missing
+
+ARM_CC="${P4_ARM_CC:-/opt/miyoo/bin/arm-miyoo-linux-uclibcgnueabi-gcc}"
+[ -x "$ARM_CC" ] || fail "pinned_miyoo_toolchain_missing:$ARM_CC"
 
 rm -rf "$OUT"
 mkdir -p "$PAYLOAD"
 
-arm-linux-gnueabihf-gcc -O2 -pipe -fno-stack-protector -fPIE -pie "$SRC" -ldl \
-  -o "$PAYLOAD/p4-egl-gles-context-probe-hardfloat"
-arm-linux-gnueabi-gcc -O2 -pipe -fno-stack-protector -fPIE -pie "$SRC" -ldl \
-  -o "$PAYLOAD/p4-egl-gles-context-probe-softfloat"
-chmod +x "$PAYLOAD"/p4-egl-gles-context-probe-*
+"$ARM_CC" -O2 -pipe -fno-stack-protector "$SRC" -ldl \
+  -o "$PAYLOAD/p4-egl-gles-context-probe"
+cp "$PAYLOAD/p4-egl-gles-context-probe" "$PAYLOAD/p4-egl-gles-context-probe-hardfloat"
+cp "$PAYLOAD/p4-egl-gles-context-probe" "$PAYLOAD/p4-egl-gles-context-probe-softfloat"
+chmod +x "$PAYLOAD"/p4-egl-gles-context-probe*
 
 cat > "$APP" <<'EOF_APP'
 #!/bin/sh
