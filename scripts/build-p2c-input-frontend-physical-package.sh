@@ -246,6 +246,10 @@ cat "$P2" >>"$MASTER"
 cat > "$DATA/keymap.cfg" <<'EOF_BAD'
 {"invalid":"mapping"}
 EOF_BAD
+# Phase 3 validates invalid-keymap fallback against the canonical default
+# phone profile.  Start it from a clean phone-mode config so a failed phase 2
+# cannot leave the persisted n-mode profile as an unrelated test input.
+rm -rf "$DATA/config"
 echo 'P2C_PHASE3_START=INVALID_KEYMAP_FAILSAFE' >>"$MASTER"
 run_phase 3 "$P3"; RC3=$?
 cat "$P3" >>"$MASTER"

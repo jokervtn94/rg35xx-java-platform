@@ -15,7 +15,7 @@ BUILD="$ROOT/build/p2c-input-frontend-exerciser"
 JAROUT="$OUT/RG35XX-Platform-Exerciser-P2C-InputFrontend.jar"
 IDENTITY="$OUT/P2C-INPUT-FRONTEND-EXERCISER-IDENTITY.txt"
 DIGEST="$ROOT/scripts/p2c-semantic-jar-digest.py"
-EXPECTED_PLATFORM_SEMANTIC=0a4f197bdbf39b7102c69bb2e560c6e469c32c20ae58c8fb688fadbcecf1c6c6
+EXPECTED_PLATFORM_SEMANTIC="${EXPECTED_PLATFORM_SEMANTIC:-0a4f197bdbf39b7102c69bb2e560c6e469c32c20ae58c8fb688fadbcecf1c6c6}"
 
 [ -f "$PLATFORM" ] || fail "P2C candidate platform jar missing"
 [ -f "$SRC" ] || fail "exerciser source missing"

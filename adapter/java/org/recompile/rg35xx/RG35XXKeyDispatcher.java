@@ -20,6 +20,8 @@ public final class RG35XXKeyDispatcher {
     private final RG35XXFrontendPolicy policy;
     private int previous;
     private int suppressedBits;
+    /* Keep a recognized SELECT chord latched until both physical keys are up. */
+    private int chordLatchMask;
     private boolean suppressSelectRelease;
     private final long[] nextRepeat = new long[15];
     private final int[] activeKey = new int[15];
@@ -46,28 +48,32 @@ public final class RG35XXKeyDispatcher {
         int rising = state & ~previous;
         boolean selectDown = isDown(state, SELECT);
 
-        if (selectDown && (rising & bit(START)) != 0 && !policy.isPointerMode()) {
-            releaseSelectForChord();
+        if (selectDown && chordLatchMask == 0 && (rising & bit(START)) != 0 && !policy.isPointerMode()) {
+            armChord(START);
             policy.cyclePhoneMode();
-            suppressedBits |= bit(START);
         }
-        if (selectDown && (rising & bit(B)) != 0) {
-            releaseSelectForChord();
+        if (selectDown && chordLatchMask == 0 && (rising & bit(B)) != 0) {
+            armChord(B);
             policy.cycleRotation();
-            suppressedBits |= bit(B);
         }
-        if (selectDown && (rising & bit(Y)) != 0) {
-            releaseSelectForChord();
+        if (selectDown && chordLatchMask == 0 && (rising & bit(Y)) != 0) {
+            armChord(Y);
             boolean entering = !policy.isPointerMode();
             if (entering) releaseAllActiveKeysExcept(SELECT);
             policy.togglePointerMode();
-            suppressedBits |= bit(Y);
         }
 
         for (int id = UP; id <= R2; id++) {
             int mask = bit(id);
             boolean wasDown = (previous & mask) != 0;
             boolean isDown = (state & mask) != 0;
+
+            if ((chordLatchMask & mask) != 0) {
+                if (!isDown) chordLatchMask &= ~mask;
+                nextRepeat[id] = 0;
+                activeKey[id] = 0;
+                continue;
+            }
 
             if ((suppressedBits & mask) != 0) {
                 if (!isDown) suppressedBits &= ~mask;
@@ -133,6 +139,11 @@ public final class RG35XXKeyDispatcher {
         }
         nextRepeat[SELECT] = 0;
         suppressSelectRelease = true;
+    }
+
+    private void armChord(int partner) {
+        releaseSelectForChord();
+        chordLatchMask |= bit(SELECT) | bit(partner);
     }
 
     private void releaseAllActiveKeysExcept(int except) {

@@ -4,7 +4,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BASE="$ROOT/scripts/build-p2c-input-frontend-physical-package.sh"
 V2="$ROOT/scripts/build-p2c-input-frontend-physical-package-v2.sh"
 DIGEST="$ROOT/scripts/p2c-semantic-jar-digest.py"
-EXPECTED_SEMANTIC=0a4f197bdbf39b7102c69bb2e560c6e469c32c20ae58c8fb688fadbcecf1c6c6
+EXPECTED_SEMANTIC="${EXPECTED_SEMANTIC:-${EXPECTED_PLATFORM_SEMANTIC:-0a4f197bdbf39b7102c69bb2e560c6e469c32c20ae58c8fb688fadbcecf1c6c6}}"
 
 [ -f "$BASE" ] || { echo P2C_PHYSICAL_V3_FAIL=base_missing >&2; exit 1; }
 [ -f "$V2" ] || { echo P2C_PHYSICAL_V3_FAIL=v2_missing >&2; exit 1; }

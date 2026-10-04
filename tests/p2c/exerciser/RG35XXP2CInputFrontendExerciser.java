@@ -206,7 +206,7 @@ public final class RG35XXP2CInputFrontendExerciser extends MIDlet {
                 if (stage == 23) return 50;  // p-mode Up
                 if (stage == 25) return -5;  // final n-mode persistence anchor
             } else if (phase == 2) {
-                if (stage == 0) return -5;   // persisted n-mode X
+                if (stage == 0) return -5;   // persisted n-mode custom OK (physical B)
                 if (stage == 5) return -6;   // custom A -> left phone
                 if (stage == 6) return -7;   // custom Y -> right phone
                 if (stage == 7) return 53;   // custom B -> OK
@@ -238,7 +238,7 @@ public final class RG35XXP2CInputFrontendExerciser extends MIDlet {
                 if (stage == 23) return "PHONE_P_UP";
                 if (stage == 25) return "PHONE_N_PERSIST_ANCHOR";
             } else if (phase == 2) {
-                String[] names = {"PERSISTED_N_X", "", "", "", "", "CUSTOM_A_LEFT", "CUSTOM_Y_RIGHT",
+                String[] names = {"PERSISTED_N_OK", "", "", "", "", "CUSTOM_A_LEFT", "CUSTOM_Y_RIGHT",
                     "CUSTOM_B_OK", "CUSTOM_START_STAR", "CUSTOM_SELECT_POUND", "CUSTOM_X_ZERO",
                     "CUSTOM_R1_ONE", "CUSTOM_L1_THREE", "CUSTOM_R2_SEVEN", "CUSTOM_L2_NINE",
                     "CUSTOM_UP", "", "POINTER", "", "", "ROT1_UP_RIGHT", "", "ROT2_UP_LEFT", "", "ROT0_UP"};
@@ -293,7 +293,7 @@ public final class RG35XXP2CInputFrontendExerciser extends MIDlet {
                 if (stage == 24) return "SELECT+START -> n";
                 if (stage == 25) return "Press X, leave n persisted";
             } else if (phase == 2) {
-                if (stage == 0) return "Persisted n: press X";
+                if (stage == 0) return "Persisted n: press B";
                 if (stage >= 1 && stage <= 4) return "SELECT+START cycle " + stage + "/4";
                 if (stage == 5) return "Custom map: press A";
                 if (stage == 6) return "Custom map: press Y";
