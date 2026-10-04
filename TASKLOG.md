@@ -90,6 +90,8 @@ NEXT_LEGAL_ACTION=P3_RUNTIME_SERVICE_MODULE_AUDIT
 EXACT_ACCEPTED_RUNTIME_PARENT=2f18b78e9b0aa1660b7fd2f5904dd697fcef5830
 PHYSICAL_ACCEPTED_PREDECESSOR=P2C_INPUT_FRONTEND
 EXPECTED_PHYSICAL_MODULE=RUNTIME-SERVICE-MODULES
+P3_AUDIT_DEFINITION=docs/P3-RUNTIME-SERVICE-MODULE-AUDIT-20261004.md
+P3_AUDIT_WORKFLOW=.github/workflows/p3-runtime-service-audit.yml
 ```
 
 P2C is physically accepted by the original-RG35XX three-phase device run. Begin P3 with an audit/reconstruction pass; keep the accepted P2C input/frontend owner and protected Miyoo/JamVM/glibj identities unchanged unless new P3 evidence identifies a specific boundary owner.

@@ -53,6 +53,7 @@ Accepted physical records:
 - `docs/P2B-FONT-TEXT-PHYSICAL-ACCEPTANCE-20261003.md`
 - `docs/P2B-WINDOWS-INSTALLER-R2-HYGIENE-CHECKPOINT-20261003.md`
 - `docs/P2C-INPUT-FRONTEND-PHYSICAL-ACCEPTANCE-20261004.md`
+- `docs/P3-RUNTIME-SERVICE-MODULE-AUDIT-20261004.md`
 
 ## Current progress
 
@@ -109,6 +110,10 @@ P2C is physically accepted. The next module is **P3 RUNTIME-SERVICE-MODULES**, c
 - Java runtime service compatibility on the RG35XX candidate runtime.
 
 The next action is **audit/reconstruction first**, not broad implementation first. Existing accepted input/frontend, video, JamVM and glibj owners remain protected until evidence identifies a missing P3 contract or RG35XX boundary owner.
+
+The P3 audit definition and CI-only source gate are recorded in
+`docs/P3-RUNTIME-SERVICE-MODULE-AUDIT-20261004.md`. This checkpoint is not a
+physical device acceptance and does not change the production runtime.
 
 ## Protected RG35XX runtime identities
 

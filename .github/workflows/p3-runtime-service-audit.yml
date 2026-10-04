@@ -1,0 +1,33 @@
+name: P3 Runtime Service Audit
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "scripts/audit-p3-runtime-services.py"
+      - "docs/P3-RUNTIME-SERVICE-MODULE-AUDIT-20261004.md"
+      - ".github/workflows/p3-runtime-service-audit.yml"
+      - ".gitmodules"
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository and pinned Miyoo submodule
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Run P3 source contract audit
+        run: |
+          set -o pipefail
+          python3 scripts/audit-p3-runtime-services.py | tee P3-RUNTIME-SERVICE-AUDIT.log
+
+      - name: Upload audit evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: P3-RUNTIME-SERVICE-AUDIT-${{ github.sha }}
+          path: |
+            P3-RUNTIME-SERVICE-AUDIT.log
+            docs/P3-RUNTIME-SERVICE-MODULE-AUDIT-20261004.md
