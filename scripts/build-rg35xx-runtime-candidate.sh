@@ -152,11 +152,13 @@ STAGED_RUNTIME="$BUILD/stage$RUNTIME_DEVICE_ROOT"
 
 [ -x "$STAGED_RUNTIME/bin/jamvm" ] || fail "staged jamvm missing"
 [ -f "$STAGED_RUNTIME/share/classpath/glibj.zip" ] || fail "staged glibj.zip missing"
+[ -f "$STAGED_RUNTIME/share/jamvm/classes.zip" ] || fail "staged JamVM classes.zip missing"
 
 rm -rf "$OUT/runtime"
-mkdir -p "$OUT/runtime/bin" "$OUT/runtime/share/classpath" "$OUT/runtime/lib"
+mkdir -p "$OUT/runtime/bin" "$OUT/runtime/share/classpath" "$OUT/runtime/share/jamvm" "$OUT/runtime/lib"
 cp -a "$STAGED_RUNTIME/bin/jamvm" "$OUT/runtime/bin/jamvm"
 cp -a "$STAGED_RUNTIME/share/classpath/glibj.zip" "$OUT/runtime/share/classpath/glibj.zip"
+cp -a "$STAGED_RUNTIME/share/jamvm/classes.zip" "$OUT/runtime/share/jamvm/classes.zip"
 if [ -d "$STAGED_RUNTIME/lib/classpath" ]; then
   cp -a "$STAGED_RUNTIME/lib/classpath" "$OUT/runtime/lib/"
 fi
