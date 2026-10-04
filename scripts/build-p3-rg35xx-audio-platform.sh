@@ -62,7 +62,7 @@ PY
   -d "$CLASSES" "$SOURCE"
 
 mapfile -t LAUNCHER_CLASSES < <(find "$CLASSES/org/recompile/rg35xx" -type f -name 'RG35XXLauncher*.class' -print | LC_ALL=C sort)
-[ "${#LAUNCHER_CLASSES[@]}" -eq 5 ] || fail "launcher_class_family=${#LAUNCHER_CLASSES[@]}"
+[ "${#LAUNCHER_CLASSES[@]}" -eq 4 ] || fail "launcher_class_family=${#LAUNCHER_CLASSES[@]}"
 
 cp "$BASE_JAR" "$JAR"
 for class_file in "${LAUNCHER_CLASSES[@]}"; do
@@ -82,7 +82,6 @@ with zipfile.ZipFile(base) as a, zipfile.ZipFile(patched) as b:
     diff = [n for n in sorted(a.namelist()) if hashlib.sha256(a.read(n)).digest() != hashlib.sha256(b.read(n)).digest()]
 expected = [
     "org/recompile/rg35xx/RG35XXLauncher$1.class",
-    "org/recompile/rg35xx/RG35XXLauncher$2.class",
     "org/recompile/rg35xx/RG35XXLauncher$FramePresenter.class",
     "org/recompile/rg35xx/RG35XXLauncher$InputPump.class",
     "org/recompile/rg35xx/RG35XXLauncher.class",
