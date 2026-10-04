@@ -7,6 +7,7 @@ on:
       - physical-test/p2c-input-frontend-20261004-r5
       - physical-test/p2c-input-frontend-20261004-r6
       - physical-test/p2c-input-frontend-20261004-r7
+      - physical-test/p2c-input-frontend-20261004-r8
   workflow_dispatch:
 
 permissions:

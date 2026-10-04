@@ -159,7 +159,7 @@ public final class RG35XXP2CFrontendHostGate {
         d.dispatchState(bit(RG35XXKeyDispatcher.START), t++);
         d.dispatchState(0, t++);
         eq('e', p.getPhoneMode(), "reverse-order hotkey phone cycle");
-        eq(2, events.size(), "balanced reverse-order chord events");
+        eq(3, events.size(), "reverse-order chord marker events");
 
         events.clear();
         d.dispatchState(bit(RG35XXKeyDispatcher.UP), t++);
