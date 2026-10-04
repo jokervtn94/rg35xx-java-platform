@@ -80,6 +80,7 @@ with zipfile.ZipFile(base) as a, zipfile.ZipFile(patched) as b:
     if set(a.namelist()) != set(b.namelist()):
         raise SystemExit("P3_AUDIO_PLATFORM_ENTRY_SET_FAIL")
     diff = [n for n in sorted(a.namelist()) if hashlib.sha256(a.read(n)).digest() != hashlib.sha256(b.read(n)).digest()]
+    data = b.read("org/recompile/rg35xx/RG35XXLauncher.class")
 expected = [
     "org/recompile/rg35xx/RG35XXLauncher$1.class",
     "org/recompile/rg35xx/RG35XXLauncher$FramePresenter.class",
@@ -88,7 +89,6 @@ expected = [
 ]
 if diff != expected:
     raise SystemExit("P3_AUDIO_PLATFORM_SCOPE_FAIL=" + repr(diff))
-data = b.read("org/recompile/rg35xx/RG35XXLauncher.class")
 for marker in (b"libaudio.so", b"RG35XX_A7_AUDIO_BRIDGE=LOADED", b"DEVICE_INIT=LAZY"):
     if marker not in data:
         raise SystemExit("P3_AUDIO_PLATFORM_LOADER_MARKER_FAIL=" + repr(marker))
