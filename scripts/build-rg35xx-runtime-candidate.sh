@@ -44,6 +44,7 @@ READELF="${READELF:-$TOOLCHAIN_ROOT/bin/${TARGET}-readelf}"
 for tool in "$CC" "$CXX" "$AR" "$RANLIB" "$STRIP" "$READELF"; do
   [ -x "$tool" ] || fail "cross-tool missing: $tool"
 done
+export CC CXX AR RANLIB STRIP READELF
 
 mkdir -p "$CACHE" "$BUILD" "$OUT"
 
@@ -83,7 +84,8 @@ export PATH="$JAVA8/bin:$PATH"
 echo "== GNU Classpath 0.99 =="
 (
   cd "$BUILD/classpath-build"
-  CC="$CC" CXX="$CXX" AR="$AR" RANLIB="$RANLIB" \
+  CC="$CC" CXX="$CXX" AR="$AR" RANLIB="$RANLIB" STRIP="$STRIP" \
+  GCJ_JAVAC_TRUE="#" GCJ_JAVAC_FALSE= \
   CFLAGS="$COMMON_CFLAGS" CPPFLAGS="$COMMON_CPPFLAGS" LDFLAGS="$COMMON_LDFLAGS" \
   JAVAC="$JAVA8/bin/javac" \
   "$CLASSPATH_SRC/configure" \
@@ -103,7 +105,6 @@ echo "== GNU Classpath 0.99 =="
     --disable-gjdoc \
     --disable-examples \
     --disable-tools \
-    --enable-default-preferences=file \
     --disable-tool-wrappers \
     --disable-Werror
   make -j"${JOBS:-2}"
