@@ -9,7 +9,7 @@ JAVA8="${JAVA8:-${JAVA_HOME:-}}"
 [ -n "$JAVA8" ] || fail JAVA8_NOT_SET
 for tool in javac jar; do [ -x "$JAVA8/bin/$tool" ] || fail "$tool missing"; done
 
-PLATFORM="$ROOT/out/p2c-input-frontend-candidate-r1/freej2me-rg35xx.jar"
+PLATFORM="${P3_PLATFORM:-$ROOT/out/p2c-input-frontend-candidate-r1/freej2me-rg35xx.jar}"
 SRC="$ROOT/tests/p3/RG35XXP3RuntimeServiceExerciser.java"
 OUT="$ROOT/out/p3-runtime-service-exerciser"
 BUILD="$ROOT/build/p3-runtime-service-exerciser"
