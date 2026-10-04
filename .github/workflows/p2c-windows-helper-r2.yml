@@ -1,0 +1,149 @@
+name: P2C Windows Helper R2 Hygiene
+
+on:
+  push:
+    branches:
+      - hygiene/p2c-windows-helper-r2-20261004
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  p2c-windows-helper-r2:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    env:
+      READY_DOC_COMMIT: 286e4ebbea850a56db27165aec3e40d1ddf97380
+      SOURCE_RUN_ID: 37145570672
+      SOURCE_ARTIFACT_NAME: RG35XX-P2C-INPUT-FRONTEND-PHYSICAL-R3-ceca509b39f95f2d172c4b20119ab644522be55b
+      SOURCE_RAW_PACKAGE_SHA256: 014c7f7b96f24aae62610fec7b1157c23a2c844777fb5b70b9b524a818962e36
+      EXPECTED_PLATFORM: 471152544509fe0e4822e782b53fdcbda3288a57ac2fb29a2efe7032e283d9a9
+      EXPECTED_EXERCISER: baed252f0d68736867b3a6d4f50f3a30199f7705050e5ac898403218bc9784ac
+      EXPECTED_INPUT: 6eaf5e23a63fa346782f35dff340d625238a89db4e54cce56d34ba5db5a4064c
+      EXPECTED_FONT_NATIVE: 29d19de922e9b3b24b93dca2db73886a32fd9e51ef1c9215b820d12324b8c84b
+      EXPECTED_VIDEO: c6687c0a43b24b425af0727c928afb5414da811ecbcbbe3538928470abe8bd0d
+      EXPECTED_AUDIO: 4522157846c33c150a85c50b4bed6f68351f1c62d54b8cd7805cbb97c5727644
+
+    steps:
+      - name: Checkout hygiene branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify hygiene-only repository scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$READY_DOC_COMMIT" HEAD
+          changed="$(git diff --name-only "$READY_DOC_COMMIT"..HEAD | LC_ALL=C sort)"
+          expected=$'.github/workflows/p2c-windows-helper-r2.yml\nscripts/build-p2c-windows-helper-r2.sh'
+          test "$changed" = "$expected" || { printf 'P2C_WINDOWS_HELPER_R2_SCOPE_FAIL=%s\n' "$changed"; exit 1; }
+          ! printf '%s\n' "$changed" | grep -E '^(adapter/|upstream/|packaging/|tests/|scripts/build-a|scripts/stage-)'
+          echo P2C_WINDOWS_HELPER_R2_SCOPE=PASS
+          echo P2C_WINDOWS_HELPER_R2_RUNTIME_SEMANTIC_DELTA=NONE
+          echo P2C_PHYSICAL_TEST=NOT_TESTED
+          echo RG35XX_PLATFORM_BASELINE_DEVICE_PASS=NO
+          echo STABLE=NO
+          echo A9_PARENT=NO
+          echo GAME_SPECIFIC_CODE=NO
+
+      - name: Download exact successful R3 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ env.SOURCE_ARTIFACT_NAME }}
+          path: input-artifact
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          run-id: ${{ env.SOURCE_RUN_ID }}
+
+      - name: Gate exact source raw package
+        shell: bash
+        run: |
+          set -euo pipefail
+          RAW="$(find input-artifact -type f -name 'RG35XX-P2C-INPUT-FRONTEND-PHYSICAL-R1.zip' -print -quit)"
+          test -n "$RAW"
+          test "$(sha256sum "$RAW" | awk '{print $1}')" = "$SOURCE_RAW_PACKAGE_SHA256"
+          echo "SOURCE_RAW_PACKAGE=$RAW" >> "$GITHUB_ENV"
+          echo P2C_WINDOWS_HELPER_R2_SOURCE_PACKAGE_GATE=PASS
+
+      - name: Build Windows helper R2 around exact R3 payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x scripts/build-p2c-windows-helper-r2.sh
+          bash scripts/build-p2c-windows-helper-r2.sh "$SOURCE_RAW_PACKAGE" out/p2c-windows-helper-r2 | tee /tmp/p2c-windows-helper-r2.log
+          grep -q '^P2C_WINDOWS_HELPER_R2_SD_RUNTIME_PAYLOAD_DELTA=NONE$' /tmp/p2c-windows-helper-r2.log
+          grep -q '^P2C_WINDOWS_HELPER_R2_RUNTIME_SEMANTIC_DELTA=NONE$' /tmp/p2c-windows-helper-r2.log
+          grep -q '^P2C_WINDOWS_HELPER_R2_BUILD=PASS$' /tmp/p2c-windows-helper-r2.log
+          grep -q '^P2C_PHYSICAL_TEST=NOT_TESTED$' /tmp/p2c-windows-helper-r2.log
+
+      - name: Independently verify SD tree and helper contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          FIXED=out/p2c-windows-helper-r2/RG35XX-P2C-INPUT-FRONTEND-PHYSICAL-R1-WINDOWS-HELPER-R2.zip
+          test -f "$FIXED"
+          rm -rf /tmp/p2c-source /tmp/p2c-fixed
+          mkdir -p /tmp/p2c-source /tmp/p2c-fixed
+          unzip -q "$SOURCE_RAW_PACKAGE" -d /tmp/p2c-source
+          unzip -q "$FIXED" -d /tmp/p2c-fixed
+          SRC=/tmp/p2c-source/RG35XX-P2C-INPUT-FRONTEND-PHYSICAL-R1
+          DST=/tmp/p2c-fixed/RG35XX-P2C-INPUT-FRONTEND-PHYSICAL-R1
+          diff -qr "$SRC/SD" "$DST/SD"
+          PAYLOAD="$DST/SD/Roms/APPS/RG35XX-P2C-INPUT-FRONTEND"
+          test "$(sha256sum "$PAYLOAD/freej2me-rg35xx.jar" | awk '{print $1}')" = "$EXPECTED_PLATFORM"
+          test "$(sha256sum "$PAYLOAD/RG35XX-Platform-Exerciser-P2C-InputFrontend.jar" | awk '{print $1}')" = "$EXPECTED_EXERCISER"
+          test "$(sha256sum "$PAYLOAD/librg35xx_input.so" | awk '{print $1}')" = "$EXPECTED_INPUT"
+          test "$(sha256sum "$PAYLOAD/librg35xx_font.so" | awk '{print $1}')" = "$EXPECTED_FONT_NATIVE"
+          test "$(sha256sum "$PAYLOAD/librg35xx_video.so" | awk '{print $1}')" = "$EXPECTED_VIDEO"
+          test "$(sha256sum "$PAYLOAD/libaudio.so" | awk '{print $1}')" = "$EXPECTED_AUDIO"
+          grep -q 'INSTALL_RESULT=PASS' "$DST/INSTALL-RG35XX-P2C-INPUT-FRONTEND.ps1"
+          grep -q 'Press ENTER to close' "$DST/INSTALL-RG35XX-P2C-INPUT-FRONTEND.ps1"
+          grep -q 'Get-FileHash' "$DST/INSTALL-RG35XX-P2C-INPUT-FRONTEND.ps1"
+          grep -q 'Refusing Windows system drive' "$DST/INSTALL-RG35XX-P2C-INPUT-FRONTEND.ps1"
+          grep -q 'COLLECT_RESULT=PASS' "$DST/COLLECT-RG35XX-P2C-INPUT-FRONTEND-EVIDENCE.ps1"
+          grep -q 'Compress-Archive' "$DST/COLLECT-RG35XX-P2C-INPUT-FRONTEND-EVIDENCE.ps1"
+          test -f "$DST/INSTALL-RG35XX-P2C-INPUT-FRONTEND.cmd"
+          test -f "$DST/COLLECT-RG35XX-P2C-INPUT-FRONTEND-EVIDENCE.cmd"
+          grep -q '^SD_RUNTIME_PAYLOAD_DELTA=NONE$' "$DST/WINDOWS-HELPER-R2-IDENTITY.txt"
+          grep -q '^RUNTIME_SEMANTIC_DELTA=NONE$' "$DST/WINDOWS-HELPER-R2-IDENTITY.txt"
+          echo P2C_WINDOWS_HELPER_R2_INDEPENDENT_SD_TREE_IDENTITY=PASS
+          echo P2C_WINDOWS_HELPER_R2_HELPER_CONTRACT=PASS
+          echo P2C_PHYSICAL_TEST=NOT_TESTED
+          echo RG35XX_PLATFORM_BASELINE_DEVICE_PASS=NO
+          echo STABLE=NO
+
+      - name: Emit helper package identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          FIXED=out/p2c-windows-helper-r2/RG35XX-P2C-INPUT-FRONTEND-PHYSICAL-R1-WINDOWS-HELPER-R2.zip
+          SHA="$(sha256sum "$FIXED" | awk '{print $1}')"
+          cat > out/p2c-windows-helper-r2/P2C-WINDOWS-HELPER-R2-CI-IDENTITY.txt <<EOF_ID
+          PROJECT=RG35XX-AWEIGIT-R1
+          MODULE=P2C_INPUT_FRONTEND
+          HYGIENE=P2C_WINDOWS_HELPER_R2
+          SOURCE_RUN_ID=$SOURCE_RUN_ID
+          SOURCE_RAW_PACKAGE_SHA256=$SOURCE_RAW_PACKAGE_SHA256
+          OUTPUT_PACKAGE_SHA256=$SHA
+          SD_RUNTIME_PAYLOAD_DELTA=NONE
+          RUNTIME_SEMANTIC_DELTA=NONE
+          P2C_PHYSICAL_TEST=NOT_TESTED
+          RG35XX_PLATFORM_BASELINE_DEVICE_PASS=NO
+          STABLE=NO
+          A9_PARENT=NO
+          GAME_SPECIFIC_CODE=NO
+          EOF_ID
+          cat out/p2c-windows-helper-r2/P2C-WINDOWS-HELPER-R2-CI-IDENTITY.txt
+
+      - name: Upload helper-only package
+        uses: actions/upload-artifact@v4
+        with:
+          name: RG35XX-P2C-INPUT-FRONTEND-WINDOWS-HELPER-R2-${{ github.sha }}
+          path: |
+            out/p2c-windows-helper-r2/RG35XX-P2C-INPUT-FRONTEND-PHYSICAL-R1-WINDOWS-HELPER-R2.zip
+            out/p2c-windows-helper-r2/P2C-WINDOWS-HELPER-R2-CI-IDENTITY.txt
+            out/p2c-windows-helper-r2/sd-before.sha256
+            out/p2c-windows-helper-r2/sd-after.sha256
