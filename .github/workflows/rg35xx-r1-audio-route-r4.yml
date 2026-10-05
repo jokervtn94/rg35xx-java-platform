@@ -1,0 +1,110 @@
+name: RG35XX R1 Audio Route R4
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/rg35xx-r1-audio-route-r4.yml"
+      - "scripts/build-rg35xx-r1-audio-route-r4.sh"
+      - "scripts/gate-rg35xx-r1-audio-route-r4.py"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - name: Checkout audio-route owner branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install archive tools
+        run: |
+          set -euo pipefail
+          sudo apt-get update >/dev/null
+          sudo apt-get install -y --no-install-recommends unzip zip python3 curl >/dev/null
+
+      - name: Download exact R3 parent artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          R3_ARTIFACT_ID: "11324480934"
+          R3_DEVICE_SHA: "93dab9974944b41b4153775aea1a7670ea0b269f55a121680f42ff47032643b3"
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/r3-artifact /tmp/r3-wrapper.zip
+          mkdir -p /tmp/r3-artifact
+          curl -fL \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/jokervtn94/rg35xx-java-platform/actions/artifacts/$R3_ARTIFACT_ID/zip" \
+            -o /tmp/r3-wrapper.zip
+          unzip -q /tmp/r3-wrapper.zip -d /tmp/r3-artifact
+          R3_ZIP="$(find /tmp/r3-artifact -type f -name 'RG35XX-MIYOO-FULL-PORT-R1-P7-READY-R3.zip' -print -quit)"
+          test -n "$R3_ZIP"
+          test "$(sha256sum "$R3_ZIP" | awk '{print $1}')" = "$R3_DEVICE_SHA"
+          echo "R3_DEVICE_ZIP=$R3_ZIP" >> "$GITHUB_ENV"
+          echo R3_PARENT_IDENTITY=PASS
+
+      - name: Build exact A1P5 route-prime R4
+        run: |
+          set -euo pipefail
+          chmod +x scripts/build-rg35xx-r1-audio-route-r4.sh
+          R3_DEVICE_ZIP="$R3_DEVICE_ZIP" bash scripts/build-rg35xx-r1-audio-route-r4.sh | tee R4-BUILD.log
+          grep -q '^R1_AUDIO_ROUTE_R4_BUILD=PASS$' R4-BUILD.log
+          grep -q '^R1_AUDIO_ROUTE_R4_PRIME_SHA256=8c30691e755abd6791ac75887b56e20f1a56266b2eb0286bfb4007b98f7d7a7e$' R4-BUILD.log
+          grep -q '^R1_AUDIO_ROUTE_R4_RUNTIME_SEMANTIC_DELTA=NONE$' R4-BUILD.log
+          grep -q '^R1_AUDIO_ROUTE_R4_NATIVE_AUDIO_DELTA=NONE$' R4-BUILD.log
+
+      - name: Independently gate final device ZIP
+        run: |
+          set -euo pipefail
+          ZIP=out/r1-audio-route-r4/RG35XX-MIYOO-FULL-PORT-R1-P7-READY-R4.zip
+          python3 scripts/gate-rg35xx-r1-audio-route-r4.py "$ZIP" | tee R4-GATE.log
+          grep -q '^R1_R4_INDEPENDENT_GATE=PASS$' R4-GATE.log
+          grep -q '^R1_R4_GOLDEN_A1P5_ROUTE_PRIME_GATE=PASS$' R4-GATE.log
+          grep -q '^R1_R4_PLATFORM_HASH_GATE=PASS$' R4-GATE.log
+          grep -q '^R1_R4_RUNTIME_HASH_GATE=PASS$' R4-GATE.log
+          grep -q '^R1_R4_NATIVE_HASH_GATE=PASS$' R4-GATE.log
+          grep -q '^R1_R4_CANONICAL_MMAPI_DELTA=NONE$' R4-GATE.log
+          grep -q '^R1_R4_NATIVE_AUDIO_DELTA=NONE$' R4-GATE.log
+          grep -q '^R1_R4_GAME_SPECIFIC_CODE=NO$' R4-GATE.log
+          grep -q '^DEVICE_PASS=NO$' R4-GATE.log
+          grep -q '^STABLE=NO$' R4-GATE.log
+
+      - name: Record host identity
+        run: |
+          set -euo pipefail
+          ZIP=out/r1-audio-route-r4/RG35XX-MIYOO-FULL-PORT-R1-P7-READY-R4.zip
+          {
+            echo PROJECT=RG35XX-AWEIGIT-R1
+            echo STAGE=R4_GOLDEN_AUDIO_ROUTE_RECONSTRUCTION
+            echo SOURCE_BRANCH=${GITHUB_REF_NAME}
+            echo SOURCE_COMMIT=${GITHUB_SHA}
+            echo PARENT_R3_ARTIFACT_ID=11324480934
+            echo PARENT_R3_SHA256=93dab9974944b41b4153775aea1a7670ea0b269f55a121680f42ff47032643b3
+            echo PRIME_PCM_SHA256=8c30691e755abd6791ac75887b56e20f1a56266b2eb0286bfb4007b98f7d7a7e
+            echo R4_ZIP_SHA256=$(sha256sum "$ZIP" | awk '{print $1}')
+            echo RUNTIME_SEMANTIC_DELTA=NONE
+            echo NATIVE_AUDIO_DELTA=NONE
+            echo GAME_SPECIFIC_CODE=NO
+            echo P6_PHYSICAL_ACCEPTANCE=NOT_TESTED
+            echo P7_PHYSICAL_REGRESSION=NOT_TESTED
+            echo DEVICE_PASS=NO
+            echo STABLE=NO
+          } > R4-HOST-IDENTITY.txt
+          cat R4-HOST-IDENTITY.txt
+
+      - name: Upload R4 physical candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: RG35XX-R1-AUDIO-ROUTE-R4-${{ github.sha }}
+          path: |
+            out/r1-audio-route-r4/RG35XX-MIYOO-FULL-PORT-R1-P7-READY-R4.zip
+            R4-BUILD.log
+            R4-GATE.log
+            R4-HOST-IDENTITY.txt
+          if-no-files-found: error
