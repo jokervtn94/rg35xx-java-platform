@@ -1,0 +1,128 @@
+name: RG35XX R1 Audio Lineage R3
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/rg35xx-r1-audio-lineage-r3.yml"
+      - "scripts/build-rg35xx-r1-audio-lineage-r3.sh"
+      - "scripts/gate-rg35xx-r1-audio-lineage-r3.py"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - name: Checkout physical-test branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install archive tools
+        run: |
+          set -euo pipefail
+          sudo apt-get update >/dev/null
+          sudo apt-get install -y --no-install-recommends unzip zip python3 curl >/dev/null
+
+      - name: Download exact R2 physical parent
+        env:
+          GH_TOKEN: ${{ github.token }}
+          R2_ARTIFACT_ID: "11324162760"
+          R2_DEVICE_SHA: "72492858d07b2c21d0c766c050f6b6af63fc3c883361916f2dd848503815b63e"
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/r2-artifact /tmp/r2-wrapper.zip
+          mkdir -p /tmp/r2-artifact
+          curl -fL \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/jokervtn94/rg35xx-java-platform/actions/artifacts/$R2_ARTIFACT_ID/zip" \
+            -o /tmp/r2-wrapper.zip
+          unzip -q /tmp/r2-wrapper.zip -d /tmp/r2-artifact
+          R2_ZIP="$(find /tmp/r2-artifact -type f -name 'RG35XX-MIYOO-FULL-PORT-R1-P7-READY-LAYOUT-R2.zip' -print -quit)"
+          test -n "$R2_ZIP"
+          test "$(sha256sum "$R2_ZIP" | awk '{print $1}')" = "$R2_DEVICE_SHA"
+          echo "R2_DEVICE_ZIP=$R2_ZIP" >> "$GITHUB_ENV"
+          echo R2_PARENT_IDENTITY=PASS
+
+      - name: Download exact physically accepted P3 audio-loader artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          P3_ARTIFACT_ID: "11306309186"
+          P3_PLATFORM_SHA: "a72df91165616bb87d1821ab9fb8641bd2c168b53175043ccd691bffe9504f00"
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/p3-accepted /tmp/p3-wrapper.zip
+          mkdir -p /tmp/p3-accepted
+          curl -fL \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/jokervtn94/rg35xx-java-platform/actions/artifacts/$P3_ARTIFACT_ID/zip" \
+            -o /tmp/p3-wrapper.zip
+          unzip -q /tmp/p3-wrapper.zip -d /tmp/p3-accepted
+          P3_JAR="$(find /tmp/p3-accepted -type f -path '*/out/p3-audio-platform/freej2me-rg35xx.jar' -print -quit)"
+          test -n "$P3_JAR"
+          test "$(sha256sum "$P3_JAR" | awk '{print $1}')" = "$P3_PLATFORM_SHA"
+          echo "P3_ACCEPTED_ARTIFACT_DIR=/tmp/p3-accepted" >> "$GITHUB_ENV"
+          echo P3_ACCEPTED_AUDIO_LOADER_IDENTITY=PASS
+
+      - name: Build R3 with exact accepted P3 platform
+        run: |
+          set -euo pipefail
+          chmod +x scripts/build-rg35xx-r1-audio-lineage-r3.sh
+          R2_DEVICE_ZIP="$R2_DEVICE_ZIP" P3_ACCEPTED_ARTIFACT_DIR="$P3_ACCEPTED_ARTIFACT_DIR" \
+            bash scripts/build-rg35xx-r1-audio-lineage-r3.sh | tee R1-AUDIO-LINEAGE-R3-BUILD.log
+          grep -q '^R1_AUDIO_LINEAGE_R3_BUILD=PASS$' R1-AUDIO-LINEAGE-R3-BUILD.log
+          grep -q '^R1_AUDIO_LINEAGE_R3_PLATFORM_SHA256=a72df91165616bb87d1821ab9fb8641bd2c168b53175043ccd691bffe9504f00$' R1-AUDIO-LINEAGE-R3-BUILD.log
+          grep -q '^R1_AUDIO_LINEAGE_R3_RUNTIME_SEMANTIC_DELTA=NONE$' R1-AUDIO-LINEAGE-R3-BUILD.log
+          grep -q '^R1_AUDIO_LINEAGE_R3_NATIVE_AUDIO_DELTA=NONE$' R1-AUDIO-LINEAGE-R3-BUILD.log
+
+      - name: Independently gate final R3 ZIP
+        run: |
+          set -euo pipefail
+          ZIP=out/r1-audio-lineage-r3/RG35XX-MIYOO-FULL-PORT-R1-P7-READY-R3.zip
+          python3 scripts/gate-rg35xx-r1-audio-lineage-r3.py "$ZIP" | tee R1-AUDIO-LINEAGE-R3-GATE.log
+          grep -q '^R1_R3_INDEPENDENT_GATE=PASS$' R1-AUDIO-LINEAGE-R3-GATE.log
+          grep -q '^R1_R3_ACCEPTED_P3_PLATFORM_GATE=PASS$' R1-AUDIO-LINEAGE-R3-GATE.log
+          grep -q '^R1_R3_AUDIO_LOADER_MARKER_GATE=PASS$' R1-AUDIO-LINEAGE-R3-GATE.log
+          grep -q '^R1_R3_RUNTIME_SEMANTIC_DELTA=NONE$' R1-AUDIO-LINEAGE-R3-GATE.log
+          grep -q '^R1_R3_NATIVE_AUDIO_DELTA=NONE$' R1-AUDIO-LINEAGE-R3-GATE.log
+
+      - name: Record package identity
+        run: |
+          set -euo pipefail
+          ZIP=out/r1-audio-lineage-r3/RG35XX-MIYOO-FULL-PORT-R1-P7-READY-R3.zip
+          {
+            echo PROJECT=RG35XX-AWEIGIT-R1
+            echo STAGE=FULL_PORT_R1_AUDIO_LINEAGE_R3
+            echo SOURCE_BRANCH=${GITHUB_REF_NAME}
+            echo SOURCE_COMMIT=${GITHUB_SHA}
+            echo R2_PARENT_ARTIFACT_ID=11324162760
+            echo R2_PARENT_DEVICE_ZIP_SHA256=72492858d07b2c21d0c766c050f6b6af63fc3c883361916f2dd848503815b63e
+            echo ACCEPTED_P3_ARTIFACT_ID=11306309186
+            echo ACCEPTED_P3_WORKFLOW_RUN=37211752518
+            echo ACCEPTED_P3_PLATFORM_SHA256=a72df91165616bb87d1821ab9fb8641bd2c168b53175043ccd691bffe9504f00
+            echo R3_DEVICE_ZIP_SHA256=$(sha256sum "$ZIP" | awk '{print $1}')
+            echo RUNTIME_SEMANTIC_DELTA=NONE
+            echo NATIVE_AUDIO_DELTA=NONE
+            echo P6_PHYSICAL_ACCEPTANCE=NOT_TESTED
+            echo P7_PHYSICAL_REGRESSION=NOT_TESTED
+            echo DEVICE_PASS=NO
+            echo STABLE=NO
+          } > R1-AUDIO-LINEAGE-R3-HOST-IDENTITY.txt
+          cat R1-AUDIO-LINEAGE-R3-HOST-IDENTITY.txt
+
+      - name: Upload R3 physical candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: RG35XX-R1-AUDIO-LINEAGE-R3-${{ github.sha }}
+          path: |
+            out/r1-audio-lineage-r3/RG35XX-MIYOO-FULL-PORT-R1-P7-READY-R3.zip
+            R1-AUDIO-LINEAGE-R3-BUILD.log
+            R1-AUDIO-LINEAGE-R3-GATE.log
+            R1-AUDIO-LINEAGE-R3-HOST-IDENTITY.txt
+          if-no-files-found: error
