@@ -25,7 +25,8 @@ with zipfile.ZipFile(sys.argv[1]) as z:
     if sha(audio) != audio_sha:
         raise SystemExit('R5_TRACE_GATE_FAIL=TRACE_AUDIO_HASH')
     for marker in [b'RG35XX_AUDIO_TRACE event=', b'RG35XX_R5_AUDIO_OWNER_PLAY=',
-                   b'RG35XX_R5_AUDIO_OWNER_BIND=PASS']:
+                   b'RG35XX_R5_AUDIO_OWNER_BIND=PASS', b'postmix_cb=',
+                   b'RG35XX_AUDIO_TRACE event=spec.actual']:
         if marker not in audio:
             raise SystemExit('R5_TRACE_GATE_FAIL=AUDIO_MARKER:' + marker.decode())
     for rel in ['SD/Roms/APPS/RG35XX-FULL-PORT-R1-TEST.sh',

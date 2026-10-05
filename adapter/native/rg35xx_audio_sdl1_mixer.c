@@ -42,6 +42,9 @@ typedef int (*pMix_PlayingMusic)(void);
 typedef int (*pMix_Playing)(int);
 typedef int (*pMix_VolumeMusic)(int);
 typedef int (*pMix_Volume)(int, int);
+typedef void (*pMix_SetPostMix)(void (*)(void *, uint8_t *, int), void *);
+typedef int (*pMix_QuerySpec)(int *, uint16_t *, int *);
+typedef const char *(*pMix_GetError)(void);
 typedef void (*pMix_FreeMusic)(void *);
 typedef void (*pMix_FreeChunk)(void *);
 
@@ -58,6 +61,11 @@ static int g_audio_open;
 static JavaVM *g_vm;
 static void *g_current_music;
 static int g_trace_enabled = -1;
+static volatile unsigned long g_postmix_callbacks;
+static volatile unsigned long g_postmix_nonzero_callbacks;
+static volatile unsigned long g_postmix_bytes;
+static volatile unsigned long g_postmix_last_len;
+static volatile int g_postmix_last_nonzero;
 
 static pSDL_InitSubSystem SDL_InitSubSystem_p;
 static pSDL_QuitSubSystem SDL_QuitSubSystem_p;
@@ -80,6 +88,9 @@ static pMix_PlayingMusic Mix_PlayingMusic_p;
 static pMix_Playing Mix_Playing_p;
 static pMix_VolumeMusic Mix_VolumeMusic_p;
 static pMix_Volume Mix_Volume_p;
+static pMix_SetPostMix Mix_SetPostMix_p;
+static pMix_QuerySpec Mix_QuerySpec_p;
+static pMix_GetError Mix_GetError_p;
 static pMix_FreeMusic Mix_FreeMusic_p;
 static pMix_FreeChunk Mix_FreeChunk_p;
 
@@ -109,8 +120,33 @@ static void rg35xx_audio_trace_state(const char *event, jobject manager, void *m
     int playing = -1;
     if (g_audio_open && Mix_PlayingMusic_p) playing = Mix_PlayingMusic_p();
     rg35xx_audio_trace(event,
-        "manager=%p handle=%p current=%p open=%d playing=%d result=%d",
-        (void *)manager, music, g_current_music, g_audio_open, playing, result);
+        "manager=%p handle=%p current=%p open=%d playing=%d result=%d postmix_cb=%lu postmix_nz=%lu postmix_bytes=%lu postmix_last_len=%lu postmix_last_nonzero=%d",
+        (void *)manager, music, g_current_music, g_audio_open, playing, result,
+        g_postmix_callbacks, g_postmix_nonzero_callbacks, g_postmix_bytes,
+        g_postmix_last_len, g_postmix_last_nonzero);
+}
+
+/*
+ * SDL_mixer invokes this after it has mixed a device buffer. Keep the callback
+ * strictly counter-only: logging or allocation here could itself cause an
+ * underrun on the RG35XX. JNI-side trace points report the counters later.
+ */
+static void rg35xx_audio_postmix(void *userdata, uint8_t *stream, int len) {
+    int i;
+    int nonzero = 0;
+    (void)userdata;
+    if (!stream || len <= 0) return;
+    for (i = 0; i < len; ++i) {
+        if (stream[i] != 0) {
+            nonzero = 1;
+            break;
+        }
+    }
+    ++g_postmix_callbacks;
+    g_postmix_bytes += (unsigned long)len;
+    g_postmix_last_len = (unsigned long)len;
+    g_postmix_last_nonzero = nonzero;
+    if (nonzero) ++g_postmix_nonzero_callbacks;
 }
 
 typedef struct MusicContext {
@@ -125,6 +161,12 @@ static MusicContext *g_contexts;
 static const char *sdl_error(void) {
     const char *e = SDL_GetError_p ? SDL_GetError_p() : 0;
     return (e && *e) ? e : "unknown";
+}
+
+static const char *mix_error(void) {
+    const char *e = Mix_GetError_p ? Mix_GetError_p() : 0;
+    if (e && *e) return e;
+    return sdl_error();
 }
 
 static void *open_first(const char *const *names) {
@@ -176,6 +218,10 @@ static int load_backend(void) {
     LOAD_MIX(Mix_Playing);
     LOAD_MIX(Mix_VolumeMusic);
     LOAD_MIX(Mix_Volume);
+    /* These are optional so the accepted SDL_mixer ABI remains loadable. */
+    Mix_SetPostMix_p = (pMix_SetPostMix)dlsym(g_mix, "Mix_SetPostMix");
+    Mix_QuerySpec_p = (pMix_QuerySpec)dlsym(g_mix, "Mix_QuerySpec");
+    Mix_GetError_p = (pMix_GetError)dlsym(g_mix, "Mix_GetError");
     LOAD_MIX(Mix_FreeMusic);
     LOAD_MIX(Mix_FreeChunk);
 #undef LOAD_SDL
@@ -261,6 +307,9 @@ JNIEXPORT void JNICALL JNI_OnUnload(JavaVM *vm, void *reserved) {
 JNIEXPORT jint JNICALL Java_org_recompile_mobile_SdlMixerManager_sdlMixerInit
   (JNIEnv *env, jclass cls, jint frequency, jint format, jint channels, jint chunksize) {
     int rc;
+    int actual_freq = 0;
+    uint16_t actual_fmt = 0;
+    int actual_ch = 0;
     int freq = frequency > 0 ? frequency : RG35XX_AUDIO_FREQ;
     uint16_t fmt = format != 0 ? (uint16_t)format : (uint16_t)RG35XX_AUDIO_S16LSB;
     int ch = channels > 0 ? channels : RG35XX_AUDIO_CHANNELS;
@@ -283,12 +332,29 @@ JNIEXPORT jint JNICALL Java_org_recompile_mobile_SdlMixerManager_sdlMixerInit
         return -1;
     }
     if (Mix_OpenAudio_p(freq, fmt, ch, chunk) != 0) {
-        fprintf(stderr, "RG35XX_A7_AUDIO_MIX_OPEN_FAIL=%s\n", sdl_error());
+        fprintf(stderr, "RG35XX_A7_AUDIO_MIX_OPEN_FAIL=%s\n", mix_error());
         fflush(stderr);
         SDL_QuitSubSystem_p(SDL_INIT_AUDIO);
         return -1;
     }
     g_audio_open = 1;
+    g_postmix_callbacks = 0;
+    g_postmix_nonzero_callbacks = 0;
+    g_postmix_bytes = 0;
+    g_postmix_last_len = 0;
+    g_postmix_last_nonzero = 0;
+    if (Mix_SetPostMix_p) {
+        Mix_SetPostMix_p(rg35xx_audio_postmix, 0);
+        rg35xx_audio_trace("postmix.install", "available=1");
+    } else {
+        rg35xx_audio_trace("postmix.install", "available=0");
+    }
+    if (Mix_QuerySpec_p && Mix_QuerySpec_p(&actual_freq, &actual_fmt, &actual_ch)) {
+        rg35xx_audio_trace("spec.actual", "frequency=%d format=%u channels=%d",
+                           actual_freq, (unsigned)actual_fmt, actual_ch);
+    } else {
+        rg35xx_audio_trace("spec.actual", "available=0");
+    }
     rg35xx_audio_trace("init.pass", "frequency=%d format=%u channels=%d chunk=%d",
                        freq, (unsigned)fmt, ch, chunk);
     printf("RG35XX_A7_AUDIO_INIT=PASS BACKEND=SDL1_MIXER FREQ=%d FORMAT=%u CHANNELS=%d CHUNK=%d\n",
@@ -327,10 +393,10 @@ JNIEXPORT jlong JNICALL Java_org_recompile_mobile_SdlMixerManager_sdlMixerLoadMi
     music = Mix_LoadMUS_p(path);
     (*env)->ReleaseStringUTFChars(env, filePath, path);
     if (!music) {
-        fprintf(stderr, "RG35XX_A7_AUDIO_MIDI_LOAD_FAIL=%s\n", sdl_error());
+        fprintf(stderr, "RG35XX_A7_AUDIO_MIDI_LOAD_FAIL=%s\n", mix_error());
         fflush(stderr);
         rg35xx_audio_trace("midi.load.fail", "manager=%p player=%p result=-1 error=%s",
-                           (void *)obj, (void *)player, sdl_error());
+                           (void *)obj, (void *)player, mix_error());
         return (jlong)-1;
     }
 
@@ -371,13 +437,13 @@ JNIEXPORT jlong JNICALL Java_org_recompile_mobile_SdlMixerManager_sdlMixerLoadWa
     rw = SDL_RWFromFile_p(path, "rb");
     (*env)->ReleaseStringUTFChars(env, filePath, path);
     if (!rw) {
-        fprintf(stderr, "RG35XX_A7_AUDIO_WAV_RW_FAIL=%s\n", sdl_error());
+        fprintf(stderr, "RG35XX_A7_AUDIO_WAV_RW_FAIL=%s\n", mix_error());
         fflush(stderr);
         return (jlong)-1;
     }
     chunk = Mix_LoadWAV_RW_p(rw, 1);
     if (!chunk) {
-        fprintf(stderr, "RG35XX_A7_AUDIO_WAV_LOAD_FAIL=%s\n", sdl_error());
+        fprintf(stderr, "RG35XX_A7_AUDIO_WAV_LOAD_FAIL=%s\n", mix_error());
         fflush(stderr);
         return (jlong)-1;
     }
@@ -397,7 +463,7 @@ JNIEXPORT jint JNICALL Java_org_recompile_mobile_SdlMixerManager_sdlMixerPlayMus
     Mix_HookMusicFinished_p(loops == -1 ? 0 : music_finished_callback);
     if (Mix_PlayMusic_p(music, loops) != 0) {
         Mix_HookMusicFinished_p(0);
-        fprintf(stderr, "RG35XX_A7_AUDIO_MIDI_PLAY_FAIL=%s\n", sdl_error());
+        fprintf(stderr, "RG35XX_A7_AUDIO_MIDI_PLAY_FAIL=%s\n", mix_error());
         fflush(stderr);
         rg35xx_audio_trace_state("midi.play.fail", obj, music, -1);
         return -1;
@@ -416,7 +482,7 @@ JNIEXPORT jint JNICALL Java_org_recompile_mobile_SdlMixerManager_sdlMixerPlayWav
     if (!g_audio_open || !chunk) return -1;
     Mix_HaltChannel_p(RG35XX_WAV_CHANNEL);
     if (Mix_PlayChannelTimed_p(RG35XX_WAV_CHANNEL, chunk, loops, -1) < 0) {
-        fprintf(stderr, "RG35XX_A7_AUDIO_WAV_PLAY_FAIL=%s\n", sdl_error());
+        fprintf(stderr, "RG35XX_A7_AUDIO_WAV_PLAY_FAIL=%s\n", mix_error());
         fflush(stderr);
         rg35xx_audio_trace_state("wav.play.fail", obj, chunk, -1);
         return -1;
@@ -538,6 +604,7 @@ JNIEXPORT void JNICALL Java_org_recompile_mobile_SdlMixerManager_sdlMixerQuit
     (void)cls;
     rg35xx_audio_trace("quit.begin", "open=%d current=%p", g_audio_open, g_current_music);
     if (g_audio_open) {
+        if (Mix_SetPostMix_p) Mix_SetPostMix_p(0, 0);
         Mix_HookMusicFinished_p(0);
         Mix_HaltMusic_p();
         Mix_HaltChannel_p(RG35XX_WAV_CHANNEL);

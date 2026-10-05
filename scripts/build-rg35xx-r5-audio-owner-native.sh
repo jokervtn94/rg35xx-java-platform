@@ -36,9 +36,11 @@ for sym in \
 done
 strings "$OUT/libaudio.so" | grep -q 'RG35XX_R5_AUDIO_OWNER_BIND=PASS' || fail OWNER_BIND_MARKER
 strings "$OUT/libaudio.so" | grep -q 'RG35XX_R5_AUDIO_OWNER_RESUME=IGNORED_NONOWNER' || fail OWNER_RESUME_MARKER
+strings "$OUT/libaudio.so" | grep -q 'postmix_cb=' || fail POSTMIX_TRACE_MARKER
+strings "$OUT/libaudio.so" | grep -q 'spec.actual' || fail MIX_SPEC_TRACE_MARKER
 strings "$OUT/libaudio.so" | grep -q '/usr/lib/libSDL_mixer-1.2.so.0' || fail SDL1_MIXER_IDENTITY
 ! strings "$OUT/libaudio.so" | grep -Eq 'libSDL2|MidiSystem|getSequencer|AudioSystem|getClip|/dev/snd/seq' || fail FORBIDDEN_BACKEND
 sha256sum "$OUT/libaudio.so" >"$OUT/libaudio.so.sha256"
 echo R5_AUDIO_NATIVE_BUILD=PASS
 echo R5_AUDIO_NATIVE_SHA256=$(awk '{print $1}' "$OUT/libaudio.so.sha256")
-echo R5_AUDIO_NATIVE_SCOPE=SDL1_MIXER_PLAYER_MANAGER_OWNERSHIP_ONLY
+echo R5_AUDIO_NATIVE_SCOPE=SDL1_MIXER_PLAYER_MANAGER_OWNERSHIP_AND_POSTMIX_DIAGNOSTIC

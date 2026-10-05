@@ -102,13 +102,15 @@ PARENT_R5_DEVICE_ZIP_SHA256=$PARENT_SHA
 PARENT_AUDIO_SHA256=$EXPECTED_R5_AUDIO
 TRACE_AUDIO_SHA256=$TRACE_AUDIO_SHA
 TRACE_CONTROL=RG35XX_AUDIO_TRACE=1
-TRACE_SCOPE=GENERIC_MIDI_WAV_LIFECYCLE_AND_OWNER_STATE
+TRACE_SCOPE=GENERIC_MIDI_WAV_LIFECYCLE_OWNER_STATE_AND_POSTMIX_BUFFER_COUNTERS
+TRACE_POSTMIX_COUNTERS=CALLBACKS_BYTES_NONZERO_BUFFERS_LAST_BUFFER
+TRACE_MIX_SPEC=QUERY_ACTUAL_FREQUENCY_FORMAT_CHANNELS
 P7_HARNESS_DELTA=CONTINUE_TO_GOW_AFTER_VUA_RUNTIME_FAILURE
 CANONICAL_PLATFORMPLAYER=UNCHANGED
 CANONICAL_MMAPI=UNCHANGED
 RUNTIME_SEMANTIC_DELTA=NONE
 PLATFORM_JAVA_DELTA=NONE
-NATIVE_AUDIO_DELTA=DIAGNOSTIC_TRACE_ONLY
+NATIVE_AUDIO_DELTA=DIAGNOSTIC_TRACE_AND_POSTMIX_COUNTERS_ONLY
 GAME_SPECIFIC_CODE=NO
 COMMERCIAL_GAME_CONTENT=NO
 P6_PHYSICAL_ACCEPTANCE=RETEST_NOT_REQUIRED_TRACE_ONLY
@@ -118,11 +120,16 @@ STABLE=NO
 EOF
 
 cat > "$FINAL/README-R5-AUDIO-TRACE.txt" <<EOF
-R5.1 native audio lifecycle diagnostic package.
+R5.2 native audio lifecycle and post-mix diagnostic package.
 
 This package preserves the R5 owner candidate and enables RG35XX_AUDIO_TRACE=1
 only for the Full Port and Tier-0 test launchers. It does not change Java,
 runtime, video, input, or production audio routing semantics.
+
+The native trace installs an SDL_mixer post-mix counter callback without
+logging from the audio thread. The log reports postmix_cb, postmix_nz,
+postmix_bytes, postmix_last_len, postmix_last_nonzero, and the actual
+Mix_QuerySpec result.
 
 Run RG35XX-R1-P7-TIER0.sh with the same external Vua Cướp Biển and God of War
 JARs. Reproduce the God of War menu -> gameplay transition, then collect:

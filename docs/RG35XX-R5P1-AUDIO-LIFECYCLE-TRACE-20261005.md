@@ -1,4 +1,4 @@
-# RG35XX R5.1 audio lifecycle trace
+# RG35XX R5.2 audio lifecycle and post-mix trace
 
 **Branch:** `physical-test/rg35xx-r5-audio-owner-r5p1-audio-trace`  
 **Purpose:** diagnose the remaining God of War gameplay-audio failure after the R5 owner-aware candidate passed the generic WAV/MIDI and Full Port checks.
@@ -10,6 +10,10 @@ R5.1 changes only the native SDL1/SDL_mixer diagnostic build:
 - logs `load`, `play`, `pause`, `resume`, `isPlaying`, `stop`, `free`, and `quit`;
 - records manager identity, MIDI handle, current global SDL_mixer music handle, open state, playing state, and return code;
 - wraps the R5 owner-aware `play` call so the actual transition is visible;
+- installs an SDL_mixer post-mix counter callback that does not log or allocate
+  on the audio thread;
+- records the actual `Mix_QuerySpec` frequency, format, and channel count when
+  that optional ABI is available;
 - enables tracing only from the Full Port and P7 diagnostic launchers with `RG35XX_AUDIO_TRACE=1`.
 
 Java PlatformPlayer/MMAPI, JamVM, video, input, WAV/MIDI routing, and game data are unchanged. No God of War-specific code or commercial game bytes are added.
@@ -34,6 +38,15 @@ Collect:
 - `r5.owner.play.end result=-1` or `midi.play.fail`: native SDL_mixer playback failed; use the adjacent SDL error.
 - `r5.owner.play.end result=0` with `playing=0`: playback was accepted but the SDL_mixer music slot stopped immediately.
 - `playing=1` while the device is silent: the route/ALSA boundary remains implicated; compare the underrun lines and the exact transition timing.
+- `postmix_cb=0`: SDL_mixer did not invoke its post-mix callback after opening
+  the device; this is a stronger indication of a mixer/device callback issue.
+- `postmix_cb>0` and `postmix_nz>0`: SDL_mixer produced non-zero mixed buffers;
+  if the device is still silent, the loss is after the mixer callback (ALSA,
+  device route, or amplifier/output state).
+- `postmix_cb>0` and `postmix_nz=0`: the mixer callback runs but receives only
+  silent buffers; inspect track decoding, volume, and ownership timing.
+- `postmix_bytes` stops increasing while `playing=1`: the reported playing
+  state has diverged from actual audio-buffer delivery.
 - `r5.owner.*.ignored` for the gameplay manager: owner binding/current-handle sequencing remains incorrect.
 
 This package is diagnostic only:
