@@ -1,0 +1,128 @@
+name: RG35XX Miyoo Full Port R1
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - platform-integration/rg35xx-miyoo-full-port-r1
+    paths:
+      - ".github/workflows/rg35xx-miyoo-full-port-r1.yml"
+      - "scripts/build-rg35xx-miyoo-full-port-r1.sh"
+      - "scripts/build-rg35xx-p6-integration-exerciser.sh"
+      - "scripts/gate-rg35xx-miyoo-full-port-r1.py"
+      - "tests/p6/**"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 240
+    env:
+      CANONICAL_AWEIGIT: ca11dfe8ea1cc273d92460f9a83bbf192023fa63
+      P3_ARTIFACT_ID: "11305410866"
+      RUNTIME_ARTIFACT_ID: "11299340903"
+
+    steps:
+      - name: Checkout P3 accepted production lineage
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Set up JDK 8 for Java 6 bytecode
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "8"
+
+      - name: Install archive tools
+        run: |
+          set -euo pipefail
+          sudo apt-get update >/dev/null
+          sudo apt-get install -y --no-install-recommends unzip zip curl python3 >/dev/null
+
+      - name: Verify pinned canonical and inherited source contracts
+        run: |
+          set -euo pipefail
+          bash scripts/verify-canonical.sh
+          python3 scripts/audit-whole-source-contract.py
+          python3 scripts/audit-p3-runtime-services.py
+          test "$(git merge-base HEAD 8cd4f6b2b08d9fbc009719e4d6148f1726972b7b)" = "8cd4f6b2b08d9fbc009719e4d6148f1726972b7b"
+          echo R1_PRODUCTION_PARENT_ANCESTRY_GATE=PASS
+
+      - name: Download accepted P3 and runtime artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/r1-p3 /tmp/r1-runtime /tmp/r1-p3.zip /tmp/r1-runtime.zip
+          mkdir -p /tmp/r1-p3 /tmp/r1-runtime
+          curl -fL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/jokervtn94/rg35xx-java-platform/actions/artifacts/$P3_ARTIFACT_ID/zip" \
+            -o /tmp/r1-p3.zip
+          curl -fL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/jokervtn94/rg35xx-java-platform/actions/artifacts/$RUNTIME_ARTIFACT_ID/zip" \
+            -o /tmp/r1-runtime.zip
+          unzip -q /tmp/r1-p3.zip -d /tmp/r1-p3
+          unzip -q /tmp/r1-runtime.zip -d /tmp/r1-runtime
+          echo "P3_ARTIFACT_DIR=/tmp/r1-p3" >> "$GITHUB_ENV"
+          echo "RUNTIME_ARTIFACT_DIR=/tmp/r1-runtime" >> "$GITHUB_ENV"
+          echo R1_ACCEPTED_ARTIFACT_DOWNLOAD=PASS
+
+      - name: Build one full Port R1 candidate
+        run: |
+          set -euo pipefail
+          JAVA8="$JAVA_HOME" P3_ARTIFACT_DIR="$P3_ARTIFACT_DIR" RUNTIME_ARTIFACT_DIR="$RUNTIME_ARTIFACT_DIR" \
+            bash scripts/build-rg35xx-miyoo-full-port-r1.sh | tee FULL-PORT-R1-BUILD.log
+          grep -q '^FULL_PORT_R1_HOST_BUILD=PASS$' FULL-PORT-R1-BUILD.log
+          grep -q '^P5_GENERIC_INSTALLER_HOST=PASS$' FULL-PORT-R1-BUILD.log
+          grep -q '^P6_FULL_PLATFORM_HOST_BUILD=PASS$' FULL-PORT-R1-BUILD.log
+          grep -q '^P6_ORIGINAL_RG35XX_PHYSICAL=NOT_TESTED$' FULL-PORT-R1-BUILD.log
+          grep -q '^DEVICE_PASS=NO$' FULL-PORT-R1-BUILD.log
+          grep -q '^STABLE=NO$' FULL-PORT-R1-BUILD.log
+          test -f out/full-port-r1/RG35XX-MIYOO-FULL-PORT-R1.zip
+
+      - name: Independently gate final R1 ZIP
+        run: |
+          set -euo pipefail
+          python3 scripts/gate-rg35xx-miyoo-full-port-r1.py \
+            out/full-port-r1/RG35XX-MIYOO-FULL-PORT-R1.zip | tee FULL-PORT-R1-GATE.log
+          grep -q '^FULL_PORT_R1_INDEPENDENT_HASH_GATE=PASS$' FULL-PORT-R1-GATE.log
+          grep -q '^FULL_PORT_R1_JAVA6_GATE=PASS$' FULL-PORT-R1-GATE.log
+          grep -q '^FULL_PORT_R1_DEFERRED_3D_GATE=PASS$' FULL-PORT-R1-GATE.log
+          grep -q '^FULL_PORT_R1_GAME_SPECIFIC_CODE=NO$' FULL-PORT-R1-GATE.log
+
+      - name: Record host identity
+        run: |
+          set -euo pipefail
+          ZIP=out/full-port-r1/RG35XX-MIYOO-FULL-PORT-R1.zip
+          {
+            echo PROJECT=RG35XX-AWEIGIT-R1
+            echo PACKAGE=RG35XX-MIYOO-FULL-PORT-R1
+            echo BUILD_HEAD="$GITHUB_SHA"
+            echo PRODUCTION_PARENT=8cd4f6b2b08d9fbc009719e4d6148f1726972b7b
+            echo CANONICAL_AWEIGIT="$CANONICAL_AWEIGIT"
+            echo P3_ARTIFACT_ID="$P3_ARTIFACT_ID"
+            echo RUNTIME_ARTIFACT_ID="$RUNTIME_ARTIFACT_ID"
+            echo FULL_PORT_R1_ZIP_SHA256="$(sha256sum "$ZIP" | awk '{print $1}')"
+            echo HOST_BUILD=PASS
+            echo P6_ORIGINAL_RG35XX_PHYSICAL=NOT_TESTED
+            echo P7_TIER0_REGRESSION=NOT_TESTED
+            echo DEVICE_PASS=NO
+            echo STABLE=NO
+          } > out/full-port-r1/FULL-PORT-R1-HOST-IDENTITY.txt
+          cat out/full-port-r1/FULL-PORT-R1-HOST-IDENTITY.txt
+
+      - name: Upload Full Port R1
+        uses: actions/upload-artifact@v4
+        with:
+          name: RG35XX-MIYOO-FULL-PORT-R1-${{ github.sha }}
+          path: |
+            out/full-port-r1/RG35XX-MIYOO-FULL-PORT-R1.zip
+            out/full-port-r1/FULL-PORT-R1-HOST-IDENTITY.txt
+            FULL-PORT-R1-BUILD.log
+            FULL-PORT-R1-GATE.log
+          if-no-files-found: error
