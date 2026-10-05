@@ -35,6 +35,9 @@ with zipfile.ZipFile(sys.argv[1]) as z:
             raise SystemExit('R5_TRACE_GATE_FAIL=TRACE_ENV:' + rel)
         if 'EXPECTED_AUDIO=' + audio_sha not in text:
             raise SystemExit('R5_TRACE_GATE_FAIL=AUDIO_HASH_REBIND:' + rel)
+    p7 = need('SD/Roms/APPS/RG35XX-R1-P7-TIER0.sh').decode('utf-8')
+    if 'P7_VUA_CONTINUE_TO_GOW=YES' not in p7:
+        raise SystemExit('R5_TRACE_GATE_FAIL=P7_CONTINUE_HARNESS')
     for token in ['CANONICAL_PLATFORMPLAYER=UNCHANGED',
                   'CANONICAL_MMAPI=UNCHANGED',
                   'RUNTIME_SEMANTIC_DELTA=NONE',
@@ -51,6 +54,7 @@ with zipfile.ZipFile(sys.argv[1]) as z:
 print('R5_AUDIO_TRACE_INDEPENDENT_GATE=PASS')
 print('R5_AUDIO_TRACE_NATIVE_MARKER_GATE=PASS')
 print('R5_AUDIO_TRACE_LAUNCHER_ENV_GATE=PASS')
+print('R5_AUDIO_TRACE_P7_CONTINUE_HARNESS_GATE=PASS')
 print('R5_AUDIO_TRACE_CANONICAL_JAVA_DELTA=NONE')
 print('R5_AUDIO_TRACE_GAME_SPECIFIC_CODE=NO')
 print('DEVICE_PASS=NO')

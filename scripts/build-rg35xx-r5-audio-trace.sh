@@ -40,6 +40,42 @@ for launcher in \
   grep -q "EXPECTED_AUDIO=$TRACE_AUDIO_SHA" "$launcher" || fail "AUDIO_HASH_REBIND:$launcher"
 done
 
+# Keep the diagnostic useful when Vua crashes in its RecordStore path: record
+# the failure, continue to God of War, and return nonzero at the end.
+P7_LAUNCHER="$FINAL/SD/Roms/APPS/RG35XX-R1-P7-TIER0.sh"
+python3 - "$P7_LAUNCHER" <<'PY'
+import pathlib, sys
+p = pathlib.Path(sys.argv[1])
+s = p.read_text()
+old = '[ "$VRC" -eq 0 ] || fail "VUA_JVM_EXIT:$VRC"\necho \'VUA_PHYSICAL_REVIEW=REQUIRED\' >>"$SUMMARY"'
+new = '''if [ "$VRC" -eq 0 ]; then
+  echo 'VUA_PHYSICAL_REVIEW=REQUIRED' >>"$SUMMARY"
+else
+  echo "VUA_RUNTIME_FAILURE=JVM_EXIT:$VRC" >>"$MASTER"
+  echo "VUA_RUNTIME_FAILURE=JVM_EXIT:$VRC" >>"$SUMMARY"
+  echo 'P7_VUA_CONTINUE_TO_GOW=YES' >>"$MASTER"
+fi'''
+if s.count(old) != 1:
+    raise SystemExit('P7_TRACE_HARNESS_VUA_BLOCK_NOT_FOUND')
+s = s.replace(old, new, 1)
+old = "echo 'P7_PROGRAMMATIC_IDENTITY_AND_LAUNCH=PASS' >>\"$SUMMARY\"\necho 'P7_PHYSICAL_REGRESSION=NOT_TESTED' >>\"$SUMMARY\""
+new = '''if [ "$VRC" -ne 0 ]; then
+  echo 'P7_PROGRAMMATIC_IDENTITY_AND_LAUNCH=PARTIAL_VUA_RUNTIME_FAILURE' >>"$SUMMARY"
+  echo 'P7_PHYSICAL_REGRESSION=BLOCKED_BY_VUA_RUNTIME_FAILURE' >>"$SUMMARY"
+  echo 'DEVICE_PASS=NO' >>"$SUMMARY"
+  echo 'STABLE=NO' >>"$SUMMARY"
+  sync
+  exit 20
+fi
+echo 'P7_PROGRAMMATIC_IDENTITY_AND_LAUNCH=PASS' >>"$SUMMARY"
+echo 'P7_PHYSICAL_REGRESSION=NOT_TESTED' >>"$SUMMARY"'''
+if s.count(old) != 1:
+    raise SystemExit('P7_TRACE_HARNESS_FINAL_BLOCK_NOT_FOUND')
+s = s.replace(old, new, 1)
+p.write_text(s)
+PY
+grep -q 'P7_VUA_CONTINUE_TO_GOW=YES' "$P7_LAUNCHER" || fail P7_TRACE_HARNESS_MISSING
+
 # Enable tracing only in this diagnostic package. Production R5 remains unchanged.
 for launcher in \
   "$FINAL/SD/Roms/APPS/RG35XX-FULL-PORT-R1-TEST.sh" \
@@ -67,6 +103,7 @@ PARENT_AUDIO_SHA256=$EXPECTED_R5_AUDIO
 TRACE_AUDIO_SHA256=$TRACE_AUDIO_SHA
 TRACE_CONTROL=RG35XX_AUDIO_TRACE=1
 TRACE_SCOPE=GENERIC_MIDI_WAV_LIFECYCLE_AND_OWNER_STATE
+P7_HARNESS_DELTA=CONTINUE_TO_GOW_AFTER_VUA_RUNTIME_FAILURE
 CANONICAL_PLATFORMPLAYER=UNCHANGED
 CANONICAL_MMAPI=UNCHANGED
 RUNTIME_SEMANTIC_DELTA=NONE
