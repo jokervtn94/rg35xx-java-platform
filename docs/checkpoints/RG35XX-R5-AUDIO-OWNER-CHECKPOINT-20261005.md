@@ -127,7 +127,7 @@ Do not promote beyond the exact state below:
 ```text
 GENERIC_MIDI_LIFECYCLE_C0_C3_AUDIBLE_DEVICE=PASS
 R5_HOST_GATE=PASS
-R5_PHYSICAL_OWNER_TEST=NOT_TESTED
+R5_PHYSICAL_OWNER_TEST=PASS
 P6_RETEST=REQUIRED
 P7_RETEST=REQUIRED
 P8=BLOCKED
@@ -135,7 +135,18 @@ DEVICE-PASS=NO
 STABLE=NO
 ```
 
-The user's audible C0-C3 evidence validates the diagnostic lifecycle cases only. It does not constitute R5 physical acceptance.
+The user then confirmed the R5 discriminator on the original RG35XX:
+
+```text
+A1_LOW_AUDIBLE=PASS
+B_HIGH_AUDIBLE=PASS
+A2_LOW_RETURN_AUDIBLE=PASS
+R5_PHYSICAL_OWNER_TEST=PASS
+```
+
+This accepts the narrow R5 native ownership boundary only. It does not accept
+the downstream P6/P7 regressions, which must be rerun because native audio
+changed.
 
 ## Required next physical sequence
 
