@@ -1,0 +1,260 @@
+#!/usr/bin/env bash
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT"
+fail(){ echo "P7_READY_BUILD_FAIL=$*" >&2; exit 1; }
+
+R1_ZIP="${FULL_PORT_R1_ZIP:-}"
+[ -f "$R1_ZIP" ] || fail FULL_PORT_R1_ZIP_MISSING
+for t in unzip zip sha256sum find awk grep sed; do command -v "$t" >/dev/null 2>&1 || fail "$t missing"; done
+
+EXPECTED_R1_ZIP=d79f416538a32e43c8c4b666658a50dd367a176f712bbe6c74809833a9201d9b
+EXPECTED_PLATFORM=b5e619eedf0b3efcca6770a46a03d125449ff9aadb59c11b18dc1b95bd6c5117
+EXPECTED_INPUT=6eaf5e23a63fa346782f35dff340d625238a89db4e54cce56d34ba5db5a4064c
+EXPECTED_VIDEO=c6687c0a43b24b425af0727c928afb5414da811ecbcbbe3538928470abe8bd0d
+EXPECTED_FONT_NATIVE=29d19de922e9b3b24b93dca2db73886a32fd9e51ef1c9215b820d12324b8c84b
+EXPECTED_AUDIO=4522157846c33c150a85c50b4bed6f68351f1c62d54b8cd7805cbb97c5727644
+EXPECTED_FONT=1a5f4112daaa9473747c6834041646cc9b2c338cb40ab5dbb2f0161f8968ca10
+EXPECTED_JAMVM=0d10011c35b791ac5670ef9f01e3dc888c4b6621c8df4b06a5460ac9072739e3
+EXPECTED_GLIBJ=c85b3af3728c89c090bf5feccdf402fc86474e99a2d61fd02142aa3c89964fd4
+EXPECTED_CLASSES=ce27c0a0bbdacf7c3f0c4f3a2edbc40b5f7892c17b785b1f89f32fd53ef3af86
+VUA_SHA=220ac0e6a2ab61318aa3d2e20057e2231991a21d7ca15148ed3c57534b941578
+GOW_SHA=e256ca47cde2b27735a4f4d3d826003ac5bbc723f91629bd5d093d948c1f9a98
+
+R1_GOT="$(sha256sum "$R1_ZIP" | awk '{print $1}')"
+[ "$R1_GOT" = "$EXPECTED_R1_ZIP" ] || fail "R1_ZIP_HASH:$R1_GOT"
+
+OUT="$ROOT/out/r1-p7-ready"
+WORK="$ROOT/build/r1-p7-ready"
+rm -rf "$OUT" "$WORK"
+mkdir -p "$OUT" "$WORK"
+unzip -q "$R1_ZIP" -d "$WORK"
+SRCROOT="$(find "$WORK" -maxdepth 2 -type d -name 'RG35XX-MIYOO-FULL-PORT-R1' -print -quit)"
+[ -n "$SRCROOT" ] || fail R1_ROOT_NOT_FOUND
+PKGROOT="$OUT/RG35XX-MIYOO-FULL-PORT-R1-P7-READY"
+cp -a "$SRCROOT" "$PKGROOT"
+SD="$PKGROOT/SD"
+APPS="$SD/Roms/APPS"
+PKG="$APPS/FreeJ2ME-RG35XX"
+RUNTIME="$APPS/RG35XX-RUNTIME-CANDIDATE-PROBE/runtime"
+P7DIR="$APPS/RG35XX-R1-P7"
+mkdir -p "$P7DIR"
+
+hash_eq(){ local file="$1" expected="$2" tag="$3"; [ -f "$file" ] || fail "$tag:MISSING"; local got; got="$(sha256sum "$file"|awk '{print $1}')"; [ "$got" = "$expected" ] || fail "$tag:HASH:$got"; echo "$tag=PASS"; }
+hash_eq "$PKG/freej2me-rg35xx.jar" "$EXPECTED_PLATFORM" PLATFORM_HASH_GATE
+hash_eq "$PKG/librg35xx_input.so" "$EXPECTED_INPUT" INPUT_HASH_GATE
+hash_eq "$PKG/librg35xx_video.so" "$EXPECTED_VIDEO" VIDEO_HASH_GATE
+hash_eq "$PKG/librg35xx_font.so" "$EXPECTED_FONT_NATIVE" FONT_NATIVE_HASH_GATE
+hash_eq "$PKG/libaudio.so" "$EXPECTED_AUDIO" AUDIO_HASH_GATE
+hash_eq "$PKG/font.ttf" "$EXPECTED_FONT" FONT_HASH_GATE
+hash_eq "$RUNTIME/bin/jamvm" "$EXPECTED_JAMVM" JAMVM_HASH_GATE
+hash_eq "$RUNTIME/share/classpath/glibj.zip" "$EXPECTED_GLIBJ" GLIBJ_HASH_GATE
+hash_eq "$RUNTIME/share/jamvm/classes.zip" "$EXPECTED_CLASSES" JAMVM_CLASSES_HASH_GATE
+
+# Commercial Tier-0 JARs are exact external test inputs and must never be embedded.
+if find "$SD" -type f -name '*.jar' | grep -E '/Roms/JAVA/(Vua-Cuop-Bien-240x320|God-of-War-Betrayal_J2ME_EN_v148)\.jar$' >/dev/null; then
+  fail COMMERCIAL_TIER0_JAR_EMBEDDED
+fi
+
+cat > "$P7DIR/P7-TIER0-IDENTITY.txt" <<EOF_ID
+PROJECT=RG35XX-AWEIGIT-R1
+STAGE=P7_TIER0_PHYSICAL_REGRESSION
+PACKAGE=RG35XX-MIYOO-FULL-PORT-R1-P7-READY
+R1_PARENT_DEVICE_ZIP_SHA256=$EXPECTED_R1_ZIP
+R1_PLATFORM_SHA256=$EXPECTED_PLATFORM
+R1_INPUT_SHA256=$EXPECTED_INPUT
+R1_VIDEO_SHA256=$EXPECTED_VIDEO
+R1_FONT_NATIVE_SHA256=$EXPECTED_FONT_NATIVE
+R1_AUDIO_SHA256=$EXPECTED_AUDIO
+R1_FONT_SHA256=$EXPECTED_FONT
+R1_JAMVM_SHA256=$EXPECTED_JAMVM
+R1_GLIBJ_SHA256=$EXPECTED_GLIBJ
+R1_JAMVM_CLASSES_SHA256=$EXPECTED_CLASSES
+TIER0_VUA_FILENAME=Vua-Cuop-Bien-240x320.jar
+TIER0_VUA_SHA256=$VUA_SHA
+TIER0_VUA_RESOLUTION=240x320
+TIER0_GOW_FILENAME=God-of-War-Betrayal_J2ME_EN_v148.jar
+TIER0_GOW_SHA256=$GOW_SHA
+TIER0_GOW_RESOLUTION=240x320
+TIER0_GOW_AUDIBLE_AUDIO=REQUIRED
+COMMERCIAL_GAME_CONTENT=NO
+RUNTIME_SEMANTIC_DELTA=NONE
+GAME_SPECIFIC_RUNTIME_CODE=NO
+P6_PHYSICAL_ACCEPTANCE=NOT_TESTED
+P7_PHYSICAL_REGRESSION=NOT_TESTED
+DEVICE_PASS=NO
+STABLE=NO
+EOF_ID
+
+cat > "$APPS/RG35XX-R1-P7-TIER0.sh" <<'EOF_RUN'
+#!/bin/sh
+APPS="$(CDPATH= cd -- "$(dirname -- "$0")" 2>/dev/null && pwd)"
+PKG="$APPS/FreeJ2ME-RG35XX"
+RUNTIME="$APPS/RG35XX-RUNTIME-CANDIDATE-PROBE/runtime"
+P7="$APPS/RG35XX-R1-P7"
+GENERIC="$APPS/FreeJ2ME-RG35XX.sh"
+P6E=/mnt/mmc/RG35XX-FULL-PORT-R1-EVIDENCE
+P6S="$P6E/FULL-PORT-R1-SUMMARY.txt"
+EVID=/mnt/mmc/RG35XX-R1-P7-EVIDENCE
+MASTER="$EVID/P7-TIER0-RUN.log"
+SUMMARY="$EVID/P7-TIER0-SUMMARY.txt"
+OBS="$EVID/MANUAL-OBSERVATION.txt"
+VUA=/mnt/mmc/Roms/JAVA/Vua-Cuop-Bien-240x320.jar
+GOW=/mnt/mmc/Roms/JAVA/God-of-War-Betrayal_J2ME_EN_v148.jar
+EXPECTED_PLATFORM=b5e619eedf0b3efcca6770a46a03d125449ff9aadb59c11b18dc1b95bd6c5117
+EXPECTED_INPUT=6eaf5e23a63fa346782f35dff340d625238a89db4e54cce56d34ba5db5a4064c
+EXPECTED_VIDEO=c6687c0a43b24b425af0727c928afb5414da811ecbcbbe3538928470abe8bd0d
+EXPECTED_FONT_NATIVE=29d19de922e9b3b24b93dca2db73886a32fd9e51ef1c9215b820d12324b8c84b
+EXPECTED_AUDIO=4522157846c33c150a85c50b4bed6f68351f1c62d54b8cd7805cbb97c5727644
+EXPECTED_FONT=1a5f4112daaa9473747c6834041646cc9b2c338cb40ab5dbb2f0161f8968ca10
+EXPECTED_JAMVM=0d10011c35b791ac5670ef9f01e3dc888c4b6621c8df4b06a5460ac9072739e3
+EXPECTED_GLIBJ=c85b3af3728c89c090bf5feccdf402fc86474e99a2d61fd02142aa3c89964fd4
+EXPECTED_CLASSES=ce27c0a0bbdacf7c3f0c4f3a2edbc40b5f7892c17b785b1f89f32fd53ef3af86
+EXPECTED_VUA=220ac0e6a2ab61318aa3d2e20057e2231991a21d7ca15148ed3c57534b941578
+EXPECTED_GOW=e256ca47cde2b27735a4f4d3d826003ac5bbc723f91629bd5d093d948c1f9a98
+
+rm -rf "$EVID"; mkdir -p "$EVID" || exit 20
+: >"$MASTER"
+cat >"$SUMMARY" <<'EOF_SUM'
+PROJECT=RG35XX-AWEIGIT-R1
+STAGE=P7_TIER0_PHYSICAL_REGRESSION
+P6_PROGRAMMATIC_PRECONDITION=NOT_TESTED
+P6_PHYSICAL_ACCEPTANCE=NOT_TESTED
+VUA_IDENTITY=NOT_TESTED
+VUA_PROCESS_EXIT=NOT_TESTED
+VUA_PHYSICAL_REVIEW=NOT_TESTED
+GOW_IDENTITY=NOT_TESTED
+GOW_PROCESS_EXIT=NOT_TESTED
+GOW_PHYSICAL_REVIEW=NOT_TESTED
+GOW_AUDIO_AUDIBLE_DEVICE=NOT_TESTED
+P7_PHYSICAL_REGRESSION=NOT_TESTED
+DEVICE_PASS=NO
+STABLE=NO
+EOF_SUM
+cat >"$OBS" <<'EOF_OBS'
+# Report these observations back together with this evidence directory.
+# Do not convert NOT_TESTED to PASS unless physically observed on original RG35XX.
+VUA_DISPLAY=NOT_TESTED
+VUA_INPUT=NOT_TESTED
+VUA_GAMEPLAY=NOT_TESTED
+VUA_NO_HANG=NOT_TESTED
+VUA_EXIT=NOT_TESTED
+GOW_DISPLAY=NOT_TESTED
+GOW_INPUT=NOT_TESTED
+GOW_GAMEPLAY=NOT_TESTED
+GOW_NO_HANG=NOT_TESTED
+GOW_AUDIO_AUDIBLE=NOT_TESTED
+GOW_EXIT=NOT_TESTED
+P7_PHYSICAL_REGRESSION=NOT_TESTED
+DEVICE_PASS=NO
+STABLE=NO
+EOF_OBS
+fail(){ echo "P7_PRECONDITION=FAIL:$1" >>"$MASTER"; echo "P7_PRECONDITION=FAIL:$1" >>"$SUMMARY"; sync; exit 20; }
+hashcheck(){ [ -f "$1" ] || fail "MISSING:$1"; [ "$(sha256sum "$1"|awk '{print $1}')" = "$2" ] || fail "HASH:$1"; }
+
+[ -f "$P6S" ] || fail P6_EVIDENCE_MISSING
+grep -q '^FULL_PORT_R1_PROGRAMMATIC=PASS$' "$P6S" || fail P6_PROGRAMMATIC_NOT_PASS
+echo P6_PROGRAMMATIC_PRECONDITION=PASS >>"$MASTER"
+echo P6_PROGRAMMATIC_PRECONDITION=PASS >>"$SUMMARY"
+echo 'P6_PHYSICAL_ACCEPTANCE=REQUIRES_USER_CONFIRMATION_BEFORE_P7' >>"$MASTER"
+
+[ -x "$GENERIC" ] || fail GENERIC_LAUNCHER_MISSING
+hashcheck "$PKG/freej2me-rg35xx.jar" "$EXPECTED_PLATFORM"
+hashcheck "$PKG/librg35xx_input.so" "$EXPECTED_INPUT"
+hashcheck "$PKG/librg35xx_video.so" "$EXPECTED_VIDEO"
+hashcheck "$PKG/librg35xx_font.so" "$EXPECTED_FONT_NATIVE"
+hashcheck "$PKG/libaudio.so" "$EXPECTED_AUDIO"
+hashcheck "$PKG/font.ttf" "$EXPECTED_FONT"
+hashcheck "$RUNTIME/bin/jamvm" "$EXPECTED_JAMVM"
+hashcheck "$RUNTIME/share/classpath/glibj.zip" "$EXPECTED_GLIBJ"
+hashcheck "$RUNTIME/share/jamvm/classes.zip" "$EXPECTED_CLASSES"
+hashcheck "$VUA" "$EXPECTED_VUA"
+hashcheck "$GOW" "$EXPECTED_GOW"
+echo P7_IDENTITY_GATE=PASS >>"$MASTER"
+echo VUA_IDENTITY=PASS >>"$SUMMARY"
+echo GOW_IDENTITY=PASS >>"$SUMMARY"
+cp "$P7/P7-TIER0-IDENTITY.txt" "$EVID/"
+
+# The user must have physically reviewed P6 before launching this P7 app.
+# This script cannot infer display/input/audio from process exit codes.
+echo 'P7_VUA_BEGIN' >>"$MASTER"
+set +e
+FREEJ2ME_LOG="$EVID/VUA-R1.log" "$GENERIC" "$VUA" 240 320
+VRC=$?
+set -e
+echo "P7_VUA_PROCESS_EXIT=$VRC" >>"$MASTER"
+echo "VUA_PROCESS_EXIT=$VRC" >>"$SUMMARY"
+[ "$VRC" -eq 0 ] || fail "VUA_JVM_EXIT:$VRC"
+echo 'VUA_PHYSICAL_REVIEW=REQUIRED' >>"$SUMMARY"
+
+sleep 2
+echo 'P7_GOW_BEGIN' >>"$MASTER"
+set +e
+FREEJ2ME_LOG="$EVID/GOW-R1.log" "$GENERIC" "$GOW" 240 320
+GRC=$?
+set -e
+echo "P7_GOW_PROCESS_EXIT=$GRC" >>"$MASTER"
+echo "GOW_PROCESS_EXIT=$GRC" >>"$SUMMARY"
+[ "$GRC" -eq 0 ] || fail "GOW_JVM_EXIT:$GRC"
+echo 'GOW_PHYSICAL_REVIEW=REQUIRED' >>"$SUMMARY"
+echo 'GOW_AUDIO_AUDIBLE_DEVICE=REQUIRED_MANUAL' >>"$SUMMARY"
+echo 'P7_PROGRAMMATIC_IDENTITY_AND_LAUNCH=PASS' >>"$SUMMARY"
+echo 'P7_PHYSICAL_REGRESSION=NOT_TESTED' >>"$SUMMARY"
+echo 'DEVICE_PASS=NO' >>"$SUMMARY"
+echo 'STABLE=NO' >>"$SUMMARY"
+echo 'P7_PROGRAMMATIC_IDENTITY_AND_LAUNCH=PASS' >>"$MASTER"
+sync
+exit 0
+EOF_RUN
+chmod 0755 "$APPS/RG35XX-R1-P7-TIER0.sh"
+
+cat > "$SD/Roms/JAVA/README-TIER0-EXACT.txt" <<EOF_JARS
+P7 exact external inputs required on the original RG35XX SD card:
+
+Vua-Cuop-Bien-240x320.jar
+SHA256=$VUA_SHA
+Resolution=240x320
+
+God-of-War-Betrayal_J2ME_EN_v148.jar
+SHA256=$GOW_SHA
+Resolution=240x320
+
+These commercial JARs are NOT included in this package and must not be repacked.
+EOF_JARS
+
+cat > "$PKGROOT/P7-README-FIRST.txt" <<'EOF_README'
+RG35XX Miyoo Full Port R1 — P6 + P7 physical campaign
+
+1. Copy SD/ to the original RG35XX GarlicOS SD root.
+2. Ensure the exact Tier-0 JARs already exist under /mnt/mmc/Roms/JAVA/ with
+   the filenames and SHA256 values in SD/Roms/JAVA/README-TIER0-EXACT.txt.
+3. Run RG35XX-FULL-PORT-R1-TEST first and complete all on-screen P6 steps.
+4. After it returns normally to GarlicOS, physically review P6: rotation was
+   correct and P3 audio was audible. Do NOT proceed to P7 if P6 failed.
+5. Run RG35XX-R1-P7-TIER0. It launches Vua Cướp Biển, then God of War, both at
+   240x320 using the exact R1 generic launcher/runtime/platform.
+6. For each game, exercise display, input and real gameplay, then exit normally.
+   For God of War, audible audio is mandatory.
+7. Return these evidence directories plus your physical observations:
+   /mnt/mmc/RG35XX-FULL-PORT-R1-EVIDENCE/
+   /mnt/mmc/RG35XX-R1-P7-EVIDENCE/
+
+Process exit 0 is never treated as physical PASS. DEVICE_PASS remains NO until
+P6 + both Tier-0 games are physically reviewed and accepted.
+EOF_README
+
+cat > "$P7DIR/P7-PACKAGE-SHA256SUMS.txt" <<EOF_SUMS
+$(sha256sum "$P7DIR/P7-TIER0-IDENTITY.txt" | awk '{print $1}')  P7-TIER0-IDENTITY.txt
+EOF_SUMS
+
+ZIP="$OUT/RG35XX-MIYOO-FULL-PORT-R1-P7-READY.zip"
+rm -f "$ZIP"
+(cd "$OUT" && zip -qr "$(basename "$ZIP")" "$(basename "$PKGROOT")")
+SHA="$(sha256sum "$ZIP" | awk '{print $1}')"
+echo P7_READY_BUILD=PASS
+echo P7_READY_RUNTIME_SEMANTIC_DELTA=NONE
+echo P7_READY_COMMERCIAL_GAME_CONTENT=NO
+echo P7_READY_PHYSICAL_TEST=NOT_TESTED
+echo P7_READY_DEVICE_PASS=NO
+echo P7_READY_ZIP="$ZIP"
+echo P7_READY_ZIP_SHA256="$SHA"
