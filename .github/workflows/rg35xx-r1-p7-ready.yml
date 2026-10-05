@@ -1,0 +1,104 @@
+name: RG35XX R1 P7 Ready
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/rg35xx-r1-p7-ready.yml"
+      - "scripts/build-rg35xx-r1-p7-ready-package.sh"
+      - "scripts/gate-rg35xx-r1-p7-ready.py"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - name: Checkout physical-test overlay branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install archive tools
+        run: |
+          set -euo pipefail
+          sudo apt-get update >/dev/null
+          sudo apt-get install -y --no-install-recommends unzip zip python3 curl >/dev/null
+
+      - name: Download exact accepted R1 Actions artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          R1_ARTIFACT_ID: "11323306446"
+          R1_DEVICE_SHA: "d79f416538a32e43c8c4b666658a50dd367a176f712bbe6c74809833a9201d9b"
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/r1-artifact /tmp/r1-wrapper.zip
+          mkdir -p /tmp/r1-artifact
+          curl -fL \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/jokervtn94/rg35xx-java-platform/actions/artifacts/$R1_ARTIFACT_ID/zip" \
+            -o /tmp/r1-wrapper.zip
+          unzip -q /tmp/r1-wrapper.zip -d /tmp/r1-artifact
+          R1_ZIP="$(find /tmp/r1-artifact -type f -name 'RG35XX-MIYOO-FULL-PORT-R1.zip' -print -quit)"
+          test -n "$R1_ZIP"
+          test "$(sha256sum "$R1_ZIP" | awk '{print $1}')" = "$R1_DEVICE_SHA"
+          echo "FULL_PORT_R1_ZIP=$R1_ZIP" >> "$GITHUB_ENV"
+          echo R1_DEVICE_ARTIFACT_IDENTITY=PASS
+
+      - name: Build P7-ready overlay without runtime delta
+        run: |
+          set -euo pipefail
+          chmod +x scripts/build-rg35xx-r1-p7-ready-package.sh
+          FULL_PORT_R1_ZIP="$FULL_PORT_R1_ZIP" bash scripts/build-rg35xx-r1-p7-ready-package.sh | tee P7-READY-BUILD.log
+          grep -q '^P7_READY_BUILD=PASS$' P7-READY-BUILD.log
+          grep -q '^P7_READY_RUNTIME_SEMANTIC_DELTA=NONE$' P7-READY-BUILD.log
+          grep -q '^P7_READY_COMMERCIAL_GAME_CONTENT=NO$' P7-READY-BUILD.log
+          grep -q '^P7_READY_PHYSICAL_TEST=NOT_TESTED$' P7-READY-BUILD.log
+          grep -q '^P7_READY_DEVICE_PASS=NO$' P7-READY-BUILD.log
+
+      - name: Independently gate final P7-ready ZIP
+        run: |
+          set -euo pipefail
+          ZIP=out/r1-p7-ready/RG35XX-MIYOO-FULL-PORT-R1-P7-READY.zip
+          python3 scripts/gate-rg35xx-r1-p7-ready.py "$ZIP" | tee P7-READY-GATE.log
+          grep -q '^P7_READY_INDEPENDENT_GATE=PASS$' P7-READY-GATE.log
+          grep -q '^P7_READY_COMMERCIAL_GAME_CONTENT=NO$' P7-READY-GATE.log
+          grep -q '^P7_READY_RUNTIME_SEMANTIC_DELTA=NONE$' P7-READY-GATE.log
+          grep -q '^P7_READY_PHYSICAL_TEST=NOT_TESTED$' P7-READY-GATE.log
+          grep -q '^P7_READY_DEVICE_PASS=NO$' P7-READY-GATE.log
+
+      - name: Record package identity
+        run: |
+          set -euo pipefail
+          ZIP=out/r1-p7-ready/RG35XX-MIYOO-FULL-PORT-R1-P7-READY.zip
+          {
+            echo PROJECT=RG35XX-AWEIGIT-R1
+            echo STAGE=P7_TIER0_PHYSICAL_REGRESSION_READY
+            echo SOURCE_BRANCH=${GITHUB_REF_NAME}
+            echo SOURCE_COMMIT=${GITHUB_SHA}
+            echo R1_PARENT_ARTIFACT_ID=11323306446
+            echo R1_PARENT_DEVICE_ZIP_SHA256=d79f416538a32e43c8c4b666658a50dd367a176f712bbe6c74809833a9201d9b
+            echo P7_READY_ZIP_SHA256=$(sha256sum "$ZIP" | awk '{print $1}')
+            echo COMMERCIAL_GAME_CONTENT=NO
+            echo RUNTIME_SEMANTIC_DELTA=NONE
+            echo P6_PHYSICAL_ACCEPTANCE=NOT_TESTED
+            echo P7_PHYSICAL_REGRESSION=NOT_TESTED
+            echo DEVICE_PASS=NO
+            echo STABLE=NO
+          } > P7-READY-HOST-IDENTITY.txt
+          cat P7-READY-HOST-IDENTITY.txt
+
+      - name: Upload P7-ready physical campaign
+        uses: actions/upload-artifact@v4
+        with:
+          name: RG35XX-R1-P7-READY-${{ github.sha }}
+          path: |
+            out/r1-p7-ready/RG35XX-MIYOO-FULL-PORT-R1-P7-READY.zip
+            P7-READY-BUILD.log
+            P7-READY-GATE.log
+            P7-READY-HOST-IDENTITY.txt
+          if-no-files-found: error
