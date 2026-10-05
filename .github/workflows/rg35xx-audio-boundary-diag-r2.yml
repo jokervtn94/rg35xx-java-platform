@@ -1,0 +1,120 @@
+name: RG35XX Audio Boundary Diagnostic R2
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/rg35xx-audio-boundary-diag-r2.yml"
+      - "scripts/build-rg35xx-audio-boundary-diag-r2.sh"
+      - "scripts/gate-rg35xx-audio-boundary-diag-r2.py"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout physical diagnostic branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install tools
+        run: |
+          set -euo pipefail
+          sudo apt-get update >/dev/null
+          sudo apt-get install -y --no-install-recommends unzip zip python3 curl >/dev/null
+
+      - name: Download exact diagnostic R1 parent
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PARENT_ARTIFACT_ID: "11331400542"
+          PARENT_DEVICE_SHA: "75a6085729f282918bf9b7c43eb8b5d067862322648282063edd2773c5e5c8dc"
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/audio-diag-parent /tmp/audio-diag-parent-wrapper.zip
+          mkdir -p /tmp/audio-diag-parent
+          curl -fL \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/jokervtn94/rg35xx-java-platform/actions/artifacts/$PARENT_ARTIFACT_ID/zip" \
+            -o /tmp/audio-diag-parent-wrapper.zip
+          unzip -q /tmp/audio-diag-parent-wrapper.zip -d /tmp/audio-diag-parent
+          PARENT_ZIP="$(find /tmp/audio-diag-parent -type f -name 'RG35XX-AUDIO-BOUNDARY-DIAG.zip' -print -quit)"
+          test -n "$PARENT_ZIP"
+          test "$(sha256sum "$PARENT_ZIP" | awk '{print $1}')" = "$PARENT_DEVICE_SHA"
+          echo "AUDIO_DIAG_PARENT_ZIP=$PARENT_ZIP" >> "$GITHUB_ENV"
+          echo AUDIO_DIAG_R2_PARENT_IDENTITY=PASS
+
+      - name: Build packaging-only R2
+        run: |
+          set -euo pipefail
+          chmod +x scripts/build-rg35xx-audio-boundary-diag-r2.sh
+          AUDIO_DIAG_PARENT_ZIP="$AUDIO_DIAG_PARENT_ZIP" bash scripts/build-rg35xx-audio-boundary-diag-r2.sh | tee AUDIO-DIAG-R2-BUILD.log
+          grep -q '^AUDIO_DIAG_R2_BUILD=PASS$' AUDIO-DIAG-R2-BUILD.log
+          grep -q '^AUDIO_DIAG_R2_DIAGNOSTIC_SEMANTIC_DELTA=NONE$' AUDIO-DIAG-R2-BUILD.log
+          grep -q '^AUDIO_DIAG_R2_PACKAGING_DELTA=DIRECT_R4_LAUNCH_ONLY$' AUDIO-DIAG-R2-BUILD.log
+          sh -n out/audio-boundary-diag-r2/stage/SD/Roms/APPS/RG35XX-AUDIO-BOUNDARY-DIAG.sh 2>/dev/null || true
+
+      - name: Independently gate final overlay
+        run: |
+          set -euo pipefail
+          ZIP=out/audio-boundary-diag-r2/RG35XX-AUDIO-BOUNDARY-DIAG-R2.zip
+          python3 scripts/gate-rg35xx-audio-boundary-diag-r2.py "$ZIP" | tee AUDIO-DIAG-R2-GATE.log
+          grep -q '^AUDIO_DIAG_R2_INDEPENDENT_GATE=PASS$' AUDIO-DIAG-R2-GATE.log
+          grep -q '^AUDIO_DIAG_R2_PARENT_JAR_IDENTITY_GATE=PASS$' AUDIO-DIAG-R2-GATE.log
+          grep -q '^AUDIO_DIAG_R2_DIRECT_R4_LAUNCH_GATE=PASS$' AUDIO-DIAG-R2-GATE.log
+          grep -q '^AUDIO_DIAG_R2_DIRECT_A1P5_PRIME_GATE=PASS$' AUDIO-DIAG-R2-GATE.log
+          grep -q '^AUDIO_DIAG_R2_NO_BOOTSTRAP_DEPENDENCY=PASS$' AUDIO-DIAG-R2-GATE.log
+          grep -q '^AUDIO_DIAG_R2_NO_GENERIC_LAUNCHER_DEPENDENCY=PASS$' AUDIO-DIAG-R2-GATE.log
+          grep -q '^AUDIO_DIAG_R2_PRODUCTION_BINARY_DELTA=NONE$' AUDIO-DIAG-R2-GATE.log
+          grep -q '^AUDIO_DIAG_R2_DIAGNOSTIC_SEMANTIC_DELTA=NONE$' AUDIO-DIAG-R2-GATE.log
+          grep -q '^DEVICE_PASS=NO$' AUDIO-DIAG-R2-GATE.log
+          grep -q '^STABLE=NO$' AUDIO-DIAG-R2-GATE.log
+
+      - name: Verify shell syntax from final ZIP
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/audio-diag-r2-check
+          mkdir -p /tmp/audio-diag-r2-check
+          unzip -q out/audio-boundary-diag-r2/RG35XX-AUDIO-BOUNDARY-DIAG-R2.zip -d /tmp/audio-diag-r2-check
+          sh -n /tmp/audio-diag-r2-check/SD/Roms/APPS/RG35XX-AUDIO-BOUNDARY-DIAG.sh
+          echo AUDIO_DIAG_R2_SHELL_SYNTAX_GATE=PASS
+
+      - name: Record identity
+        run: |
+          set -euo pipefail
+          ZIP=out/audio-boundary-diag-r2/RG35XX-AUDIO-BOUNDARY-DIAG-R2.zip
+          {
+            echo PROJECT=RG35XX-AWEIGIT-R1
+            echo STAGE=AUDIO_BOUNDARY_DIAGNOSTIC_R2_PACKAGING_FIX
+            echo SOURCE_BRANCH=${GITHUB_REF_NAME}
+            echo SOURCE_COMMIT=${GITHUB_SHA}
+            echo PARENT_DIAGNOSTIC_ARTIFACT_ID=11331400542
+            echo PARENT_DIAGNOSTIC_ZIP_SHA256=75a6085729f282918bf9b7c43eb8b5d067862322648282063edd2773c5e5c8dc
+            echo DIAGNOSTIC_JAR_SHA256=8600a6aaeb5782486a55570e54f11e67cf9edcc2d5233329fdf2b5177d9e0f09
+            echo R2_ZIP_SHA256=$(sha256sum "$ZIP" | awk '{print $1}')
+            echo DIAGNOSTIC_SEMANTIC_DELTA=NONE
+            echo PACKAGING_DELTA=DIRECT_R4_LAUNCH_ONLY
+            echo RUNTIME_SEMANTIC_DELTA=NONE
+            echo PLATFORM_SEMANTIC_DELTA=NONE
+            echo NATIVE_AUDIO_DELTA=NONE
+            echo GAME_SPECIFIC_CODE=NO
+            echo DEVICE_PASS=NO
+            echo STABLE=NO
+          } > AUDIO-DIAG-R2-IDENTITY.txt
+          cat AUDIO-DIAG-R2-IDENTITY.txt
+
+      - name: Upload diagnostic R2 overlay
+        uses: actions/upload-artifact@v4
+        with:
+          name: RG35XX-AUDIO-BOUNDARY-DIAG-R2-${{ github.sha }}
+          path: |
+            out/audio-boundary-diag-r2/RG35XX-AUDIO-BOUNDARY-DIAG-R2.zip
+            AUDIO-DIAG-R2-BUILD.log
+            AUDIO-DIAG-R2-GATE.log
+            AUDIO-DIAG-R2-IDENTITY.txt
+          if-no-files-found: error
