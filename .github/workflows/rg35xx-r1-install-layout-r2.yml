@@ -1,0 +1,106 @@
+name: RG35XX R1 Install Layout R2
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/rg35xx-r1-install-layout-r2.yml"
+      - "scripts/build-rg35xx-r1-install-layout-r2.sh"
+      - "scripts/gate-rg35xx-r1-install-layout-r2.py"
+      - "docs/RG35XX-R1-INSTALL-LAYOUT-FAILURE-20261005.md"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - name: Checkout physical-test branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install archive tools
+        run: |
+          set -euo pipefail
+          sudo apt-get update >/dev/null
+          sudo apt-get install -y --no-install-recommends unzip zip python3 curl >/dev/null
+
+      - name: Download exact P7-ready parent
+        env:
+          GH_TOKEN: ${{ github.token }}
+          P7_ARTIFACT_ID: "11322994133"
+          P7_DEVICE_SHA: "28ae70b6ff7f5b51733c0429756f0074ba9419e26c57885ddd5ff464ecc17ebe"
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/p7-artifact /tmp/p7-wrapper.zip
+          mkdir -p /tmp/p7-artifact
+          curl -fL \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/jokervtn94/rg35xx-java-platform/actions/artifacts/$P7_ARTIFACT_ID/zip" \
+            -o /tmp/p7-wrapper.zip
+          unzip -q /tmp/p7-wrapper.zip -d /tmp/p7-artifact
+          P7_ZIP="$(find /tmp/p7-artifact -type f -name 'RG35XX-MIYOO-FULL-PORT-R1-P7-READY.zip' -print -quit)"
+          test -n "$P7_ZIP"
+          test "$(sha256sum "$P7_ZIP" | awk '{print $1}')" = "$P7_DEVICE_SHA"
+          echo "R1_DEVICE_ZIP=$P7_ZIP" >> "$GITHUB_ENV"
+          echo R1_LAYOUT_R2_PARENT_IDENTITY=PASS
+
+      - name: Build install-layout R2 only
+        run: |
+          set -euo pipefail
+          chmod +x scripts/build-rg35xx-r1-install-layout-r2.sh
+          R1_DEVICE_ZIP="$R1_DEVICE_ZIP" bash scripts/build-rg35xx-r1-install-layout-r2.sh | tee R1-LAYOUT-R2-BUILD.log
+          grep -q '^R1_LAYOUT_R2_BUILD=PASS$' R1-LAYOUT-R2-BUILD.log
+          grep -q '^RUNTIME_SEMANTIC_DELTA=NONE$' R1-LAYOUT-R2-BUILD.log
+          grep -q '^PLATFORM_SEMANTIC_DELTA=NONE$' R1-LAYOUT-R2-BUILD.log
+          grep -q '^DEVICE_PASS=NO$' R1-LAYOUT-R2-BUILD.log
+          grep -q '^STABLE=NO$' R1-LAYOUT-R2-BUILD.log
+
+      - name: Independently gate final device ZIP
+        run: |
+          set -euo pipefail
+          ZIP=out/r1-install-layout-r2/RG35XX-MIYOO-FULL-PORT-R1-P7-READY-LAYOUT-R2.zip
+          python3 scripts/gate-rg35xx-r1-install-layout-r2.py "$ZIP" | tee R1-LAYOUT-R2-GATE.log
+          grep -q '^R1_LAYOUT_R2_INDEPENDENT_GATE=PASS$' R1-LAYOUT-R2-GATE.log
+          grep -q '^R1_LAYOUT_R2_BOOTSTRAP_SOURCE_HASH_GATE=PASS$' R1-LAYOUT-R2-GATE.log
+          grep -q '^RUNTIME_SEMANTIC_DELTA=NONE$' R1-LAYOUT-R2-GATE.log
+          grep -q '^PLATFORM_SEMANTIC_DELTA=NONE$' R1-LAYOUT-R2-GATE.log
+          grep -q '^DEVICE_PASS=NO$' R1-LAYOUT-R2-GATE.log
+
+      - name: Record package identity
+        run: |
+          set -euo pipefail
+          ZIP=out/r1-install-layout-r2/RG35XX-MIYOO-FULL-PORT-R1-P7-READY-LAYOUT-R2.zip
+          {
+            echo PROJECT=RG35XX-AWEIGIT-R1
+            echo STAGE=R1_INSTALL_LAYOUT_R2
+            echo FAILURE_OWNER=INSTALL_LAYOUT_BOUNDARY
+            echo SOURCE_BRANCH=${GITHUB_REF_NAME}
+            echo SOURCE_COMMIT=${GITHUB_SHA}
+            echo PARENT_P7_READY_ARTIFACT_ID=11322994133
+            echo PARENT_P7_READY_DEVICE_ZIP_SHA256=28ae70b6ff7f5b51733c0429756f0074ba9419e26c57885ddd5ff464ecc17ebe
+            echo R1_LAYOUT_R2_ZIP_SHA256=$(sha256sum "$ZIP" | awk '{print $1}')
+            echo RUNTIME_SEMANTIC_DELTA=NONE
+            echo PLATFORM_SEMANTIC_DELTA=NONE
+            echo P6_PHYSICAL_ACCEPTANCE=NOT_TESTED
+            echo P7_PHYSICAL_REGRESSION=NOT_TESTED
+            echo DEVICE_PASS=NO
+            echo STABLE=NO
+          } > R1-LAYOUT-R2-HOST-IDENTITY.txt
+          cat R1-LAYOUT-R2-HOST-IDENTITY.txt
+
+      - name: Upload install-layout R2 physical candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: RG35XX-R1-INSTALL-LAYOUT-R2-${{ github.sha }}
+          path: |
+            out/r1-install-layout-r2/RG35XX-MIYOO-FULL-PORT-R1-P7-READY-LAYOUT-R2.zip
+            R1-LAYOUT-R2-BUILD.log
+            R1-LAYOUT-R2-GATE.log
+            R1-LAYOUT-R2-HOST-IDENTITY.txt
+          if-no-files-found: error
