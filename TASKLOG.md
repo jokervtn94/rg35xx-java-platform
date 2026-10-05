@@ -1,6 +1,6 @@
 # RG35XX FreeJ2ME Platform Port — TASKLOG / New-Chat Handoff
 
-Last updated: **2026-10-04**
+Last updated: **2026-10-05**
 
 Purpose: this is the first checkpoint to read when a new ChatGPT conversation starts. It records exact accepted ancestry, protected identities, current phase status, and the only legal next work unit.
 
@@ -62,14 +62,14 @@ P2B_ACCEPTED_BRANCH_HEAD=6cc7461897dedeafa3d71848854341d41c533b5d
 
 CURRENT_PHASE=P4
 CURRENT_MODULE=P4_3D_CAPABILITY_DECISION
-CURRENT_PHYSICAL_ACCEPTED_SCOPE=P2C_INPUT_FRONTEND
-CURRENT_PHYSICAL_ACCEPTED_BRANCH_HEAD=8cd4f6b
+CURRENT_PHYSICAL_ACCEPTED_SCOPE=P3_RUNTIME_SERVICE_SCOPED
+CURRENT_PHYSICAL_ACCEPTED_BRANCH_HEAD=23a79d5
 
 P0=PASS
 P1=PASS
 P2=PASS
-P3=PASS
-P4=NOT_TESTED
+P3=PASS_SCOPED
+P4=PARTIAL
 P5=NOT_TESTED
 P6=NOT_TESTED
 P7=NOT_TESTED
@@ -86,7 +86,7 @@ NEW_TIER1_FIX_BEFORE_P8=NO
 ### NEXT_LEGAL_ACTION
 
 ```text
-NEXT_LEGAL_ACTION=P4_EGL_GLES_HARDWARE_CAPABILITY_PROBE
+NEXT_LEGAL_ACTION=P4_PLATFORM_DEVICE_PROBE_PHYSICAL_TEST
 EXACT_ACCEPTED_RUNTIME_PARENT=2f18b78e9b0aa1660b7fd2f5904dd697fcef5830
 PHYSICAL_ACCEPTED_PREDECESSOR=P2C_INPUT_FRONTEND
 EXPECTED_PHYSICAL_MODULE=RUNTIME-SERVICE-MODULES
@@ -99,14 +99,28 @@ P3_PLATFORM_SHA256=a72df91165616bb87d1821ab9fb8641bd2c168b53175043ccd691bffe9504
 P3_PHYSICAL_TEST=PASS
 P3_AUDIO_AUDIBLE_DEVICE=CONFIRMED_BY_USER
 P3_DEVICE_PROGRAMMATIC_RESULT=PASS
-P4=NOT_TESTED
+P4=PARTIAL
 DEVICE_PASS=P3_SCOPED_ONLY
 P4_PROBE_WORKFLOW_RUN=37214748433
 P4_PROBE_ARTIFACT=RG35XX-P4-CAPABILITY-PROBE-cc29ad2f92666f26256a8c4a6850a4ec19b92276
 P4_PROBE_ARTIFACT_SHA256=f877a9214accd4d328d59c0944a61a4f209fdeb54164d99766c08332791b099b
+P4_CONTEXT_WORKFLOW_RUN=37215844002
+P4_CONTEXT_ARTIFACT=RG35XX-P4-CONTEXT-PROBE-1780d3599333f74f52882885f814fac8029b8197
+P4_CONTEXT_DEVICE_RESULT=REVIEW_REQUIRED
+P4_PLATFORM_WORKFLOW_RUN=37216707434
+P4_PLATFORM_ARTIFACT=RG35XX-P4-PLATFORM-PROBE-23a79d5d8bdf024382890f8d347cf50c85c91203
+P4_PLATFORM_ARTIFACT_SHA256=64d375fbc487ee5a49e7cb4834f287773fc3994f74b83445bb0eb4ece3d3c3ea
+P4_PLATFORM_PHYSICAL_TEST=NOT_TESTED
 ```
 
-P2C is physically accepted by the original-RG35XX three-phase device run. P3 is now physically accepted as a scoped runtime-service module: lifecycle, RMS, FileConnection, WAV/MIDI API paths, audible output, shutdown and protected hashes all passed. The read-only P4 EGL/GLES capability probe is built and installed on the SD; the next action is to run it on the original RG35XX and review its evidence. Do not re-enable M3G, MascotCapsule/Micro3D or LWJGL/OpenGL until the device probe and source-call mapping provide evidence.
+P2C is physically accepted by the original-RG35XX three-phase device run. P3 is
+physically accepted as a scoped runtime-service module: lifecycle, RMS,
+FileConnection, WAV/MIDI API paths, audible output, shutdown and protected
+hashes all passed. P4.1 proved that EGL/GLES libraries load with the correct
+uClibc ABI but the default display cannot initialize. P4.2 is the current
+physical checkpoint; it tests device nodes, SDL/EGL environment and advertised
+platform/device display paths. Do not re-enable M3G, MascotCapsule/Micro3D or
+LWJGL/OpenGL until this evidence and source-call mapping provide support.
 
 ---
 

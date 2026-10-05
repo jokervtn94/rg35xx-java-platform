@@ -20,7 +20,7 @@ ORIGINAL RG35XX PHYSICAL ACCEPTANCE
 
 ## Official repository baseline
 
-As of **2026-10-04**, P2C Input/Frontend has passed its original-RG35XX physical module gate. The official `main` promotion remains separate from this physical-test branch.
+As of **2026-10-05**, P2C Input/Frontend and the scoped P3 Runtime Service module have passed their original-RG35XX physical gates. The official `main` promotion remains separate from this physical-test branch.
 
 ```text
 OFFICIAL_REPOSITORY_BRANCH=main
@@ -35,9 +35,11 @@ P2A_IMAGE_DECODE_MODULE_PHYSICAL_ACCEPTANCE=PASS
 P2B_FONT_TEXT_MODULE_PHYSICAL_ACCEPTANCE=PASS
 CURRENT_PHASE=P4
 CURRENT_MODULE=P4_3D_CAPABILITY_DECISION
-CURRENT_PHYSICAL_ACCEPTED_SCOPE=P2C_INPUT_FRONTEND
-CURRENT_PHYSICAL_ACCEPTED_BRANCH_HEAD=8cd4f6b
+CURRENT_PHYSICAL_ACCEPTED_SCOPE=P3_RUNTIME_SERVICE_SCOPED
+CURRENT_PHYSICAL_ACCEPTED_BRANCH_HEAD=23a79d5
 P2=PASS
+P3=PASS_SCOPED
+P4=PARTIAL
 RG35XX_PLATFORM_BASELINE_DEVICE_PASS=NO
 STABLE=NO
 A9_PARENT=NO
@@ -65,7 +67,7 @@ Accepted physical records:
 | P2B — Font/Text | `PASS` | Host/module gates PASS; original RG35XX 360/360 cases PASS, protected hashes PASS, green PASS screen, normal GarlicOS return. |
 | P2C — Input / Frontend contract | `PASS` | Original RG35XX programmatic run passed all three phases, including custom keymap, pointer 6,6 and rotation 1→2→0. |
 | P3 — Runtime service modules | `PASS (scoped)` | Original RG35XX passed lifecycle, RMS, FileConnection, WAV/MIDI API paths, audible output, shutdown and protected hashes. |
-| P4 — Deferred capabilities | `NOT_TESTED` | Next: read-only EGL/GLES hardware probe and source-call mapping; no blind M3G/Mascot/LWJGL/OpenGL re-enable. |
+| P4 — Deferred capabilities | `PARTIAL` | Provider inventory and uClibc context probe completed; default EGL display returns `EGL_NOT_INITIALIZED (0x3001)`. P4.2 platform/device probe is built and awaits physical log review. No blind M3G/Mascot/LWJGL/OpenGL re-enable. |
 | P5 — Generic installer/platform | `NOT_TESTED` | One generic FreeJ2ME-RG35XX installer/launcher, no game-name runtime logic. |
 | P6 — Full platform exerciser | `NOT_TESTED` | Full declared platform contract suite. |
 | P7 — Tier-0 physical regression | `NOT_TESTED` | Vua Cướp Biển + God of War, including protected audible GoW audio expectation. |
@@ -100,7 +102,7 @@ P2B_R2_PACKAGE_SHA256=7df059c07a3867eef5e6a00348b19b18ee6901cffd4bf7b53caefbbebb
 
 No second physical run is required for that helper-only revision because the tested SD runtime payload is unchanged byte-for-byte.
 
-## Next legal work unit — P4 EGL/GLES capability decision
+## Current checkpoint — P4 EGL/GLES capability decision
 
 P3 is now physically accepted as a scoped runtime-service module without changing the accepted input/frontend owner. The next module is **P4 EGL/GLES CAPABILITY DECISION**:
 
@@ -126,19 +128,34 @@ P3_AUDIO_AUDIBLE_DEVICE=CONFIRMED_BY_USER
 P3_DEVICE_PROGRAMMATIC_RESULT=PASS
 ```
 
-The P4 read-only probe package is built and installed on the SD:
+The first P4 inventory package was run on the original RG35XX and found the
+provider libraries, but that does not prove a usable EGL context. The uClibc
+P4.1 context probe then ran both candidate names successfully, loaded EGL/GLES,
+and reached `eglGetDisplay`; `eglInitialize` failed with
+`EGL_NOT_INITIALIZED (0x3001)`. This is an initialization/display-path issue,
+not an ABI or candidate-runtime failure.
+
+The follow-up P4.2 platform/device probe is built from the pinned Miyoo uClibc
+toolchain and installed on the SD:
 
 ```text
 P4_RUN=https://github.com/jokervtn94/rg35xx-java-platform/actions/runs/37214748433
 P4_ARTIFACT=RG35XX-P4-CAPABILITY-PROBE-cc29ad2f92666f26256a8c4a6850a4ec19b92276
 P4_ARTIFACT_SHA256=f877a9214accd4d328d59c0944a61a4f209fdeb54164d99766c08332791b099b
 P4_DEVICE_RESULT=REVIEW_REQUIRED
+P4_CONTEXT_RUN=https://github.com/jokervtn94/rg35xx-java-platform/actions/runs/37215844002
+P4_CONTEXT_ARTIFACT=RG35XX-P4-CONTEXT-PROBE-1780d3599333f74f52882885f814fac8029b8197
+P4_CONTEXT_DEVICE_RESULT=REVIEW_REQUIRED
+P4_PLATFORM_RUN=https://github.com/jokervtn94/rg35xx-java-platform/actions/runs/37216707434
+P4_PLATFORM_ARTIFACT=RG35XX-P4-PLATFORM-PROBE-23a79d5d8bdf024382890f8d347cf50c85c91203
+P4_PLATFORM_ARTIFACT_SHA256=64d375fbc487ee5a49e7cb4834f287773fc3994f74b83445bb0eb4ece3d3c3ea
+P4_PLATFORM_PHYSICAL_TEST=NOT_TESTED
 ```
 
-Run `Roms/APPS/RG35XX-P4-CAPABILITY-PROBE.sh` and return
-`RG35XX-P4-CAPABILITY-EVIDENCE/P4-EGL-GLES-PROBE.log`. The probe is read-only
-and must not be treated as 3D support until its provider and symbols are mapped
-to the canonical Aweigit call surface.
+Run `Roms/APPS/RG35XX-P4-PLATFORM-PROBE.sh` and return
+`RG35XX-P4-PLATFORM-EVIDENCE/P4-EGL-PLATFORM.log`. The probe is read-only and
+must not be treated as 3D support until a usable display/context path and the
+canonical Aweigit call surface are both mapped.
 
 ## Protected RG35XX runtime identities
 
