@@ -128,7 +128,7 @@ Do not promote beyond the exact state below:
 GENERIC_MIDI_LIFECYCLE_C0_C3_AUDIBLE_DEVICE=PASS
 R5_HOST_GATE=PASS
 R5_PHYSICAL_OWNER_TEST=PASS
-P6_RETEST=REQUIRED
+P6_RETEST=PASS_SCOPED
 P7_RETEST=REQUIRED
 P8=BLOCKED
 DEVICE-PASS=NO
@@ -144,9 +144,9 @@ A2_LOW_RETURN_AUDIBLE=PASS
 R5_PHYSICAL_OWNER_TEST=PASS
 ```
 
-This accepts the narrow R5 native ownership boundary only. It does not accept
-the downstream P6/P7 regressions, which must be rerun because native audio
-changed.
+The same R5 payload then passed the required Full Port R1 manual checks for
+WAV/MIDI audibility and normal return to GarlicOS. This accepts the scoped P6
+retest evidence. P7 Tier-0 must still be rerun because native audio changed.
 
 ## Required next physical sequence
 
