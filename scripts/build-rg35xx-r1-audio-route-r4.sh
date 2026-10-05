@@ -86,9 +86,9 @@ insert=anchor+'AUDIO_PRIME="$APPS/RG35XX-R1-AUDIO-ROUTE-PRIME.sh"\n[ -x "$AUDIO_
 p.write_text(s.replace(anchor,insert,1))
 PY
 
-# Full-platform campaign starts several JamVM processes directly. Restore the
-# accepted pre-Java route contract before every direct process, so the audio
-# phase cannot depend on prior SDL lifecycle state.
+# Full-platform campaign starts several JamVM processes through run_direct().
+# Restore the accepted pre-Java route contract inside that helper so every
+# direct Java process gets the exact Golden route setup immediately before JVM.
 python3 - "$APPS/RG35XX-FULL-PORT-R1-TEST.sh" <<'PY'
 from pathlib import Path
 import sys
@@ -106,24 +106,20 @@ prime_audio(){
 echo A1P5_AUDIO_ROUTE_PRIME_R4=ENABLED >> "$MASTER"
 '''
 s=s.replace(anchor,block,1)
-# Every direct JamVM command starts with LD_LIBRARY_PATH on its own line.
-needle='LD_LIBRARY_PATH="$RUNTIME_LIBS$PKG${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \\\n'
-count=s.count(needle)
-if count < 1: raise SystemExit('R4_P6_JAMVM_LAUNCH_NOT_FOUND')
-s=s.replace(needle,'prime_audio\n'+needle)
+needle='shift 4; set +e; LD_LIBRARY_PATH='
+if needle not in s: raise SystemExit('R4_P6_RUN_DIRECT_ANCHOR_MISSING')
+s=s.replace(needle,'shift 4; prime_audio; set +e; LD_LIBRARY_PATH=',1)
 p.write_text(s)
-print('R4_P6_PRIME_INJECTIONS='+str(count))
+print('R4_P6_PRIME_IN_RUN_DIRECT=PASS')
 PY
 
-# P7 itself delegates Vua/GoW to the generic launcher. Do not duplicate the
-# route prime there; gate that the generic launcher contains it.
+# P7 delegates both Golden games to the generic launcher; no duplicate prime.
 python3 - "$APPS/RG35XX-R1-P7-TIER0.sh" <<'PY'
 from pathlib import Path
 import sys
 p=Path(sys.argv[1]); s=p.read_text()
 marker='P7_R4_AUDIO_ROUTE_OWNER=GENERIC_LAUNCHER\n'
 if marker not in s:
-    # Add an identity marker near APPS resolution without changing game logic.
     first='APPS="$(CDPATH= cd -- "$(dirname -- "$0")" 2>/dev/null && pwd)"\n'
     if first not in s: raise SystemExit('R4_P7_ANCHOR_MISSING')
     s=s.replace(first,first+'# P7_R4_AUDIO_ROUTE_OWNER=GENERIC_LAUNCHER\n',1)
@@ -134,6 +130,7 @@ chmod +x "$APPS/FreeJ2ME-RG35XX.sh" "$APPS/RG35XX-FULL-PORT-R1-TEST.sh" "$APPS/R
 
 grep -q 'RG35XX-R1-AUDIO-ROUTE-PRIME.sh' "$APPS/FreeJ2ME-RG35XX.sh" || fail GENERIC_PRIME_GATE
 grep -q 'A1P5_AUDIO_ROUTE_PRIME_R4=ENABLED' "$APPS/RG35XX-FULL-PORT-R1-TEST.sh" || fail P6_PRIME_GATE
+grep -q 'shift 4; prime_audio; set +e; LD_LIBRARY_PATH=' "$APPS/RG35XX-FULL-PORT-R1-TEST.sh" || fail P6_RUN_DIRECT_PRIME_GATE
 grep -q 'export SDL_AUDIODRIVER=alsa' "$APPS/FreeJ2ME-RG35XX.sh" || fail GENERIC_ALSA_GATE
 grep -q 'export SDL_AUDIODRIVER=alsa' "$APPS/RG35XX-FULL-PORT-R1-TEST.sh" || fail P6_ALSA_GATE
 
