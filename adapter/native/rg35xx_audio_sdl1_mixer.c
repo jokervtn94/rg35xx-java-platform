@@ -3,6 +3,8 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdarg.h>
+#include <string.h>
 
 /*
  * Original-RG35XX audio adapter for Aweigit's SdlMixerManager JNI surface.
@@ -55,6 +57,7 @@ static void *g_mix;
 static int g_audio_open;
 static JavaVM *g_vm;
 static void *g_current_music;
+static int g_trace_enabled = -1;
 
 static pSDL_InitSubSystem SDL_InitSubSystem_p;
 static pSDL_QuitSubSystem SDL_QuitSubSystem_p;
@@ -79,6 +82,36 @@ static pMix_VolumeMusic Mix_VolumeMusic_p;
 static pMix_Volume Mix_Volume_p;
 static pMix_FreeMusic Mix_FreeMusic_p;
 static pMix_FreeChunk Mix_FreeChunk_p;
+
+static int rg35xx_audio_trace_enabled(void) {
+    const char *value;
+    if (g_trace_enabled >= 0) return g_trace_enabled;
+    value = getenv("RG35XX_AUDIO_TRACE");
+    g_trace_enabled = value && *value && strcmp(value, "0") != 0;
+    return g_trace_enabled;
+}
+
+static void rg35xx_audio_trace(const char *event, const char *fmt, ...) {
+    va_list ap;
+    if (!rg35xx_audio_trace_enabled()) return;
+    fprintf(stderr, "RG35XX_AUDIO_TRACE event=%s", event);
+    if (fmt && *fmt) {
+        fputc(' ', stderr);
+        va_start(ap, fmt);
+        vfprintf(stderr, fmt, ap);
+        va_end(ap);
+    }
+    fputc('\n', stderr);
+    fflush(stderr);
+}
+
+static void rg35xx_audio_trace_state(const char *event, jobject manager, void *music, int result) {
+    int playing = -1;
+    if (g_audio_open && Mix_PlayingMusic_p) playing = Mix_PlayingMusic_p();
+    rg35xx_audio_trace(event,
+        "manager=%p handle=%p current=%p open=%d playing=%d result=%d",
+        (void *)manager, music, g_current_music, g_audio_open, playing, result);
+}
 
 typedef struct MusicContext {
     void *music;
@@ -236,6 +269,8 @@ JNIEXPORT jint JNICALL Java_org_recompile_mobile_SdlMixerManager_sdlMixerInit
     (void)cls;
 
     if (g_audio_open) return 0;
+    rg35xx_audio_trace("init.begin", "frequency=%d format=%d channels=%d chunk=%d",
+                       (int)frequency, (int)format, (int)channels, (int)chunksize);
     rc = load_backend();
     if (rc) {
         fprintf(stderr, "RG35XX_A7_AUDIO_BACKEND_LOAD_FAIL=%d\n", rc);
@@ -254,6 +289,8 @@ JNIEXPORT jint JNICALL Java_org_recompile_mobile_SdlMixerManager_sdlMixerInit
         return -1;
     }
     g_audio_open = 1;
+    rg35xx_audio_trace("init.pass", "frequency=%d format=%u channels=%d chunk=%d",
+                       freq, (unsigned)fmt, ch, chunk);
     printf("RG35XX_A7_AUDIO_INIT=PASS BACKEND=SDL1_MIXER FREQ=%d FORMAT=%u CHANNELS=%d CHUNK=%d\n",
            freq, (unsigned)fmt, ch, chunk);
     fflush(stdout);
@@ -285,11 +322,15 @@ JNIEXPORT jlong JNICALL Java_org_recompile_mobile_SdlMixerManager_sdlMixerLoadMi
     if (!g_audio_open || !filePath || !Mix_LoadMUS_p) return (jlong)-1;
     path = (*env)->GetStringUTFChars(env, filePath, 0);
     if (!path) return (jlong)-1;
+    rg35xx_audio_trace("midi.load.begin", "manager=%p player=%p path=%s",
+                       (void *)obj, (void *)player, path);
     music = Mix_LoadMUS_p(path);
     (*env)->ReleaseStringUTFChars(env, filePath, path);
     if (!music) {
         fprintf(stderr, "RG35XX_A7_AUDIO_MIDI_LOAD_FAIL=%s\n", sdl_error());
         fflush(stderr);
+        rg35xx_audio_trace("midi.load.fail", "manager=%p player=%p result=-1 error=%s",
+                           (void *)obj, (void *)player, sdl_error());
         return (jlong)-1;
     }
 
@@ -311,6 +352,8 @@ JNIEXPORT jlong JNICALL Java_org_recompile_mobile_SdlMixerManager_sdlMixerLoadMi
     }
     printf("RG35XX_A7_AUDIO_MIDI_LOAD=PASS\n");
     fflush(stdout);
+    rg35xx_audio_trace("midi.load.pass", "manager=%p player=%p handle=%p",
+                       (void *)obj, (void *)player, music);
     return (jlong)(intptr_t)music;
 }
 
@@ -324,6 +367,7 @@ JNIEXPORT jlong JNICALL Java_org_recompile_mobile_SdlMixerManager_sdlMixerLoadWa
     if (!g_audio_open || !filePath || !SDL_RWFromFile_p || !Mix_LoadWAV_RW_p) return (jlong)-1;
     path = (*env)->GetStringUTFChars(env, filePath, 0);
     if (!path) return (jlong)-1;
+    rg35xx_audio_trace("wav.load.begin", "manager=%p path=%s", (void *)obj, path);
     rw = SDL_RWFromFile_p(path, "rb");
     (*env)->ReleaseStringUTFChars(env, filePath, path);
     if (!rw) {
@@ -339,14 +383,14 @@ JNIEXPORT jlong JNICALL Java_org_recompile_mobile_SdlMixerManager_sdlMixerLoadWa
     }
     printf("RG35XX_A7_AUDIO_WAV_LOAD=PASS\n");
     fflush(stdout);
+    rg35xx_audio_trace("wav.load.pass", "manager=%p handle=%p", (void *)obj, chunk);
     return (jlong)(intptr_t)chunk;
 }
 
 JNIEXPORT jint JNICALL Java_org_recompile_mobile_SdlMixerManager_sdlMixerPlayMusic
   (JNIEnv *env, jobject obj, jlong musicHandle, jint loops) {
     void *music = (void *)(intptr_t)musicHandle;
-    (void)env;
-    (void)obj;
+    rg35xx_audio_trace_state("midi.play.begin", obj, music, 0);
     if (!g_audio_open || !music) return -1;
     Mix_HaltMusic_p();
     g_current_music = music;
@@ -355,10 +399,12 @@ JNIEXPORT jint JNICALL Java_org_recompile_mobile_SdlMixerManager_sdlMixerPlayMus
         Mix_HookMusicFinished_p(0);
         fprintf(stderr, "RG35XX_A7_AUDIO_MIDI_PLAY_FAIL=%s\n", sdl_error());
         fflush(stderr);
+        rg35xx_audio_trace_state("midi.play.fail", obj, music, -1);
         return -1;
     }
     printf("RG35XX_A7_AUDIO_MIDI_PLAY=PASS LOOPS=%d\n", (int)loops);
     fflush(stdout);
+    rg35xx_audio_trace_state("midi.play.pass", obj, music, 0);
     return 0;
 }
 
@@ -366,36 +412,74 @@ JNIEXPORT jint JNICALL Java_org_recompile_mobile_SdlMixerManager_sdlMixerPlayWav
   (JNIEnv *env, jobject obj, jlong musicHandle, jint loops) {
     void *chunk = (void *)(intptr_t)musicHandle;
     (void)env;
-    (void)obj;
+    rg35xx_audio_trace_state("wav.play.begin", obj, chunk, 0);
     if (!g_audio_open || !chunk) return -1;
     Mix_HaltChannel_p(RG35XX_WAV_CHANNEL);
     if (Mix_PlayChannelTimed_p(RG35XX_WAV_CHANNEL, chunk, loops, -1) < 0) {
         fprintf(stderr, "RG35XX_A7_AUDIO_WAV_PLAY_FAIL=%s\n", sdl_error());
         fflush(stderr);
+        rg35xx_audio_trace_state("wav.play.fail", obj, chunk, -1);
         return -1;
     }
     printf("RG35XX_A7_AUDIO_WAV_PLAY=PASS LOOPS=%d\n", (int)loops);
     fflush(stdout);
+    rg35xx_audio_trace_state("wav.play.pass", obj, chunk, 0);
     return 0;
 }
 
 JNIEXPORT void JNICALL Java_org_recompile_mobile_SdlMixerManager_sdlMixerPauseMusic
-  (JNIEnv *env, jobject obj) { (void)env; (void)obj; if (g_audio_open) Mix_PauseMusic_p(); }
+  (JNIEnv *env, jobject obj) {
+    (void)env;
+    if (g_audio_open) Mix_PauseMusic_p();
+    rg35xx_audio_trace_state("midi.pause", obj, g_current_music, 0);
+  }
 JNIEXPORT void JNICALL Java_org_recompile_mobile_SdlMixerManager_sdlMixerResumeMusic
-  (JNIEnv *env, jobject obj) { (void)env; (void)obj; if (g_audio_open) Mix_ResumeMusic_p(); }
+  (JNIEnv *env, jobject obj) {
+    (void)env;
+    if (g_audio_open) Mix_ResumeMusic_p();
+    rg35xx_audio_trace_state("midi.resume", obj, g_current_music, 0);
+  }
 JNIEXPORT void JNICALL Java_org_recompile_mobile_SdlMixerManager_sdlMixerStopMusic
-  (JNIEnv *env, jobject obj) { (void)env; (void)obj; if (g_audio_open) { Mix_HookMusicFinished_p(0); Mix_HaltMusic_p(); } }
+  (JNIEnv *env, jobject obj) {
+    (void)env;
+    if (g_audio_open) { Mix_HookMusicFinished_p(0); Mix_HaltMusic_p(); }
+    rg35xx_audio_trace_state("midi.stop", obj, g_current_music, 0);
+  }
 JNIEXPORT jboolean JNICALL Java_org_recompile_mobile_SdlMixerManager_sdlMixerIsPlaying
-  (JNIEnv *env, jobject obj) { (void)env; (void)obj; return (g_audio_open && Mix_PlayingMusic_p()) ? JNI_TRUE : JNI_FALSE; }
+  (JNIEnv *env, jobject obj) {
+    int result;
+    (void)env;
+    result = (g_audio_open && Mix_PlayingMusic_p()) ? 1 : 0;
+    rg35xx_audio_trace_state("midi.is_playing", obj, g_current_music, result);
+    return result ? JNI_TRUE : JNI_FALSE;
+  }
 
 JNIEXPORT void JNICALL Java_org_recompile_mobile_SdlMixerManager_sdlMixerPauseWav
-  (JNIEnv *env, jobject obj) { (void)env; (void)obj; if (g_audio_open) Mix_Pause_p(RG35XX_WAV_CHANNEL); }
+  (JNIEnv *env, jobject obj) {
+    (void)env;
+    if (g_audio_open) Mix_Pause_p(RG35XX_WAV_CHANNEL);
+    rg35xx_audio_trace_state("wav.pause", obj, 0, 0);
+  }
 JNIEXPORT void JNICALL Java_org_recompile_mobile_SdlMixerManager_sdlMixerResumeWav
-  (JNIEnv *env, jobject obj) { (void)env; (void)obj; if (g_audio_open) Mix_Resume_p(RG35XX_WAV_CHANNEL); }
+  (JNIEnv *env, jobject obj) {
+    (void)env;
+    if (g_audio_open) Mix_Resume_p(RG35XX_WAV_CHANNEL);
+    rg35xx_audio_trace_state("wav.resume", obj, 0, 0);
+  }
 JNIEXPORT void JNICALL Java_org_recompile_mobile_SdlMixerManager_sdlMixerStopWav
-  (JNIEnv *env, jobject obj) { (void)env; (void)obj; if (g_audio_open) Mix_HaltChannel_p(RG35XX_WAV_CHANNEL); }
+  (JNIEnv *env, jobject obj) {
+    (void)env;
+    if (g_audio_open) Mix_HaltChannel_p(RG35XX_WAV_CHANNEL);
+    rg35xx_audio_trace_state("wav.stop", obj, 0, 0);
+  }
 JNIEXPORT jboolean JNICALL Java_org_recompile_mobile_SdlMixerManager_sdlMixerIsPlayingWav
-  (JNIEnv *env, jobject obj) { (void)env; (void)obj; return (g_audio_open && Mix_Playing_p(RG35XX_WAV_CHANNEL)) ? JNI_TRUE : JNI_FALSE; }
+  (JNIEnv *env, jobject obj) {
+    int result;
+    (void)env;
+    result = (g_audio_open && Mix_Playing_p(RG35XX_WAV_CHANNEL)) ? 1 : 0;
+    rg35xx_audio_trace_state("wav.is_playing", obj, 0, result);
+    return result ? JNI_TRUE : JNI_FALSE;
+  }
 
 JNIEXPORT void JNICALL Java_org_recompile_mobile_SdlMixerManager_sdlMixerSetVolume
   (JNIEnv *env, jobject obj, jint volume) {
@@ -435,6 +519,7 @@ JNIEXPORT void JNICALL Java_org_recompile_mobile_SdlMixerManager_sdlMixerFreeMus
     }
     remove_context(env, music);
     if (Mix_FreeMusic_p) Mix_FreeMusic_p(music);
+    rg35xx_audio_trace_state("midi.free", obj, music, 0);
 }
 
 JNIEXPORT void JNICALL Java_org_recompile_mobile_SdlMixerManager_sdlMixerFreeWav
@@ -445,11 +530,13 @@ JNIEXPORT void JNICALL Java_org_recompile_mobile_SdlMixerManager_sdlMixerFreeWav
     if (!chunk) return;
     if (g_audio_open) Mix_HaltChannel_p(RG35XX_WAV_CHANNEL);
     if (Mix_FreeChunk_p) Mix_FreeChunk_p(chunk);
+    rg35xx_audio_trace_state("wav.free", obj, chunk, 0);
 }
 
 JNIEXPORT void JNICALL Java_org_recompile_mobile_SdlMixerManager_sdlMixerQuit
   (JNIEnv *env, jclass cls) {
     (void)cls;
+    rg35xx_audio_trace("quit.begin", "open=%d current=%p", g_audio_open, g_current_music);
     if (g_audio_open) {
         Mix_HookMusicFinished_p(0);
         Mix_HaltMusic_p();
@@ -464,4 +551,5 @@ JNIEXPORT void JNICALL Java_org_recompile_mobile_SdlMixerManager_sdlMixerQuit
     }
     printf("RG35XX_A7_AUDIO_SHUTDOWN=PASS VIDEO_SDL_OWNER_PRESERVED=YES\n");
     fflush(stdout);
+    rg35xx_audio_trace("quit.pass", "open=%d current=%p", g_audio_open, g_current_music);
 }

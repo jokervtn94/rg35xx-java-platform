@@ -1,4 +1,5 @@
 #define Java_org_recompile_mobile_SdlMixerManager_sdlMixerLoadMidi Java_org_recompile_mobile_SdlMixerManager_sdlMixerLoadMidi_legacy
+#define Java_org_recompile_mobile_SdlMixerManager_sdlMixerPlayMusic Java_org_recompile_mobile_SdlMixerManager_sdlMixerPlayMusic_legacy
 #define Java_org_recompile_mobile_SdlMixerManager_sdlMixerPauseMusic Java_org_recompile_mobile_SdlMixerManager_sdlMixerPauseMusic_legacy
 #define Java_org_recompile_mobile_SdlMixerManager_sdlMixerResumeMusic Java_org_recompile_mobile_SdlMixerManager_sdlMixerResumeMusic_legacy
 #define Java_org_recompile_mobile_SdlMixerManager_sdlMixerStopMusic Java_org_recompile_mobile_SdlMixerManager_sdlMixerStopMusic_legacy
@@ -7,6 +8,7 @@
 #define Java_org_recompile_mobile_SdlMixerManager_sdlMixerQuit Java_org_recompile_mobile_SdlMixerManager_sdlMixerQuit_legacy
 #include "rg35xx_audio_sdl1_mixer.c"
 #undef Java_org_recompile_mobile_SdlMixerManager_sdlMixerLoadMidi
+#undef Java_org_recompile_mobile_SdlMixerManager_sdlMixerPlayMusic
 #undef Java_org_recompile_mobile_SdlMixerManager_sdlMixerPauseMusic
 #undef Java_org_recompile_mobile_SdlMixerManager_sdlMixerResumeMusic
 #undef Java_org_recompile_mobile_SdlMixerManager_sdlMixerStopMusic
@@ -97,8 +99,21 @@ JNIEXPORT jlong JNICALL Java_org_recompile_mobile_SdlMixerManager_sdlMixerLoadMi
         owner_bind(env, obj, (void *)(intptr_t)handle);
         printf("RG35XX_R5_AUDIO_OWNER_BIND=PASS\n");
         fflush(stdout);
+        rg35xx_audio_trace("r5.owner.bind", "manager=%p handle=%p", (void *)obj, (void *)(intptr_t)handle);
     }
     return handle;
+}
+
+JNIEXPORT jint JNICALL Java_org_recompile_mobile_SdlMixerManager_sdlMixerPlayMusic
+  (JNIEnv *env, jobject obj, jlong musicHandle, jint loops) {
+    void *music = (void *)(intptr_t)musicHandle;
+    int rc;
+    rg35xx_audio_trace_state("r5.owner.play.begin", obj, music, 0);
+    rc = Java_org_recompile_mobile_SdlMixerManager_sdlMixerPlayMusic_legacy(env, obj, musicHandle, loops);
+    rg35xx_audio_trace_state("r5.owner.play.end", obj, music, rc);
+    printf("RG35XX_R5_AUDIO_OWNER_PLAY=%s\n", rc == 0 ? "PASS" : "FAIL");
+    fflush(stdout);
+    return rc;
 }
 
 JNIEXPORT void JNICALL Java_org_recompile_mobile_SdlMixerManager_sdlMixerPauseMusic
@@ -106,8 +121,10 @@ JNIEXPORT void JNICALL Java_org_recompile_mobile_SdlMixerManager_sdlMixerPauseMu
     if (g_audio_open && owner_is_current(env, obj)) {
         Mix_PauseMusic_p();
         printf("RG35XX_R5_AUDIO_OWNER_PAUSE=CURRENT\n");
+        rg35xx_audio_trace_state("r5.owner.pause.current", obj, g_current_music, 0);
     } else {
         printf("RG35XX_R5_AUDIO_OWNER_PAUSE=IGNORED_NONOWNER\n");
+        rg35xx_audio_trace_state("r5.owner.pause.ignored", obj, g_current_music, 0);
     }
     fflush(stdout);
 }
@@ -117,29 +134,36 @@ JNIEXPORT void JNICALL Java_org_recompile_mobile_SdlMixerManager_sdlMixerResumeM
     if (g_audio_open && owner_is_current(env, obj)) {
         Mix_ResumeMusic_p();
         printf("RG35XX_R5_AUDIO_OWNER_RESUME=CURRENT\n");
+        rg35xx_audio_trace_state("r5.owner.resume.current", obj, g_current_music, 0);
     } else {
         printf("RG35XX_R5_AUDIO_OWNER_RESUME=IGNORED_NONOWNER\n");
+        rg35xx_audio_trace_state("r5.owner.resume.ignored", obj, g_current_music, 0);
     }
     fflush(stdout);
 }
 
 JNIEXPORT void JNICALL Java_org_recompile_mobile_SdlMixerManager_sdlMixerStopMusic
   (JNIEnv *env, jobject obj) {
+    void *music = g_current_music;
     if (g_audio_open && owner_is_current(env, obj)) {
         Mix_HookMusicFinished_p(0);
         Mix_HaltMusic_p();
         g_current_music = 0;
         printf("RG35XX_R5_AUDIO_OWNER_STOP=CURRENT\n");
+        rg35xx_audio_trace_state("r5.owner.stop.current", obj, music, 0);
     } else {
         printf("RG35XX_R5_AUDIO_OWNER_STOP=IGNORED_NONOWNER\n");
+        rg35xx_audio_trace_state("r5.owner.stop.ignored", obj, g_current_music, 0);
     }
     fflush(stdout);
 }
 
 JNIEXPORT jboolean JNICALL Java_org_recompile_mobile_SdlMixerManager_sdlMixerIsPlaying
   (JNIEnv *env, jobject obj) {
-    if (!g_audio_open || !owner_is_current(env, obj)) return JNI_FALSE;
-    return Mix_PlayingMusic_p() ? JNI_TRUE : JNI_FALSE;
+    int owner = owner_is_current(env, obj);
+    int playing = (g_audio_open && owner) ? Mix_PlayingMusic_p() : 0;
+    rg35xx_audio_trace_state("r5.owner.is_playing", obj, g_current_music, playing);
+    return playing ? JNI_TRUE : JNI_FALSE;
 }
 
 JNIEXPORT void JNICALL Java_org_recompile_mobile_SdlMixerManager_sdlMixerFreeMusic
@@ -148,10 +172,12 @@ JNIEXPORT void JNICALL Java_org_recompile_mobile_SdlMixerManager_sdlMixerFreeMus
     (void)obj;
     if (music) owner_remove_music(env, music);
     Java_org_recompile_mobile_SdlMixerManager_sdlMixerFreeMusic_legacy(env, obj, musicHandle);
+    rg35xx_audio_trace_state("r5.owner.free", obj, music, 0);
 }
 
 JNIEXPORT void JNICALL Java_org_recompile_mobile_SdlMixerManager_sdlMixerQuit
   (JNIEnv *env, jclass cls) {
     owner_clear(env);
     Java_org_recompile_mobile_SdlMixerManager_sdlMixerQuit_legacy(env, cls);
+    rg35xx_audio_trace("r5.owner.quit", "open=%d current=%p", g_audio_open, g_current_music);
 }
