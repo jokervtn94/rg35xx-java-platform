@@ -1,0 +1,87 @@
+name: RG35XX MIDI Lifecycle Diagnostic
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/rg35xx-midi-lifecycle-diag.yml'
+      - 'scripts/build-rg35xx-midi-lifecycle-diag.sh'
+      - 'scripts/gate-rg35xx-midi-lifecycle-diag.py'
+      - 'tests/diagnostics/RG35XXMidiLifecycleDiagnostic.java'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - name: Checkout diagnostic branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install tools
+        run: |
+          set -euo pipefail
+          sudo apt-get update >/dev/null
+          sudo apt-get install -y --no-install-recommends unzip zip python3 curl >/dev/null
+
+      - name: Setup Java 8
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Download exact R4 parent artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          R4_ARTIFACT_ID: '11325956934'
+          R4_DEVICE_SHA: '0e739da19b7f6078e8c9b1b2223cf3fb55a9f95e187830502320a1987282792d'
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/r4
+          curl -fL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/jokervtn94/rg35xx-java-platform/actions/artifacts/$R4_ARTIFACT_ID/zip" -o /tmp/r4-wrapper.zip
+          unzip -q /tmp/r4-wrapper.zip -d /tmp/r4
+          R4_ZIP="$(find /tmp/r4 -type f -name 'RG35XX-MIYOO-FULL-PORT-R1-P7-READY-R4.zip' -print -quit)"
+          test -n "$R4_ZIP"
+          test "$(sha256sum "$R4_ZIP" | awk '{print $1}')" = "$R4_DEVICE_SHA"
+          echo "R4_DEVICE_ZIP=$R4_ZIP" >> "$GITHUB_ENV"
+
+      - name: Build MIDI lifecycle diagnostic
+        run: |
+          set -euo pipefail
+          chmod +x scripts/build-rg35xx-midi-lifecycle-diag.sh
+          JAVA8="$JAVA_HOME" R4_DEVICE_ZIP="$R4_DEVICE_ZIP" bash scripts/build-rg35xx-midi-lifecycle-diag.sh | tee MIDI-LIFE-BUILD.log
+          grep -q '^MIDI_LIFE_BUILD=PASS$' MIDI-LIFE-BUILD.log
+
+      - name: Independently gate overlay
+        run: |
+          set -euo pipefail
+          ZIP=out/midi-lifecycle-diag/RG35XX-MIDI-LIFECYCLE-DIAG.zip
+          python3 scripts/gate-rg35xx-midi-lifecycle-diag.py "$ZIP" | tee MIDI-LIFE-GATE.log
+          grep -q '^MIDI_LIFE_INDEPENDENT_GATE=PASS$' MIDI-LIFE-GATE.log
+          grep -q '^MIDI_LIFE_JAVA6_GATE=PASS$' MIDI-LIFE-GATE.log
+          grep -q '^MIDI_LIFE_SAME_FIXTURE_GATE=PASS$' MIDI-LIFE-GATE.log
+          grep -q '^MIDI_LIFE_FRESH_JVM_CASE_GATE=PASS$' MIDI-LIFE-GATE.log
+          grep -q '^MIDI_LIFE_PRODUCTION_BINARY_DELTA=NONE$' MIDI-LIFE-GATE.log
+
+      - name: Verify final launcher shell
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/midi-life-final && mkdir /tmp/midi-life-final
+          unzip -q out/midi-lifecycle-diag/RG35XX-MIDI-LIFECYCLE-DIAG.zip -d /tmp/midi-life-final
+          sh -n /tmp/midi-life-final/SD/Roms/APPS/RG35XX-MIDI-LIFECYCLE-DIAG.sh
+
+      - name: Upload diagnostic
+        uses: actions/upload-artifact@v4
+        with:
+          name: RG35XX-MIDI-LIFECYCLE-DIAG-${{ github.sha }}
+          path: |
+            out/midi-lifecycle-diag/RG35XX-MIDI-LIFECYCLE-DIAG.zip
+            MIDI-LIFE-BUILD.log
+            MIDI-LIFE-GATE.log
+          if-no-files-found: error
