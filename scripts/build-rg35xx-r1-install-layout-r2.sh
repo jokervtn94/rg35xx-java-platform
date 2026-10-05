@@ -6,12 +6,12 @@ fail(){ echo "R1_LAYOUT_R2_BUILD_FAIL=$*" >&2; exit 1; }
 
 R1ZIP="${R1_DEVICE_ZIP:-}"
 [ -f "$R1ZIP" ] || fail R1_DEVICE_ZIP_MISSING
-for t in unzip zip sha256sum awk grep sed cp chmod find; do command -v "$t" >/dev/null 2>&1 || fail "$t missing"; done
+for t in unzip zip sha256sum awk grep sed cp chmod find python3; do command -v "$t" >/dev/null 2>&1 || fail "$t missing"; done
 
-EXPECTED_R1=d79f416538a32e43c8c4b666658a50dd367a176f712bbe6c74809833a9201d9b
+EXPECTED_R1=28ae70b6ff7f5b51733c0429756f0074ba9419e26c57885ddd5ff464ecc17ebe
 EXPECTED_JAMVM=0d10011c35b791ac5670ef9f01e3dc888c4b6621c8df4b06a5460ac9072739e3
 EXPECTED_GLIBJ=c85b3af3728c89c090bf5feccdf402fc86474e99a2d61fd02142aa3c89964fd4
-EXPECTED_CLASSES=ce27c0a0bbdacf7c3f0c4f3a2edbc40b5f7892c17b785b1f89f32fd53ef3af86
+EXPECTED_CLASSES=ce27c0a0bbdacf7c3f0c4f3a2edbc40b5f7892b97c6e284b
 EXPECTED_PLATFORM=b5e619eedf0b3efcca6770a46a03d125449ff9aadb59c11b18dc1b95bd6c5117
 EXPECTED_INPUT=6eaf5e23a63fa346782f35dff340d625238a89db4e54cce56d34ba5db5a4064c
 EXPECTED_VIDEO=c6687c0a43b24b425af0727c928afb5414da811ecbcbbe3538928470abe8bd0d
@@ -19,19 +19,23 @@ EXPECTED_FONT_NATIVE=29d19de922e9b3b24b93dca2db73886a32fd9e51ef1c9215b820d12324b
 EXPECTED_AUDIO=4522157846c33c150a85c50b4bed6f68351f1c62d54b8cd7805cbb97c5727644
 EXPECTED_FONT=1a5f4112daaa9473747c6834041646cc9b2c338cb40ab5dbb2f0161f8968ca10
 
+# Correct accidental short constant above only if this source is edited manually.
+EXPECTED_CLASSES=ce27c0a0bbdacf7c3f0c4f3a2edbc40b5f7892c17b785b1f89f32fd53ef3af86
+
 [ "$(sha256sum "$R1ZIP"|awk '{print $1}')" = "$EXPECTED_R1" ] || fail R1_PARENT_HASH
 OUT="$ROOT/out/r1-install-layout-r2"
 WORK="$ROOT/build/r1-install-layout-r2"
 rm -rf "$OUT" "$WORK"
 mkdir -p "$OUT" "$WORK"
 unzip -q "$R1ZIP" -d "$WORK"
-BASE="$(find "$WORK" -type d -name RG35XX-MIYOO-FULL-PORT-R1 -print -quit)"
+BASE="$(find "$WORK" -type d -name RG35XX-MIYOO-FULL-PORT-R1-P7-READY -print -quit)"
 [ -n "$BASE" ] || fail R1_ROOT_NOT_FOUND
 SD="$BASE/SD"
 APPS="$SD/Roms/APPS"
 APP="$APPS/FreeJ2ME-RG35XX"
 RUNTIME="$APPS/RG35XX-RUNTIME-CANDIDATE-PROBE/runtime"
 [ -d "$RUNTIME" ] || fail PARENT_RUNTIME_MISSING
+[ -f "$APPS/RG35XX-R1-P7-TIER0.sh" ] || fail P7_LAUNCHER_MISSING
 
 hash_eq(){ [ -f "$1" ] || fail "MISSING:$1"; [ "$(sha256sum "$1"|awk '{print $1}')" = "$2" ] || fail "HASH:$1"; }
 hash_eq "$RUNTIME/bin/jamvm" "$EXPECTED_JAMVM"
@@ -100,19 +104,15 @@ s=s.replace(needle,block,1)
 open(p,'w',encoding='utf-8').write(s)
 PY
 }
-# All three launchers define APPS immediately after shebang.
 inject_bootstrap "$APPS/FreeJ2ME-RG35XX.sh" 'APPS="$(CDPATH= cd -- "$(dirname -- "$0")" 2>/dev/null && pwd)"'
 inject_bootstrap "$APPS/RG35XX-FULL-PORT-R1-TEST.sh" 'APPS="$(CDPATH= cd -- "$(dirname -- "$0")" 2>/dev/null && pwd)"'
-if [ -f "$APPS/RG35XX-R1-P7-TIER0.sh" ]; then
-  inject_bootstrap "$APPS/RG35XX-R1-P7-TIER0.sh" 'APPS="$(CDPATH= cd -- "$(dirname -- "$0")" 2>/dev/null && pwd)"'
-fi
-chmod +x "$APPS/FreeJ2ME-RG35XX.sh" "$APPS/RG35XX-FULL-PORT-R1-TEST.sh" "$APPS/RG35XX-R1-RUNTIME-BOOTSTRAP.sh"
-[ ! -f "$APPS/RG35XX-R1-P7-TIER0.sh" ] || chmod +x "$APPS/RG35XX-R1-P7-TIER0.sh"
+inject_bootstrap "$APPS/RG35XX-R1-P7-TIER0.sh" 'APPS="$(CDPATH= cd -- "$(dirname -- "$0")" 2>/dev/null && pwd)"'
+chmod +x "$APPS/FreeJ2ME-RG35XX.sh" "$APPS/RG35XX-FULL-PORT-R1-TEST.sh" "$APPS/RG35XX-R1-P7-TIER0.sh" "$APPS/RG35XX-R1-RUNTIME-BOOTSTRAP.sh"
 
 cat > "$BASE/INSTALL-LAYOUT-R2-IDENTITY.txt" <<EOF_ID
 PROJECT=RG35XX-AWEIGIT-R1
 SCOPE=INSTALL_LAYOUT_BOUNDARY_ONLY
-PARENT_R1_DEVICE_ZIP_SHA256=$EXPECTED_R1
+PARENT_P7_READY_DEVICE_ZIP_SHA256=$EXPECTED_R1
 RUNTIME_SEMANTIC_DELTA=NONE
 PLATFORM_SEMANTIC_DELTA=NONE
 JAMVM_SHA256=$EXPECTED_JAMVM
@@ -135,28 +135,27 @@ EOF_ID
 # Rebuild package checksums for modified main app payload.
 (cd "$APP" && find . -type f ! -name PAYLOAD-SHA256SUMS.txt -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > PAYLOAD-SHA256SUMS.txt)
 
-FINALROOT="$OUT/RG35XX-MIYOO-FULL-PORT-R1-LAYOUT-R2"
+FINALROOT="$OUT/RG35XX-MIYOO-FULL-PORT-R1-P7-READY-LAYOUT-R2"
 mkdir -p "$FINALROOT"
 cp -R "$SD" "$FINALROOT/SD"
-cp "$BASE/README-FIRST.txt" "$FINALROOT/README-FIRST.txt" 2>/dev/null || true
+cp "$BASE/P7-README-FIRST.txt" "$FINALROOT/P7-README-FIRST.txt" 2>/dev/null || true
 cp "$BASE/INSTALL-LAYOUT-R2-IDENTITY.txt" "$FINALROOT/INSTALL-LAYOUT-R2-IDENTITY.txt"
 cat > "$FINALROOT/README-LAYOUT-R2.txt" <<'EOF_README'
-RG35XX Full Port R1 — install/layout R2 physical candidate.
+RG35XX Full Port R1 P7-ready — install/layout R2 physical candidate.
 
-Why R2 exists:
-The first R1 physical run reached the test launcher but the expected app-local
-runtime sibling was absent on SD. This package changes only installation/bootstrap
-behavior. It does not rebuild JamVM, glibj, platform JAR, input, video, font or audio.
+Physical evidence from R1 showed the test shell started, but the expected sibling
+runtime path was absent on SD. R2 changes only installation/bootstrap behavior.
+JamVM, glibj, platform JAR, input, video, font and audio bytes are unchanged.
 
 Install:
 Copy the CONTENTS of SD/ to the GarlicOS SD root.
-Run RG35XX-FULL-PORT-R1-TEST. The launcher will first materialize and hash-check
+Run RG35XX-FULL-PORT-R1-TEST. The launcher first materializes and hash-checks
 the exact runtime at its compiled prefix if it is missing.
 
-If P6 succeeds, then run RG35XX-R1-P7-TIER0 if present.
+If P6 passes, run RG35XX-R1-P7-TIER0 on the same install.
 DEVICE_PASS remains NO until physical review.
 EOF_README
-ZIP="$OUT/RG35XX-MIYOO-FULL-PORT-R1-LAYOUT-R2.zip"
+ZIP="$OUT/RG35XX-MIYOO-FULL-PORT-R1-P7-READY-LAYOUT-R2.zip"
 rm -f "$ZIP"
 (cd "$OUT" && zip -qr "$(basename "$ZIP")" "$(basename "$FINALROOT")")
 echo R1_LAYOUT_R2_BUILD=PASS
