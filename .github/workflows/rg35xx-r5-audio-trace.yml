@@ -56,7 +56,7 @@ jobs:
           docker pull "$TOOLCHAIN"
           docker run --rm -v "$GITHUB_WORKSPACE:/work" -w /work "$TOOLCHAIN" \
             bash -lc 'git config --global --add safe.directory /work/upstream/freej2me-miyoomini; bash ./scripts/build-rg35xx-r5-audio-owner-native.sh' | tee R5-TRACE-NATIVE.log
-          sudo chown -R "$(id -u):$(id -g)" out/r5-audio-owner-native
+          sudo chown -R "$(id -u):$(id -g)" out
           grep -q '^R5_AUDIO_NATIVE_BUILD=PASS$' R5-TRACE-NATIVE.log
           echo "R5_AUDIO_SO=$GITHUB_WORKSPACE/out/r5-audio-owner-native/libaudio.so" >> "$GITHUB_ENV"
 
