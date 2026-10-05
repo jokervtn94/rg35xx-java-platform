@@ -33,6 +33,8 @@ with zipfile.ZipFile(sys.argv[1]) as z:
         text = need(rel).decode('utf-8')
         if 'export RG35XX_AUDIO_TRACE=1' not in text:
             raise SystemExit('R5_TRACE_GATE_FAIL=TRACE_ENV:' + rel)
+        if 'EXPECTED_AUDIO=' + audio_sha not in text:
+            raise SystemExit('R5_TRACE_GATE_FAIL=AUDIO_HASH_REBIND:' + rel)
     for token in ['CANONICAL_PLATFORMPLAYER=UNCHANGED',
                   'CANONICAL_MMAPI=UNCHANGED',
                   'RUNTIME_SEMANTIC_DELTA=NONE',

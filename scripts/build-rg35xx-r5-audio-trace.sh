@@ -30,6 +30,16 @@ TRACE_AUDIO_SHA="$(sha256sum "$PKG/libaudio.so"|awk '{print $1}')"
 strings "$PKG/libaudio.so" | grep -q 'RG35XX_AUDIO_TRACE event=' || fail TRACE_MARKER_MISSING
 strings "$PKG/libaudio.so" | grep -q 'RG35XX_R5_AUDIO_OWNER_PLAY=' || fail TRACE_PLAY_MARKER_MISSING
 
+# The diagnostic native payload has a new identity. Rebind only the two
+# physical-test launchers that intentionally hash-gate libaudio.so.
+for launcher in \
+  "$FINAL/SD/Roms/APPS/RG35XX-FULL-PORT-R1-TEST.sh" \
+  "$FINAL/SD/Roms/APPS/RG35XX-R1-P7-TIER0.sh"; do
+  [ -f "$launcher" ] || fail "LAUNCHER_MISSING:$launcher"
+  sed -i "s/$EXPECTED_R5_AUDIO/$TRACE_AUDIO_SHA/g" "$launcher"
+  grep -q "EXPECTED_AUDIO=$TRACE_AUDIO_SHA" "$launcher" || fail "AUDIO_HASH_REBIND:$launcher"
+done
+
 # Enable tracing only in this diagnostic package. Production R5 remains unchanged.
 for launcher in \
   "$FINAL/SD/Roms/APPS/RG35XX-FULL-PORT-R1-TEST.sh" \
