@@ -43,7 +43,7 @@ with zipfile.ZipFile(sys.argv[1]) as z:
                   'CANONICAL_MMAPI=UNCHANGED',
                   'RUNTIME_SEMANTIC_DELTA=NONE',
                   'PLATFORM_JAVA_DELTA=NONE',
-                  'NATIVE_AUDIO_DELTA=DIAGNOSTIC_TRACE_ONLY',
+                  'NATIVE_AUDIO_DELTA=DIAGNOSTIC_TRACE_AND_POSTMIX_COUNTERS_ONLY',
                   'GAME_SPECIFIC_CODE=NO', 'DEVICE_PASS=NO', 'STABLE=NO']:
         if token not in ident:
             raise SystemExit('R5_TRACE_GATE_FAIL=IDENTITY_TOKEN:' + token)
