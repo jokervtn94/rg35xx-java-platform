@@ -1,0 +1,118 @@
+name: RG35XX Audio Boundary Diagnostic
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/rg35xx-audio-boundary-diag.yml"
+      - "tests/diagnostics/RG35XXAudioBoundaryDiagnostic.java"
+      - "scripts/build-rg35xx-audio-boundary-diag.sh"
+      - "scripts/gate-rg35xx-audio-boundary-diag.py"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout physical diagnostic branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install tools
+        run: |
+          set -euo pipefail
+          sudo apt-get update >/dev/null
+          sudo apt-get install -y --no-install-recommends unzip zip python3 curl >/dev/null
+
+      - name: Setup Java 8 for Java 6 bytecode
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Download exact R4 parent artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          R4_ARTIFACT_ID: "11325956934"
+          R4_DEVICE_SHA: "0e739da19b7f6078e8c9b1b2223cf3fb55a9f95e187830502320a1987282792d"
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/r4-artifact /tmp/r4-wrapper.zip
+          mkdir -p /tmp/r4-artifact
+          curl -fL \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/jokervtn94/rg35xx-java-platform/actions/artifacts/$R4_ARTIFACT_ID/zip" \
+            -o /tmp/r4-wrapper.zip
+          unzip -q /tmp/r4-wrapper.zip -d /tmp/r4-artifact
+          R4_ZIP="$(find /tmp/r4-artifact -type f -name 'RG35XX-MIYOO-FULL-PORT-R1-P7-READY-R4.zip' -print -quit)"
+          test -n "$R4_ZIP"
+          test "$(sha256sum "$R4_ZIP" | awk '{print $1}')" = "$R4_DEVICE_SHA"
+          echo "R4_DEVICE_ZIP=$R4_ZIP" >> "$GITHUB_ENV"
+          echo AUDIO_DIAG_R4_PARENT_IDENTITY=PASS
+
+      - name: Build generic audio diagnostic overlay
+        run: |
+          set -euo pipefail
+          chmod +x scripts/build-rg35xx-audio-boundary-diag.sh
+          JAVA8="$JAVA_HOME" R4_DEVICE_ZIP="$R4_DEVICE_ZIP" bash scripts/build-rg35xx-audio-boundary-diag.sh | tee AUDIO-DIAG-BUILD.log
+          grep -q '^AUDIO_DIAG_BUILD=PASS$' AUDIO-DIAG-BUILD.log
+          grep -q '^AUDIO_DIAG_RUNTIME_SEMANTIC_DELTA=NONE$' AUDIO-DIAG-BUILD.log
+          grep -q '^AUDIO_DIAG_PLATFORM_SEMANTIC_DELTA=NONE$' AUDIO-DIAG-BUILD.log
+          grep -q '^AUDIO_DIAG_NATIVE_AUDIO_DELTA=NONE$' AUDIO-DIAG-BUILD.log
+          grep -q '^AUDIO_DIAG_GAME_SPECIFIC_CODE=NO$' AUDIO-DIAG-BUILD.log
+
+      - name: Independently gate overlay
+        run: |
+          set -euo pipefail
+          ZIP=out/audio-boundary-diag/RG35XX-AUDIO-BOUNDARY-DIAG.zip
+          python3 scripts/gate-rg35xx-audio-boundary-diag.py "$ZIP" | tee AUDIO-DIAG-GATE.log
+          grep -q '^AUDIO_DIAG_INDEPENDENT_GATE=PASS$' AUDIO-DIAG-GATE.log
+          grep -q '^AUDIO_DIAG_JAVA6_GATE=PASS$' AUDIO-DIAG-GATE.log
+          grep -q '^AUDIO_DIAG_COMPLEX_FORMAT1_FIXTURE_GATE=PASS$' AUDIO-DIAG-GATE.log
+          grep -q '^AUDIO_DIAG_MULTI_PLAYER_FIXTURE_GATE=PASS$' AUDIO-DIAG-GATE.log
+          grep -q '^AUDIO_DIAG_R4_IDENTITY_BINDING_GATE=PASS$' AUDIO-DIAG-GATE.log
+          grep -q '^AUDIO_DIAG_PRODUCTION_BINARY_DELTA=NONE$' AUDIO-DIAG-GATE.log
+          grep -q '^AUDIO_DIAG_GAME_SPECIFIC_CODE=NO$' AUDIO-DIAG-GATE.log
+          grep -q '^DEVICE_PASS=NO$' AUDIO-DIAG-GATE.log
+          grep -q '^STABLE=NO$' AUDIO-DIAG-GATE.log
+
+      - name: Record identity
+        run: |
+          set -euo pipefail
+          ZIP=out/audio-boundary-diag/RG35XX-AUDIO-BOUNDARY-DIAG.zip
+          {
+            echo PROJECT=RG35XX-AWEIGIT-R1
+            echo STAGE=GENERIC_AUDIO_BOUNDARY_DIAGNOSTIC
+            echo SOURCE_BRANCH=${GITHUB_REF_NAME}
+            echo SOURCE_COMMIT=${GITHUB_SHA}
+            echo PARENT_R4_ARTIFACT_ID=11325956934
+            echo PARENT_R4_SHA256=0e739da19b7f6078e8c9b1b2223cf3fb55a9f95e187830502320a1987282792d
+            echo AUDIO_DIAG_ZIP_SHA256=$(sha256sum "$ZIP" | awk '{print $1}')
+            echo DIAGNOSTIC_ONLY=YES
+            echo RUNTIME_SEMANTIC_DELTA=NONE
+            echo PLATFORM_SEMANTIC_DELTA=NONE
+            echo NATIVE_AUDIO_DELTA=NONE
+            echo GAME_SPECIFIC_CODE=NO
+            echo P6_PHYSICAL_ACCEPTANCE=PASS
+            echo P7_PHYSICAL_REGRESSION=FAIL:GOW_AUDIBLE_AUDIO_CONTINUITY
+            echo DEVICE_PASS=NO
+            echo STABLE=NO
+          } > AUDIO-DIAG-HOST-IDENTITY.txt
+          cat AUDIO-DIAG-HOST-IDENTITY.txt
+
+      - name: Upload diagnostic overlay
+        uses: actions/upload-artifact@v4
+        with:
+          name: RG35XX-AUDIO-BOUNDARY-DIAG-${{ github.sha }}
+          path: |
+            out/audio-boundary-diag/RG35XX-AUDIO-BOUNDARY-DIAG.zip
+            AUDIO-DIAG-BUILD.log
+            AUDIO-DIAG-GATE.log
+            AUDIO-DIAG-HOST-IDENTITY.txt
+          if-no-files-found: error
