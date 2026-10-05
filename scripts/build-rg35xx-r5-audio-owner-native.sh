@@ -37,6 +37,7 @@ done
 strings "$OUT/libaudio.so" | grep -q 'RG35XX_R5_AUDIO_OWNER_BIND=PASS' || fail OWNER_BIND_MARKER
 strings "$OUT/libaudio.so" | grep -q 'RG35XX_R5_AUDIO_OWNER_RESUME=IGNORED_NONOWNER' || fail OWNER_RESUME_MARKER
 strings "$OUT/libaudio.so" | grep -q 'postmix_cb=' || fail POSTMIX_TRACE_MARKER
+strings "$OUT/libaudio.so" | grep -q 'postmix_last_peak=' || fail POSTMIX_PEAK_TRACE_MARKER
 strings "$OUT/libaudio.so" | grep -q 'spec.actual' || fail MIX_SPEC_TRACE_MARKER
 strings "$OUT/libaudio.so" | grep -q '/usr/lib/libSDL_mixer-1.2.so.0' || fail SDL1_MIXER_IDENTITY
 ! strings "$OUT/libaudio.so" | grep -Eq 'libSDL2|MidiSystem|getSequencer|AudioSystem|getClip|/dev/snd/seq' || fail FORBIDDEN_BACKEND

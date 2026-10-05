@@ -45,6 +45,10 @@ Collect:
   device route, or amplifier/output state).
 - `postmix_cb>0` and `postmix_nz=0`: the mixer callback runs but receives only
   silent buffers; inspect track decoding, volume, and ownership timing.
+- `postmix_last_peak` and `postmix_peak_max` show the largest signed-16 sample
+  magnitude in the latest and all observed buffers; `postmix_last_sum_abs`
+  shows the aggregate absolute signal for the latest buffer. These distinguish
+  a real waveform from a buffer containing only a stray non-zero byte.
 - `postmix_bytes` stops increasing while `playing=1`: the reported playing
   state has diverged from actual audio-buffer delivery.
 - `r5.owner.*.ignored` for the gameplay manager: owner binding/current-handle sequencing remains incorrect.

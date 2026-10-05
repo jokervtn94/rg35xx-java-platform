@@ -66,6 +66,9 @@ static volatile unsigned long g_postmix_nonzero_callbacks;
 static volatile unsigned long g_postmix_bytes;
 static volatile unsigned long g_postmix_last_len;
 static volatile int g_postmix_last_nonzero;
+static volatile int g_postmix_last_peak;
+static volatile int g_postmix_peak_max;
+static volatile unsigned long g_postmix_last_sum_abs;
 
 static pSDL_InitSubSystem SDL_InitSubSystem_p;
 static pSDL_QuitSubSystem SDL_QuitSubSystem_p;
@@ -120,20 +123,24 @@ static void rg35xx_audio_trace_state(const char *event, jobject manager, void *m
     int playing = -1;
     if (g_audio_open && Mix_PlayingMusic_p) playing = Mix_PlayingMusic_p();
     rg35xx_audio_trace(event,
-        "manager=%p handle=%p current=%p open=%d playing=%d result=%d postmix_cb=%lu postmix_nz=%lu postmix_bytes=%lu postmix_last_len=%lu postmix_last_nonzero=%d",
+        "manager=%p handle=%p current=%p open=%d playing=%d result=%d postmix_cb=%lu postmix_nz=%lu postmix_bytes=%lu postmix_last_len=%lu postmix_last_nonzero=%d postmix_last_peak=%d postmix_peak_max=%d postmix_last_sum_abs=%lu",
         (void *)manager, music, g_current_music, g_audio_open, playing, result,
         g_postmix_callbacks, g_postmix_nonzero_callbacks, g_postmix_bytes,
-        g_postmix_last_len, g_postmix_last_nonzero);
+        g_postmix_last_len, g_postmix_last_nonzero, g_postmix_last_peak,
+        g_postmix_peak_max, g_postmix_last_sum_abs);
 }
 
 /*
  * SDL_mixer invokes this after it has mixed a device buffer. Keep the callback
- * strictly counter-only: logging or allocation here could itself cause an
- * underrun on the RG35XX. JNI-side trace points report the counters later.
+ * strictly measurement-only: logging or allocation here could itself cause
+ * an underrun on the RG35XX. JNI-side trace points report the measurements
+ * later.
  */
 static void rg35xx_audio_postmix(void *userdata, uint8_t *stream, int len) {
     int i;
     int nonzero = 0;
+    int peak = 0;
+    unsigned long sum_abs = 0;
     (void)userdata;
     if (!stream || len <= 0) return;
     for (i = 0; i < len; ++i) {
@@ -142,10 +149,19 @@ static void rg35xx_audio_postmix(void *userdata, uint8_t *stream, int len) {
             break;
         }
     }
+    for (i = 0; i + 1 < len; i += 2) {
+        int sample = (int16_t)((uint16_t)stream[i] | ((uint16_t)stream[i + 1] << 8));
+        int magnitude = sample < 0 ? -sample : sample;
+        if (magnitude > peak) peak = magnitude;
+        sum_abs += (unsigned long)magnitude;
+    }
     ++g_postmix_callbacks;
     g_postmix_bytes += (unsigned long)len;
     g_postmix_last_len = (unsigned long)len;
     g_postmix_last_nonzero = nonzero;
+    g_postmix_last_peak = peak;
+    g_postmix_last_sum_abs = sum_abs;
+    if (peak > g_postmix_peak_max) g_postmix_peak_max = peak;
     if (nonzero) ++g_postmix_nonzero_callbacks;
 }
 
@@ -343,6 +359,9 @@ JNIEXPORT jint JNICALL Java_org_recompile_mobile_SdlMixerManager_sdlMixerInit
     g_postmix_bytes = 0;
     g_postmix_last_len = 0;
     g_postmix_last_nonzero = 0;
+    g_postmix_last_peak = 0;
+    g_postmix_peak_max = 0;
+    g_postmix_last_sum_abs = 0;
     if (Mix_SetPostMix_p) {
         Mix_SetPostMix_p(rg35xx_audio_postmix, 0);
         rg35xx_audio_trace("postmix.install", "available=1");

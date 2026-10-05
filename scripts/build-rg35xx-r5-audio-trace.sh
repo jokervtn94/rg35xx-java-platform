@@ -104,6 +104,7 @@ TRACE_AUDIO_SHA256=$TRACE_AUDIO_SHA
 TRACE_CONTROL=RG35XX_AUDIO_TRACE=1
 TRACE_SCOPE=GENERIC_MIDI_WAV_LIFECYCLE_OWNER_STATE_AND_POSTMIX_BUFFER_COUNTERS
 TRACE_POSTMIX_COUNTERS=CALLBACKS_BYTES_NONZERO_BUFFERS_LAST_BUFFER
+TRACE_POSTMIX_SIGNAL=LAST_PEAK_MAX_PEAK_SUM_ABS
 TRACE_MIX_SPEC=QUERY_ACTUAL_FREQUENCY_FORMAT_CHANNELS
 P7_HARNESS_DELTA=CONTINUE_TO_GOW_AFTER_VUA_RUNTIME_FAILURE
 CANONICAL_PLATFORMPLAYER=UNCHANGED
@@ -126,10 +127,10 @@ This package preserves the R5 owner candidate and enables RG35XX_AUDIO_TRACE=1
 only for the Full Port and Tier-0 test launchers. It does not change Java,
 runtime, video, input, or production audio routing semantics.
 
-The native trace installs an SDL_mixer post-mix counter callback without
+The native trace installs an SDL_mixer post-mix measurement callback without
 logging from the audio thread. The log reports postmix_cb, postmix_nz,
-postmix_bytes, postmix_last_len, postmix_last_nonzero, and the actual
-Mix_QuerySpec result.
+postmix_bytes, postmix_last_len, postmix_last_nonzero, postmix_last_peak,
+postmix_peak_max, postmix_last_sum_abs, and the actual Mix_QuerySpec result.
 
 Run RG35XX-R1-P7-TIER0.sh with the same external Vua Cướp Biển and God of War
 JARs. Reproduce the God of War menu -> gameplay transition, then collect:
